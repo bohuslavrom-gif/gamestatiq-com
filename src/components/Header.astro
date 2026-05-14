@@ -1,0 +1,47 @@
+---
+const navLinks = [
+  { href: '/#features', label: 'Funkce' },
+  { href: '/#how', label: 'Jak to funguje' },
+  { href: '/#pricing', label: 'Cena' },
+  { href: '/liga', label: 'Liga' },
+];
+---
+
+<header class="sticky top-0 z-40 border-b border-stone bg-pearl/85 backdrop-blur">
+  <div class="container-pm flex h-16 items-center justify-between">
+    <a href="/" class="flex items-center gap-2.5" aria-label="GameStatiq">
+      <img
+        src="/brand/gamestatiq-icon.svg"
+        alt=""
+        width="28"
+        height="28"
+        class="h-7 w-7"
+      />
+      <span class="text-[17px] font-semibold tracking-tight-2">
+        Game<span class="font-bold text-signal">Statiq</span>
+      </span>
+    </a>
+
+    <nav class="hidden items-center gap-7 md:flex">
+      {
+        navLinks.map((link) => (
+          <a
+            href={link.href}
+            class="text-[14px] font-medium text-graphite transition-colors hover:text-ink"
+          >
+            {link.label}
+          </a>
+        ))
+      }
+    </nav>
+
+    <div class="flex items-center gap-3">
+      <a
+        href="/#contact"
+        class="hidden items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[14px] font-medium text-white transition-all hover:bg-[#1A2B45] sm:inline-flex"
+      >
+        Vyžádat demo
+      </a>
+    </div>
+  </div>
+</header>

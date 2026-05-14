@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --ink: #0F1B2D;
+    --signal: #E63946;
+    --mist: #F5F7FA;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  body {
+    @apply bg-pearl text-ink font-sans;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  ::selection {
+    background: var(--signal);
+    color: #fff;
+  }
+}
+
+@layer components {
+  .container-pm {
+    @apply mx-auto max-w-container px-6 lg:px-8;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-signal px-5 py-3 text-[15px] font-medium text-white transition-all hover:bg-[#C8313D] active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-stone-2 bg-pearl px-5 py-3 text-[15px] font-medium text-ink transition-all hover:border-ink hover:bg-mist active:scale-[0.98];
+  }
+
+  .btn-dark {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-ink px-5 py-3 text-[15px] font-medium text-white transition-all hover:bg-[#1A2B45] active:scale-[0.98];
+  }
+
+  .eyebrow {
+    @apply text-xs font-medium uppercase tracking-[0.12em] text-slate;
+  }
+
+  .h-display {
+    @apply font-bold tracking-tight-3;
+    font-size: clamp(2.25rem, 5vw, 3.75rem);
+    line-height: 1.05;
+  }
+
+  .h-section {
+    @apply font-bold tracking-tight-2;
+    font-size: clamp(1.75rem, 3vw, 2.5rem);
+    line-height: 1.15;
+  }
+
+  .lead {
+    @apply text-graphite;
+    font-size: clamp(1rem, 1.5vw, 1.125rem);
+    line-height: 1.65;
+  }
+}

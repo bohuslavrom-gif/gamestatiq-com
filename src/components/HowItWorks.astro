@@ -1,0 +1,60 @@
+---
+const steps = [
+  {
+    n: '01',
+    title: 'Statistik u hřiště',
+    body:
+      'Mobilní app na PWA — žádná instalace přes app store. Statistik tap-tap zachycuje hru během 1–2 sekund na akci.',
+  },
+  {
+    n: '02',
+    title: 'Sync do Sheets',
+    body:
+      'Po zápase jeden tap → všechna data (drives, plays, fauly, per-hráč staty) se uloží do strukturovaného Google Sheets vašeho klubu.',
+  },
+  {
+    n: '03',
+    title: 'Live na webu pro fanoušky',
+    body:
+      'Public widget se aktualizuje automaticky. Fanoušci, sponzoři i federace vidí stejný profi scoreboard.',
+  },
+  {
+    n: '04',
+    title: 'Trenérská analytika',
+    body:
+      'Coach widget agreguje sezónu — down distance, playbook efficiency, opponent yardage. Příprava na další zápas v jednom view.',
+  },
+];
+---
+
+<section id="how" class="bg-pearl py-20 lg:py-28">
+  <div class="container-pm">
+    <div class="grid gap-12 lg:grid-cols-[0.9fr_1.1fr]">
+      <div>
+        <p class="eyebrow">Jak to funguje</p>
+        <h2 class="h-section mt-3">Čtyři kroky od zápasu k analytice.</h2>
+        <p class="lead mt-4 max-w-md">
+          GameStatiq odděluje sběr dat (jeden statistik s mobilem) od distribuce
+          (web pro fanoušky + analytika pro trenéry). Žádné přepisování ze sešitu,
+          žádné duplikáty.
+        </p>
+      </div>
+
+      <ol class="space-y-5">
+        {
+          steps.map((s) => (
+            <li class="flex gap-5 rounded-xl border border-stone bg-mist p-5">
+              <span class="font-mono text-[13px] font-semibold tracking-[0.05em] text-signal">
+                {s.n}
+              </span>
+              <div>
+                <h3 class="text-[16px] font-semibold tracking-tight-2 text-ink">{s.title}</h3>
+                <p class="mt-1.5 text-[14px] leading-relaxed text-graphite">{s.body}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </div>
+</section>

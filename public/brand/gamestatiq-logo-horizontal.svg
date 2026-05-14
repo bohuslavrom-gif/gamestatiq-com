@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 64" role="img" aria-label="GameStatiq logo">
+  <g>
+    <rect x="6" y="44" width="6" height="12" rx="1" fill="#7AB5D9"/>
+    <rect x="16" y="34" width="6" height="22" rx="1" fill="#7AB5D9"/>
+    <rect x="26" y="20" width="6" height="36" rx="1" fill="#E63946"/>
+    <polygon points="36,18 54,37 36,56" fill="#E63946"/>
+  </g>
+  <text x="68" y="46" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="32" font-weight="500" fill="#0F1B2D" letter-spacing="-0.6">Game<tspan font-weight="700" fill="#E63946">Statiq</tspan></text>
+</svg>
