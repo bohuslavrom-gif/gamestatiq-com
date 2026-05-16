@@ -1,189 +1,351 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
+import { getSupabaseAdmin, type Club } from '../../lib/supabase';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const admin = getSupabaseAdmin();
+
+const { data: club } = await admin
+  .from('clubs')
+  .select('*')
+  .eq('owner_id', user.id)
+  .order('created_at', { ascending: true })
+  .limit(1)
+  .maybeSingle() as { data: Club | null };
+
+if (!club) return Astro.redirect('/app');
+
+// Members with profile info
+const { data: members } = await admin
+  .from('club_members')
+  .select('id, role, user_id, created_at')
+  .eq('club_id', club.id)
+  .order('created_at', { ascending: true });
+
+const userIds = (members ?? []).map((m: any) => m.user_id);
+const { data: profiles } = userIds.length
+  ? await admin.from('profiles').select('id, email, first_name, last_name').in('id', userIds)
+  : { data: [] as any[] };
+
+const profileById = new Map<string, any>((profiles ?? []).map((p: any) => [p.id, p]));
+
+// Pending (not accepted, not expired) invites
+const { data: invitesRaw } = await admin
+  .from('club_invites')
+  .select('id, email, role, created_at, expires_at, token')
+  .eq('club_id', club.id)
+  .is('accepted_at', null)
+  .gt('expires_at', new Date().toISOString())
+  .order('created_at', { ascending: false });
+const invites = invitesRaw ?? [];
+
+const url = new URL(Astro.request.url);
+const saved = url.searchParams.get('saved');
+const error = url.searchParams.get('error');
+const newInviteUrl = url.searchParams.get('invite');
+
+const roleLabel: Record<string, string> = {
+  admin: 'Admin',
+  coach: 'Trenér',
+  stats: 'Statistik',
+  viewer: 'Pozorovatel',
+};
+
+const tier = club.subscription_tier;
+const customDomainAllowed = tier === 'liga' || tier === 'federace';
+
+const initials = (name: string, email: string) => {
+  const n = name.trim();
+  if (n) return n.split(/\s+/).map((w) => w[0] ?? '').join('').slice(0, 2).toUpperCase();
+  return (email[0] ?? '?').toUpperCase();
+};
 ---
 
-<AppLayout
-  title="Nastavení · GameStatiq"
-  active="settings"
-  pageTitle="Nastavení klubu"
-  pageSub="Údaje o klubu, branding a integrace"
->
+<AppLayout title="Nastavení · GameStatiq" active="settings" pageTitle="Nastavení klubu" pageSub="Údaje o klubu, branding a integrace">
+
+  {saved && (
+    <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">
+      ✓ Změny uloženy.
+    </div>
+  )}
+  {error && (
+    <div class="mb-6 rounded-lg border border-signal/30 bg-signal/5 px-4 py-3 text-[14px] text-signal">{error}</div>
+  )}
+  {newInviteUrl && (
+    <div class="mb-6 rounded-lg border border-sky/30 bg-sky/5 p-4">
+      <p class="text-[14px] font-semibold text-ink">✓ Pozvánka vytvořena — pošlete tento odkaz pozvanému (platnost 7 dní):</p>
+      <div class="mt-3 flex items-center gap-2 rounded-md border border-stone bg-pearl p-2">
+        <input type="text" readonly value={newInviteUrl} id="invite-url" class="flex-1 bg-transparent px-2 font-mono text-[12px] text-ink focus:outline-none" />
+        <button type="button" id="copy-invite" class="rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#1A2B45]">Zkopírovat</button>
+      </div>
+      <script is:inline>
+        document.getElementById('copy-invite')?.addEventListener('click', async () => {
+          const inp = document.getElementById('invite-url');
+          if (!inp) return;
+          try {
+            await navigator.clipboard.writeText(inp.value);
+            const btn = document.getElementById('copy-invite');
+            if (btn) { const o = btn.textContent; btn.textContent = 'Zkopírováno ✓'; setTimeout(() => btn.textContent = o, 1500); }
+          } catch {}
+        });
+      </script>
+    </div>
+  )}
+
   <div class="grid gap-6 lg:grid-cols-[1fr_280px]">
     <div class="space-y-6">
-      <!-- Club info -->
+
+      <!-- Club info (handles name, slug, sport, year, description) -->
       <section class="rounded-xl border border-stone bg-pearl">
         <div class="border-b border-stone px-5 py-4">
           <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Informace o klubu</p>
-          <p class="text-[12px] text-slate">Veřejné údaje, které se zobrazují fanoušků na public stránce</p>
+          <p class="text-[12px] text-slate">Veřejné údaje, které se zobrazují fanouškům na public stránce</p>
         </div>
-        <form class="space-y-5 p-5 lg:p-6">
+        <form method="POST" action="/api/club/update" class="space-y-5 p-5 lg:p-6">
           <div class="grid gap-5 sm:grid-cols-2">
             <label class="block">
               <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Název klubu</span>
-              <input type="text" value="Bobcats" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+              <input type="text" name="name" required value={club.name} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
             </label>
             <label class="block">
               <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Slug (URL)</span>
               <div class="mt-1.5 flex items-center overflow-hidden rounded-lg border border-stone bg-pearl">
                 <span class="bg-mist px-3 py-2.5 text-[13px] text-slate">liga.gamestatiq.com/</span>
-                <input type="text" value="bobcats" class="block w-full bg-pearl px-3 py-2.5 text-[14px] text-ink focus:outline-none" />
+                <input type="text" name="slug" value={club.slug} pattern="[a-z0-9-]+" class="block w-full bg-pearl px-3 py-2.5 text-[14px] text-ink focus:outline-none" />
               </div>
             </label>
           </div>
           <div class="grid gap-5 sm:grid-cols-3">
             <label class="block sm:col-span-2">
               <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Sport / disciplína</span>
-              <select class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none">
-                <option>Americký fotbal — 11s</option>
-                <option>Flag football — 5s</option>
-                <option>Basketbal</option>
-                <option>Lední hokej</option>
-                <option>Florbal</option>
+              <select name="sport" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none">
+                <option value="american_football" selected={club.sport === 'american_football'}>Americký fotbal — 11s</option>
+                <option value="flag_football"     selected={club.sport === 'flag_football'}>Flag football — 5s</option>
+                <option value="basketball"        selected={club.sport === 'basketball'}>Basketbal</option>
+                <option value="ice_hockey"        selected={club.sport === 'ice_hockey'}>Lední hokej</option>
+                <option value="floorball"         selected={club.sport === 'floorball'}>Florbal</option>
               </select>
             </label>
             <label class="block">
               <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Rok založení</span>
-              <input type="text" value="2018" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] tabular-nums text-ink focus:border-signal focus:outline-none" />
+              <input type="text" name="founded_year" value={club.founded_year ?? ''} placeholder="2018" inputmode="numeric" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] tabular-nums text-ink focus:border-signal focus:outline-none" />
             </label>
           </div>
           <label class="block">
             <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Krátký popis klubu</span>
-            <textarea rows="3" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20">Bobcats jsou ambiciózní český tým amerického fotbalu s mužskou a ženskou složkou. Hrajeme v top divizi české ligy.</textarea>
+            <textarea name="description" rows="3" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20">{club.description ?? ''}</textarea>
           </label>
-          <div class="flex justify-end gap-2 border-t border-stone pt-5">
-            <button type="button" class="rounded-lg border border-stone bg-pearl px-4 py-2 text-[13px] font-medium text-graphite hover:bg-mist">Zrušit</button>
-            <button type="submit" class="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1A2B45]">Uložit změny</button>
-          </div>
-        </form>
-      </section>
 
-      <!-- Branding -->
-      <section class="rounded-xl border border-stone bg-pearl">
-        <div class="border-b border-stone px-5 py-4">
-          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Branding</p>
-          <p class="text-[12px] text-slate">Logo, barvy a custom doména pro veřejnou stránku</p>
-        </div>
-        <div class="space-y-5 p-5 lg:p-6">
-          <div class="flex items-center gap-5">
-            <span class="inline-flex h-16 w-16 items-center justify-center rounded-xl bg-ink text-[14px] font-bold tracking-[0.04em] text-white">BOB</span>
-            <div>
-              <p class="text-[14px] font-semibold text-ink">Logo klubu</p>
-              <p class="text-[12px] text-slate">SVG, PNG nebo JPG. Doporučené 512×512 px.</p>
-              <div class="mt-2 flex gap-2">
-                <button class="rounded-md border border-stone bg-mist px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-stone/30">Nahrát nové</button>
-                <button class="rounded-md px-3 py-1.5 text-[12px] font-medium text-slate hover:text-signal">Odebrat</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="grid gap-4 sm:grid-cols-2">
+          <div class="grid gap-5 sm:grid-cols-2 border-t border-stone pt-5">
             <label class="block">
               <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Primární barva</span>
               <div class="mt-1.5 flex items-center gap-2 rounded-lg border border-stone bg-pearl p-1.5">
-                <span class="h-7 w-7 rounded-md bg-signal"></span>
-                <input type="text" value="#E63946" class="flex-1 bg-transparent px-2 font-mono text-[13px] text-ink focus:outline-none" />
+                <input type="color" value={club.primary_color} class="h-7 w-7 rounded-md border-none p-0 cursor-pointer" id="picker-primary" />
+                <input type="text" name="primary_color" value={club.primary_color} pattern="#[0-9a-fA-F]{6}" class="flex-1 bg-transparent px-2 font-mono text-[13px] text-ink focus:outline-none" id="hex-primary" />
               </div>
             </label>
             <label class="block">
               <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Sekundární barva</span>
               <div class="mt-1.5 flex items-center gap-2 rounded-lg border border-stone bg-pearl p-1.5">
-                <span class="h-7 w-7 rounded-md bg-ink"></span>
-                <input type="text" value="#0F1B2D" class="flex-1 bg-transparent px-2 font-mono text-[13px] text-ink focus:outline-none" />
+                <input type="color" value={club.secondary_color} class="h-7 w-7 rounded-md border-none p-0 cursor-pointer" id="picker-secondary" />
+                <input type="text" name="secondary_color" value={club.secondary_color} pattern="#[0-9a-fA-F]{6}" class="flex-1 bg-transparent px-2 font-mono text-[13px] text-ink focus:outline-none" id="hex-secondary" />
               </div>
             </label>
           </div>
 
-          <div class="flex items-center justify-between rounded-lg border border-stone bg-mist p-4">
-            <div>
-              <p class="text-[14px] font-semibold text-ink">Custom doména</p>
-              <p class="text-[12px] text-graphite">Např. stats.bobcats.cz · vyžaduje DNS CNAME na cname.gamestatiq.com</p>
-            </div>
-            <span class="rounded-md bg-signal/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-signal">Liga tier ↗</span>
+          <div class="border-t border-stone pt-5">
+            <label class="block">
+              <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Custom doména</span>
+              <input
+                type="text"
+                name="custom_domain"
+                value={club.custom_domain ?? ''}
+                placeholder="stats.bobcats.cz"
+                disabled={!customDomainAllowed}
+                class={`mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20 ${!customDomainAllowed ? 'cursor-not-allowed bg-mist text-slate' : ''}`}
+              />
+              {customDomainAllowed ? (
+                <p class="mt-1 text-[11px] text-graphite">DNS CNAME <strong class="text-ink">cname.gamestatiq.com</strong> · po uložení potvrdíme propagaci.</p>
+              ) : (
+                <p class="mt-1 inline-flex items-center gap-1.5 text-[11px] text-slate">
+                  <span class="rounded bg-signal/10 px-1.5 py-0.5 font-semibold uppercase tracking-wider text-signal">Liga tier ↗</span>
+                  Vlastní doména je dostupná od balíčku Liga.
+                </p>
+              )}
+            </label>
           </div>
+
+          <div class="flex justify-end gap-2 border-t border-stone pt-5">
+            <a href="/app/settings" class="rounded-lg border border-stone bg-pearl px-4 py-2 text-[13px] font-medium text-graphite hover:bg-mist">Zrušit</a>
+            <button type="submit" class="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1A2B45]">Uložit změny</button>
+          </div>
+        </form>
+        <script is:inline>
+          for (const [picker, hex] of [['picker-primary', 'hex-primary'], ['picker-secondary', 'hex-secondary']]) {
+            const p = document.getElementById(picker);
+            const h = document.getElementById(hex);
+            if (!p || !h) continue;
+            p.addEventListener('input', (e) => { h.value = e.target.value.toUpperCase(); });
+            h.addEventListener('input', (e) => {
+              const v = e.target.value;
+              if (/^#[0-9a-fA-F]{6}$/.test(v)) p.value = v;
+            });
+          }
+        </script>
+      </section>
+
+      <!-- Logo -->
+      <section class="rounded-xl border border-stone bg-pearl">
+        <div class="border-b border-stone px-5 py-4">
+          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Logo klubu</p>
+          <p class="text-[12px] text-slate">SVG, PNG, JPG nebo WebP · doporučené 512×512 px · max 5 MB</p>
+        </div>
+        <div class="flex items-center gap-5 p-5 lg:p-6">
+          {club.logo_url ? (
+            <img src={club.logo_url} alt="Logo klubu" class="h-16 w-16 rounded-xl bg-mist object-contain" />
+          ) : (
+            <span class="inline-flex h-16 w-16 items-center justify-center rounded-xl bg-ink text-[14px] font-bold tracking-[0.04em] text-white">
+              {club.name.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || 'KLB'}
+            </span>
+          )}
+          <form method="POST" action="/api/club/logo/upload" enctype="multipart/form-data" class="flex items-center gap-2">
+            <input type="file" name="logo" accept="image/svg+xml,image/png,image/jpeg,image/webp" required class="text-[12px]" />
+            <button type="submit" class="rounded-md border border-stone bg-mist px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-stone/30">Nahrát</button>
+          </form>
+          {club.logo_url && (
+            <form method="POST" action="/api/club/logo/remove" onsubmit="return confirm('Odebrat logo?');">
+              <button type="submit" class="rounded-md px-3 py-1.5 text-[12px] font-medium text-slate hover:text-signal">Odebrat</button>
+            </form>
+          )}
         </div>
       </section>
 
-      <!-- Team admins -->
+      <!-- People -->
       <section class="rounded-xl border border-stone bg-pearl">
         <div class="flex items-center justify-between border-b border-stone px-5 py-4">
           <div>
             <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Lidé v klubu</p>
-            <p class="text-[12px] text-slate">3 uživatelé s přístupem do portálu</p>
+            <p class="text-[12px] text-slate">{(members?.length ?? 0)} členů · {invites.length} čekajících pozvánek</p>
           </div>
-          <button class="rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#1A2B45]">+ Pozvat</button>
+          <details class="relative">
+            <summary class="list-none cursor-pointer rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#1A2B45]">+ Pozvat</summary>
+            <form method="POST" action="/api/club/invite/create" class="absolute right-0 top-full z-10 mt-2 w-80 rounded-xl border border-stone bg-pearl p-4 shadow-[0_10px_30px_-10px_rgba(15,27,45,0.2)]">
+              <p class="text-[13px] font-semibold text-ink">Pozvat nového člena</p>
+              <label class="mt-3 block">
+                <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">E-mail</span>
+                <input type="email" name="email" required placeholder="kolega@klub.cz" class="mt-1 block w-full rounded-md border border-stone bg-pearl px-2 py-1.5 text-[13px] text-ink focus:border-signal focus:outline-none" />
+              </label>
+              <label class="mt-3 block">
+                <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Role</span>
+                <select name="role" class="mt-1 block w-full rounded-md border border-stone bg-pearl px-2 py-1.5 text-[13px] text-ink focus:border-signal focus:outline-none">
+                  <option value="viewer">Pozorovatel — jen čtení</option>
+                  <option value="stats">Statistik</option>
+                  <option value="coach">Trenér</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </label>
+              <button type="submit" class="mt-4 block w-full rounded-md bg-signal px-3 py-2 text-[13px] font-semibold text-white hover:bg-[#C8313D]">Vygenerovat pozvánku</button>
+              <p class="mt-2 text-[11px] text-slate">Vznikne sdílitelný odkaz s 7denní platností.</p>
+            </form>
+          </details>
         </div>
         <ul class="divide-y divide-stone">
-          {[
-            { name: 'Bohuslav Rom',  email: 'bohuslav.rom@gmail.com', role: 'Admin',      you: true },
-            { name: 'Petr Trenér',   email: 'petr@bobcats.cz',         role: 'Trenér',     you: false },
-            { name: 'Jana Statistik',email: 'jana@bobcats.cz',         role: 'Statistik',  you: false },
-          ].map((u) => (
-            <li class="flex items-center gap-4 px-5 py-3.5">
-              <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-mist text-[12px] font-semibold text-ink">{u.name.split(' ').map((w) => w[0]).join('')}</span>
-              <div class="min-w-0 flex-1">
-                <p class="text-[14px] font-semibold text-ink">{u.name} {u.you && <span class="ml-1 rounded bg-mist px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate">vy</span>}</p>
-                <p class="truncate text-[12px] text-slate">{u.email}</p>
-              </div>
-              <span class="rounded-md bg-mist px-2 py-1 text-[11px] font-semibold text-graphite">{u.role}</span>
-              {!u.you && <button class="text-[12px] font-semibold text-slate hover:text-signal">Odebrat</button>}
-            </li>
-          ))}
+          {(members ?? []).map((m: any) => {
+            const p = profileById.get(m.user_id);
+            const name = ((p?.first_name ?? '') + ' ' + (p?.last_name ?? '')).trim() || p?.email || '—';
+            const email = p?.email ?? '—';
+            const isOwner = m.user_id === club.owner_id;
+            const isYou = m.user_id === user.id;
+            return (
+              <li class="flex items-center gap-4 px-5 py-3.5">
+                <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-mist text-[12px] font-semibold text-ink">{initials(name, email)}</span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-[14px] font-semibold text-ink">
+                    {name}
+                    {isYou && <span class="ml-1 rounded bg-mist px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate">vy</span>}
+                    {isOwner && !isYou && <span class="ml-1 rounded bg-signal/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-signal">vlastník</span>}
+                  </p>
+                  <p class="truncate text-[12px] text-slate">{email}</p>
+                </div>
+                <span class="rounded-md bg-mist px-2 py-1 text-[11px] font-semibold text-graphite">{roleLabel[m.role] ?? m.role}</span>
+                {!isOwner && (
+                  <form method="POST" action="/api/club/member/remove" onsubmit={`return confirm('Odebrat ${name} z klubu?');`}>
+                    <input type="hidden" name="member_id" value={m.id} />
+                    <button type="submit" class="text-[12px] font-semibold text-slate hover:text-signal">Odebrat</button>
+                  </form>
+                )}
+              </li>
+            );
+          })}
         </ul>
+
+        {invites.length > 0 && (
+          <>
+            <div class="border-t border-stone bg-mist/50 px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Čekající pozvánky</div>
+            <ul class="divide-y divide-stone">
+              {invites.map((inv: any) => (
+                <li class="flex items-center gap-4 px-5 py-3">
+                  <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-stone text-[12px] font-semibold text-slate">@</span>
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate text-[13px] font-medium text-graphite">{inv.email}</p>
+                    <p class="text-[11px] text-slate">Pozváno · platí do {new Date(inv.expires_at).toLocaleDateString('cs-CZ')}</p>
+                  </div>
+                  <span class="rounded-md bg-mist px-2 py-1 text-[11px] font-semibold text-graphite">{roleLabel[inv.role] ?? inv.role}</span>
+                  <form method="POST" action="/api/club/invite/remove" onsubmit="return confirm('Zrušit pozvánku?');">
+                    <input type="hidden" name="id" value={inv.id} />
+                    <button type="submit" class="text-[12px] font-semibold text-slate hover:text-signal">Zrušit</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </section>
 
-      <!-- Danger zone -->
+      <!-- Danger zone (visual only for now) -->
       <section class="rounded-xl border border-signal/30 bg-signal/5 p-5 lg:p-6">
         <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Smazat klub</p>
         <p class="mt-1 text-[13px] text-graphite">
-          Trvale odstraní všechna data klubu, hráčů a zápasů. Faktury z minulosti zůstanou ve Stripe.
-          Akce je nevratná.
+          Trvale odstraní všechna data klubu, hráčů a zápasů. Faktury z minulosti zůstanou ve Stripe. Akce je nevratná.
         </p>
-        <button class="mt-4 rounded-lg border border-signal bg-pearl px-4 py-2 text-[13px] font-semibold text-signal hover:bg-signal hover:text-white">
-          Smazat klub
+        <button disabled class="mt-4 cursor-not-allowed rounded-lg border border-stone bg-mist px-4 py-2 text-[13px] font-semibold text-stone-2">
+          Smazat klub (zatím nedostupné)
         </button>
       </section>
     </div>
 
-    <!-- Right column -->
+    <!-- Right sidebar -->
     <aside class="space-y-5">
       <div class="rounded-xl border border-stone bg-pearl p-5">
         <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Integrace</p>
         <ul class="mt-4 space-y-3">
           <li class="flex items-center gap-3">
             <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-verde/15 text-[#1B6E62]">
-              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18 M9 21V9"/></svg>
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18 M9 21V9"/></svg>
             </span>
             <div class="min-w-0 flex-1">
               <p class="text-[13px] font-semibold text-ink">Google Sheets</p>
-              <p class="text-[11px] text-verde">Připojeno · bobcats-stats.xlsx</p>
+              <p class="text-[11px] text-verde">Připojeno · bobcats-stats</p>
             </div>
           </li>
           <li class="flex items-center gap-3">
             <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-mist text-slate">
-              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z M4 9h16 M9 4v16"/></svg>
-            </span>
-            <div class="min-w-0 flex-1">
-              <p class="text-[13px] font-semibold text-ink">Slack</p>
-              <p class="text-[11px] text-slate">Nepřipojeno</p>
-            </div>
-            <button class="text-[12px] font-semibold text-signal hover:underline">Připojit</button>
-          </li>
-          <li class="flex items-center gap-3">
-            <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-mist text-slate">
-              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3 7 12 13 21 7"/></svg>
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3 7 12 13 21 7"/></svg>
             </span>
             <div class="min-w-0 flex-1">
               <p class="text-[13px] font-semibold text-ink">Newsletter</p>
               <p class="text-[11px] text-slate">Nepřipojeno</p>
             </div>
-            <button class="text-[12px] font-semibold text-signal hover:underline">Připojit</button>
+            <button disabled class="cursor-not-allowed text-[12px] font-semibold text-stone-2">Brzy</button>
           </li>
         </ul>
       </div>
 
       <div class="rounded-xl border border-stone bg-mist p-5">
         <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Potřebujete pomoc?</p>
-        <p class="mt-2 text-[13px] text-graphite">Napište nám na <a href="mailto:hello@gamestatiq.com" class="text-signal hover:underline">hello@gamestatiq.com</a> nebo si objednejte 30min onboarding session.</p>
+        <p class="mt-2 text-[13px] text-graphite">Napište nám na <a href="mailto:hello@gamestatiq.com" class="text-signal hover:underline">hello@gamestatiq.com</a>.</p>
       </div>
     </aside>
   </div>

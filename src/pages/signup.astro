@@ -5,24 +5,30 @@ export const prerender = false;
 
 const url = new URL(Astro.request.url);
 const error = url.searchParams.get('error');
+const emailPrefill = url.searchParams.get('email') ?? '';
+const inviteToken = url.searchParams.get('invite') ?? '';
+const isInvite = !!inviteToken;
 ---
 
 <AuthLayout title="Registrace · GameStatiq">
   <div class="w-full max-w-md">
     <div class="rounded-2xl border border-stone bg-pearl p-8 shadow-[0_20px_50px_-25px_rgba(15,27,45,0.2)]">
       <span class="inline-flex items-center rounded-full bg-signal/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-signal">
-        30 dní zdarma · bez karty
+        {isInvite ? 'Přijetí pozvánky' : '30 dní zdarma · bez karty'}
       </span>
-      <h1 class="mt-4 text-[24px] font-bold tracking-tight-2 text-ink">Začněte s GameStatiq</h1>
-      <p class="mt-1.5 text-[14px] text-slate">Vytvořte si účet a aktivujte 30denní free trial</p>
+      <h1 class="mt-4 text-[24px] font-bold tracking-tight-2 text-ink">
+        {isInvite ? 'Vytvořte si účet' : 'Začněte s GameStatiq'}
+      </h1>
+      <p class="mt-1.5 text-[14px] text-slate">
+        {isInvite ? 'Po vytvoření účtu se rovnou připojíte k pozvanému klubu.' : 'Vytvořte si účet a aktivujte 30denní free trial'}
+      </p>
 
       {error && (
-        <div class="mt-5 rounded-lg border border-signal/30 bg-signal/5 px-3 py-2.5 text-[13px] text-signal">
-          {error}
-        </div>
+        <div class="mt-5 rounded-lg border border-signal/30 bg-signal/5 px-3 py-2.5 text-[13px] text-signal">{error}</div>
       )}
 
       <form method="POST" action="/api/auth/signup" class="mt-6 space-y-4">
+        {isInvite && <input type="hidden" name="invite" value={inviteToken} />}
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block">
             <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Jméno</span>
@@ -33,18 +39,31 @@ const error = url.searchParams.get('error');
             <input type="text" name="last_name" autocomplete="family-name" placeholder="Novák" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
           </label>
         </div>
-        <label class="block">
-          <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Název klubu</span>
-          <input type="text" name="club_name" required placeholder="Bobcats" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
-        </label>
+
+        {!isInvite && (
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Název klubu</span>
+            <input type="text" name="club_name" required placeholder="Bobcats" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+          </label>
+        )}
+
         <label class="block">
           <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">E-mail</span>
-          <input type="email" name="email" required autocomplete="email" placeholder="vy@klub.cz" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+          <input
+            type="email"
+            name="email"
+            required
+            autocomplete="email"
+            placeholder="vy@klub.cz"
+            value={emailPrefill}
+            readonly={isInvite}
+            class={`mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20 ${isInvite ? 'bg-mist text-graphite' : ''}`}
+          />
+          {isInvite && <p class="mt-1 text-[11px] text-slate">E-mail je vázán na pozvánku a nelze ho měnit.</p>}
         </label>
         <label class="block">
           <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Heslo</span>
           <input type="password" name="password" required minlength="8" autocomplete="new-password" placeholder="alespoň 8 znaků" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
-          <p class="mt-1 text-[11px] text-slate">Použijte alespoň 8 znaků.</p>
         </label>
         <label class="flex items-start gap-2.5 text-[12px] text-graphite">
           <input type="checkbox" name="consent" required class="mt-0.5 h-4 w-4 rounded border-stone text-signal focus:ring-signal" />
@@ -53,12 +72,12 @@ const error = url.searchParams.get('error');
           </span>
         </label>
         <button type="submit" class="block w-full rounded-lg bg-signal px-4 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-[#C8313D]">
-          Vytvořit účet
+          {isInvite ? 'Vytvořit účet a připojit se' : 'Vytvořit účet'}
         </button>
       </form>
 
       <p class="mt-6 text-center text-[13px] text-graphite">
-        Už máte účet? <a href="/login" class="font-semibold text-signal hover:underline">Přihlásit se</a>
+        Už máte účet? <a href={isInvite ? `/login?next=${encodeURIComponent('/invite/' + inviteToken)}` : '/login'} class="font-semibold text-signal hover:underline">Přihlásit se</a>
       </p>
     </div>
   </div>

@@ -1,0 +1,139 @@
+---
+import AuthLayout from '../../layouts/AuthLayout.astro';
+import { getSupabaseAdmin } from '../../lib/supabase';
+
+export const prerender = false;
+
+const { token } = Astro.params;
+const user = Astro.locals.user;
+
+if (!token) return Astro.redirect('/');
+
+const admin = getSupabaseAdmin();
+const { data: invite } = await admin
+  .from('club_invites')
+  .select('id, club_id, email, role, expires_at, accepted_at, clubs(name)')
+  .eq('token', token)
+  .maybeSingle();
+
+type State = 'valid_logged_out' | 'expired' | 'used' | 'notfound' | 'wrong_user' | 'accepted';
+let state: State = 'notfound';
+let clubName = '';
+
+if (invite) {
+  clubName = (invite as any).clubs?.name ?? '—';
+  if (invite.accepted_at) {
+    state = 'used';
+  } else if (new Date(invite.expires_at) < new Date()) {
+    state = 'expired';
+  } else if (user) {
+    if ((user.email ?? '').toLowerCase() !== invite.email.toLowerCase()) {
+      state = 'wrong_user';
+    } else {
+      // Auto-accept
+      const { data: existing } = await admin
+        .from('club_members')
+        .select('id')
+        .eq('club_id', invite.club_id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!existing) {
+        await admin.from('club_members').insert({
+          club_id: invite.club_id,
+          user_id: user.id,
+          role: invite.role,
+        });
+      }
+      await admin.from('club_invites')
+        .update({ accepted_at: new Date().toISOString(), accepted_by: user.id })
+        .eq('id', invite.id);
+      state = 'accepted';
+    }
+  } else {
+    state = 'valid_logged_out';
+  }
+}
+
+const roleLabel: Record<string, string> = {
+  admin: 'Admin',
+  coach: 'Trenér',
+  stats: 'Statistik',
+  viewer: 'Pozorovatel',
+};
+---
+
+<AuthLayout title="Pozvánka · GameStatiq">
+  <div class="w-full max-w-md">
+    <div class="rounded-2xl border border-stone bg-pearl p-8 shadow-[0_20px_50px_-25px_rgba(15,27,45,0.2)]">
+      {state === 'accepted' && invite && (
+        <>
+          <div class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-verde/15 text-verde">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+          </div>
+          <h1 class="mt-4 text-[24px] font-bold tracking-tight-2 text-ink">Pozvánka přijata</h1>
+          <p class="mt-2 text-[14px] text-slate">Připojili jste se do klubu <strong class="text-ink">{clubName}</strong> jako <strong class="text-ink">{roleLabel[invite.role]}</strong>.</p>
+          <a href="/app" class="mt-6 block w-full rounded-lg bg-signal px-4 py-2.5 text-center text-[14px] font-semibold text-white transition-colors hover:bg-[#C8313D]">Otevřít portál</a>
+        </>
+      )}
+
+      {state === 'valid_logged_out' && invite && (
+        <>
+          <span class="inline-flex items-center rounded-full bg-signal/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-signal">Pozvánka do klubu</span>
+          <h1 class="mt-4 text-[24px] font-bold tracking-tight-2 text-ink">Vítejte v GameStatiq</h1>
+          <p class="mt-2 text-[14px] text-graphite">
+            Klub <strong class="text-ink">{clubName}</strong> vás zve jako <strong class="text-ink">{roleLabel[invite.role]}</strong>.
+          </p>
+          <div class="mt-5 rounded-lg bg-mist p-3 text-[13px]">
+            E-mail pozvánky: <strong class="text-ink">{invite.email}</strong>
+          </div>
+          <p class="mt-5 text-[13px] text-graphite">Pro přijetí se přihlaste nebo si vytvořte nový účet s tímto e-mailem.</p>
+          <div class="mt-5 flex flex-col gap-2">
+            <a
+              href={`/signup?email=${encodeURIComponent(invite.email)}&invite=${token}`}
+              class="block w-full rounded-lg bg-signal px-4 py-2.5 text-center text-[14px] font-semibold text-white hover:bg-[#C8313D]"
+            >Vytvořit účet</a>
+            <a
+              href={`/login?next=${encodeURIComponent('/invite/' + token)}`}
+              class="block w-full rounded-lg border border-stone bg-pearl px-4 py-2.5 text-center text-[14px] font-medium text-ink hover:bg-mist"
+            >Přihlásit se</a>
+          </div>
+        </>
+      )}
+
+      {state === 'wrong_user' && invite && (
+        <>
+          <div class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-spark/15 text-[#A0531B]">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <h1 class="mt-4 text-[24px] font-bold tracking-tight-2 text-ink">Špatný účet</h1>
+          <p class="mt-2 text-[14px] text-slate">Pozvánka je pro <strong>{invite.email}</strong>, ale jste přihlášen pod jiným e-mailem.</p>
+          <form method="POST" action="/api/auth/logout" class="mt-5">
+            <button type="submit" class="block w-full rounded-lg bg-ink px-4 py-2.5 text-[14px] font-medium text-white hover:bg-[#1A2B45]">Odhlásit se a zkusit znovu</button>
+          </form>
+        </>
+      )}
+
+      {state === 'expired' && (
+        <>
+          <h1 class="text-[24px] font-bold tracking-tight-2 text-ink">Pozvánka vypršela</h1>
+          <p class="mt-2 text-[14px] text-slate">Platnost této pozvánky skončila. Požádejte administrátora klubu o novou.</p>
+        </>
+      )}
+
+      {state === 'used' && (
+        <>
+          <h1 class="text-[24px] font-bold tracking-tight-2 text-ink">Pozvánka už byla použita</h1>
+          <p class="mt-2 text-[14px] text-slate">Tato pozvánka byla již dříve přijata.</p>
+          <a href="/login" class="mt-5 block w-full rounded-lg bg-ink px-4 py-2.5 text-center text-[14px] font-medium text-white hover:bg-[#1A2B45]">Přihlásit se</a>
+        </>
+      )}
+
+      {state === 'notfound' && (
+        <>
+          <h1 class="text-[24px] font-bold tracking-tight-2 text-ink">Pozvánka nenalezena</h1>
+          <p class="mt-2 text-[14px] text-slate">Tento odkaz není platný.</p>
+        </>
+      )}
+    </div>
+  </div>
+</AuthLayout>
