@@ -1,0 +1,87 @@
+---
+import { getLangFromUrl, switchLangPath, languages, type Lang } from '../i18n/utils';
+
+const currentLang = getLangFromUrl(Astro.url);
+const langKeys = Object.keys(languages) as Lang[];
+const current = languages[currentLang];
+---
+
+<div class="relative" id="lang-switcher">
+  <button
+    type="button"
+    id="lang-switcher-toggle"
+    aria-haspopup="listbox"
+    aria-expanded="false"
+    aria-label="Změnit jazyk / Change language"
+    class="inline-flex h-9 items-center gap-1.5 rounded-md border border-stone bg-pearl px-2.5 text-[13px] font-medium text-graphite transition-colors hover:bg-mist"
+  >
+    <svg class="h-4 w-4 text-slate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18 M12 3a14 14 0 0 1 0 18 M12 3a14 14 0 0 0 0 18" />
+    </svg>
+    <span class="font-mono text-[11px] font-bold tracking-[0.04em]">{current.flag}</span>
+    <svg class="h-3 w-3 text-slate transition-transform" id="lang-switcher-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  </button>
+
+  <ul
+    id="lang-switcher-menu"
+    role="listbox"
+    class="absolute right-0 top-full z-50 mt-1.5 hidden w-44 overflow-hidden rounded-md border border-stone bg-pearl shadow-[0_10px_30px_-10px_rgba(15,27,45,0.2)]"
+  >
+    {langKeys.map((l) => {
+      const path = switchLangPath(Astro.url, l);
+      const isActive = l === currentLang;
+      return (
+        <li role="option" aria-selected={isActive}>
+          <a
+            href={path}
+            hreflang={l}
+            class={`flex items-center justify-between gap-3 px-3 py-2.5 text-[13px] transition-colors ${
+              isActive ? 'bg-mist text-ink' : 'text-graphite hover:bg-mist hover:text-ink'
+            }`}
+          >
+            <span class="flex items-center gap-2">
+              <span class="font-mono text-[10px] font-bold tracking-[0.04em] text-slate">{languages[l].flag}</span>
+              <span class="font-medium">{languages[l].label}</span>
+            </span>
+            {isActive && (
+              <svg class="h-3.5 w-3.5 text-signal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+          </a>
+        </li>
+      );
+    })}
+  </ul>
+</div>
+
+<script>
+  const wrapper = document.getElementById('lang-switcher');
+  const toggle = document.getElementById('lang-switcher-toggle');
+  const menu = document.getElementById('lang-switcher-menu');
+  const chevron = document.getElementById('lang-switcher-chevron');
+
+  function setOpen(open: boolean) {
+    if (!menu || !toggle || !chevron) return;
+    menu.classList.toggle('hidden', !open);
+    chevron.style.transform = open ? 'rotate(180deg)' : '';
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  toggle?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = menu?.classList.contains('hidden') === false;
+    setOpen(!isOpen);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (wrapper && !wrapper.contains(e.target as Node)) setOpen(false);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') setOpen(false);
+  });
+</script>

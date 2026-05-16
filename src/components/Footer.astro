@@ -1,53 +1,58 @@
 ---
+import { getLangFromUrl, useTranslations, localizedPath } from '../i18n/utils';
+
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
 const year = new Date().getFullYear();
+const home = localizedPath('/', lang);
 ---
 
 <footer class="border-t border-stone bg-mist">
   <div class="container-pm py-12">
     <div class="grid gap-10 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
       <div>
-        <a href="/" class="inline-flex items-center gap-2.5" aria-label="GameStatiq">
+        <a href={home} class="inline-flex items-center gap-2.5" aria-label="GameStatiq">
           <img src="/brand/gamestatiq-icon.svg" alt="" class="h-7 w-7" width="28" height="28" />
           <span class="text-[17px] font-semibold tracking-tight-2">
             Game<span class="font-bold text-signal">Statiq</span>
           </span>
         </a>
         <p class="mt-3 max-w-xs text-sm text-slate">
-          Sport stats platforma — měřte každou hru, od amatérského zápasu až po ligové finále.
+          {t('footer.tagline')}
         </p>
       </div>
 
       <div>
-        <p class="eyebrow mb-3">Produkt</p>
+        <p class="eyebrow mb-3">{t('footer.col.product')}</p>
         <ul class="space-y-2 text-sm">
-          <li><a href="/#features" class="text-graphite hover:text-ink">Funkce</a></li>
-          <li><a href="/#how" class="text-graphite hover:text-ink">Jak to funguje</a></li>
-          <li><a href="/#pricing" class="text-graphite hover:text-ink">Cena</a></li>
-          <li><a href="/liga" class="text-graphite hover:text-ink">Liga &amp; kluby</a></li>
+          <li><a href={home + '#features'} class="text-graphite hover:text-ink">{t('nav.features')}</a></li>
+          <li><a href={home + '#how'} class="text-graphite hover:text-ink">{t('nav.how')}</a></li>
+          <li><a href={home + '#pricing'} class="text-graphite hover:text-ink">{t('nav.pricing')}</a></li>
+          <li><a href={localizedPath('/liga', lang)} class="text-graphite hover:text-ink">{t('footer.link.liga')}</a></li>
         </ul>
       </div>
 
       <div>
-        <p class="eyebrow mb-3">Společnost</p>
+        <p class="eyebrow mb-3">{t('footer.col.company')}</p>
         <ul class="space-y-2 text-sm">
-          <li><a href="/#contact" class="text-graphite hover:text-ink">Kontakt</a></li>
-          <li><a href="/o-nas" class="text-graphite hover:text-ink">O nás</a></li>
+          <li><a href={home + '#contact'} class="text-graphite hover:text-ink">{t('footer.link.contact')}</a></li>
+          <li><a href={localizedPath('/o-nas', lang)} class="text-graphite hover:text-ink">{t('footer.link.about')}</a></li>
           <li><a href="mailto:hello@gamestatiq.com" class="text-graphite hover:text-ink">hello@gamestatiq.com</a></li>
         </ul>
       </div>
 
       <div>
-        <p class="eyebrow mb-3">Právní</p>
+        <p class="eyebrow mb-3">{t('footer.col.legal')}</p>
         <ul class="space-y-2 text-sm">
-          <li><a href="/podminky" class="text-graphite hover:text-ink">Podmínky</a></li>
-          <li><a href="/soukromi" class="text-graphite hover:text-ink">Ochrana údajů</a></li>
+          <li><a href={localizedPath('/podminky', lang)} class="text-graphite hover:text-ink">{t('footer.link.terms')}</a></li>
+          <li><a href={localizedPath('/soukromi', lang)} class="text-graphite hover:text-ink">{t('footer.link.privacy')}</a></li>
         </ul>
       </div>
     </div>
 
     <div class="mt-10 flex flex-col items-start justify-between gap-3 border-t border-stone pt-6 text-xs text-slate sm:flex-row sm:items-center">
-      <p>© {year} GameStatiq. All rights reserved.</p>
-      <p class="font-mono uppercase tracking-[0.12em]">Measure every play</p>
+      <p>© {year} GameStatiq. {t('footer.copyright')}</p>
+      <p class="font-mono uppercase tracking-[0.12em]">{t('footer.motto')}</p>
     </div>
   </div>
 </footer>

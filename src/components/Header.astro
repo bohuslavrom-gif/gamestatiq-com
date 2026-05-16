@@ -1,15 +1,23 @@
 ---
+import { getLangFromUrl, useTranslations, localizedPath } from '../i18n/utils';
+import LanguageSwitcher from './LanguageSwitcher.astro';
+
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+
 const navLinks = [
-  { href: '/#features', label: 'Funkce' },
-  { href: '/#how', label: 'Jak to funguje' },
-  { href: '/#pricing', label: 'Cena' },
-  { href: '/liga', label: 'Liga' },
+  { href: localizedPath('/', lang) + '#features', label: t('nav.features') },
+  { href: localizedPath('/', lang) + '#how',      label: t('nav.how') },
+  { href: localizedPath('/', lang) + '#pricing',  label: t('nav.pricing') },
+  { href: localizedPath('/liga', lang),           label: t('nav.liga') },
 ];
+const homeHref = localizedPath('/', lang);
+const contactHref = localizedPath('/', lang) + '#contact';
 ---
 
 <header class="sticky top-0 z-40 border-b border-stone bg-pearl/85 backdrop-blur">
   <div class="container-pm flex h-16 items-center justify-between">
-    <a href="/" class="flex items-center gap-2.5" aria-label="GameStatiq">
+    <a href={homeHref} class="flex items-center gap-2.5" aria-label="GameStatiq">
       <img
         src="/brand/gamestatiq-icon.svg"
         alt=""
@@ -36,19 +44,20 @@ const navLinks = [
       }
     </nav>
 
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-2 sm:gap-3">
+      <LanguageSwitcher />
+
       <a
-        href="/#contact"
-        class="hidden items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[14px] font-medium text-white transition-all hover:bg-[#1A2B45] sm:inline-flex md:hidden lg:inline-flex"
+        href={contactHref}
+        class="hidden items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[14px] font-medium text-white transition-all hover:bg-[#1A2B45] lg:inline-flex"
       >
-        Vyžádat demo
+        {t('nav.cta')}
       </a>
 
-      <!-- Mobile menu toggle -->
       <button
         type="button"
         id="mobile-menu-toggle"
-        aria-label="Otevřít menu"
+        aria-label={t('nav.menu.open')}
         aria-controls="mobile-menu"
         aria-expanded="false"
         class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-stone bg-pearl text-ink transition-colors hover:bg-mist md:hidden"
@@ -66,11 +75,7 @@ const navLinks = [
     </div>
   </div>
 
-  <!-- Mobile menu (slide-down) -->
-  <div
-    id="mobile-menu"
-    class="hidden border-t border-stone bg-pearl md:hidden"
-  >
+  <div id="mobile-menu" class="hidden border-t border-stone bg-pearl md:hidden">
     <nav class="container-pm py-4">
       <ul class="flex flex-col">
         {
@@ -87,10 +92,10 @@ const navLinks = [
         }
       </ul>
       <a
-        href="/#contact"
+        href={contactHref}
         class="mobile-nav-link mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-ink px-4 py-3 text-[15px] font-medium text-white transition-all hover:bg-[#1A2B45]"
       >
-        Vyžádat demo
+        {t('nav.cta')}
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
       </a>
     </nav>
@@ -110,13 +115,11 @@ const navLinks = [
       iconOpen.classList.add('hidden');
       iconClose.classList.remove('hidden');
       toggle.setAttribute('aria-expanded', 'true');
-      toggle.setAttribute('aria-label', 'Zavřít menu');
     } else {
       menu.classList.add('hidden');
       iconOpen.classList.remove('hidden');
       iconClose.classList.add('hidden');
       toggle.setAttribute('aria-expanded', 'false');
-      toggle.setAttribute('aria-label', 'Otevřít menu');
     }
   }
 
@@ -125,12 +128,10 @@ const navLinks = [
     setOpen(!isOpen);
   });
 
-  // Zavřít menu po kliknutí na link (kvůli anchor scrollu)
   document.querySelectorAll('.mobile-nav-link').forEach((link) => {
     link.addEventListener('click', () => setOpen(false));
   });
 
-  // Zavřít menu po Esc
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') setOpen(false);
   });

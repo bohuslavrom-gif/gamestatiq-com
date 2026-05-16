@@ -1,112 +1,76 @@
 ---
+import { getLangFromUrl, useTranslations, localizedPath } from '../i18n/utils';
+
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+const home = localizedPath('/', lang);
+
 const tiers = [
-  {
-    name: 'Klub',
-    price: '690 Kč',
-    period: '/ měsíc',
-    desc: 'Pro jeden tým. App, public widget, coach analytika, neomezené zápasy.',
-    features: [
-      'Live tracking + Sheets sync',
-      'Public stats widget',
-      'Coach analytika',
-      'Soupiska s fotkami',
-      'E-mail support',
-    ],
-    cta: 'Zkusit zdarma 30 dní',
-    accent: false,
-  },
-  {
-    name: 'Liga',
-    price: 'Domluva',
-    period: '',
-    desc: 'Pro svazy a ligy. Master view napříč všemi kluby + custom branding.',
-    features: [
-      'Vše z Klubu pro neomezený počet týmů',
-      'Master league standings',
-      'Cross-club leaderboardy',
-      'Custom domain (vase-liga.cz)',
-      'Vlastní branding (váš svazový logo)',
-      'Dedikovaný account manager',
-      'Onboarding workshopy',
-    ],
-    cta: 'Vyžádat nabídku',
-    accent: true,
-  },
-  {
-    name: 'Federace',
-    price: 'Enterprise',
-    period: '',
-    desc: 'Pro národní svazy. White-label deployment + integrace s existujícími systémy.',
-    features: [
-      'Vše z Liga',
-      'White-label nasazení',
-      'API + webhook integrace',
-      'Custom funkcionalita na vyžádání',
-      'SLA + 24/7 support',
-      'On-premise option',
-    ],
-    cta: 'Kontakt',
-    accent: false,
-  },
-];
+  { id: 't1', accent: false, featureCount: 5 },
+  { id: 't2', accent: true,  featureCount: 7 },
+  { id: 't3', accent: false, featureCount: 6 },
+] as const;
 ---
 
 <section id="pricing" class="bg-mist py-20 lg:py-28">
   <div class="container-pm">
     <div class="max-w-2xl">
-      <p class="eyebrow">Cena</p>
-      <h2 class="h-section mt-3">Tři tiery, jeden produkt.</h2>
+      <p class="eyebrow">{t('pricing.eyebrow')}</p>
+      <h2 class="h-section mt-3">{t('pricing.title')}</h2>
       <p class="lead mt-4">
-        Začněte s klubem za cenu fotbalového balónu měsíčně. Roste s vámi
-        do ligy a národního svazu.
+        {t('pricing.lead')}
       </p>
     </div>
 
     <div class="mt-12 grid gap-5 lg:grid-cols-3">
       {
-        tiers.map((t) => (
-          <div
-            class={`relative flex flex-col rounded-xl border bg-pearl p-7 ${
-              t.accent
-                ? 'border-2 border-signal shadow-[0_20px_50px_-15px_rgba(230,57,70,0.3)]'
-                : 'border-stone'
-            }`}
-          >
-            {t.accent && (
-              <span class="absolute -top-3 right-6 rounded-full bg-signal px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-white">
-                Doporučeno
-              </span>
-            )}
-            <h3 class="text-[20px] font-bold tracking-tight-2 text-ink">{t.name}</h3>
-            <p class="mt-2 text-sm text-slate">{t.desc}</p>
-            <div class="mt-5 flex items-baseline gap-1.5">
-              <span class="text-3xl font-bold tracking-tight-3 text-ink">{t.price}</span>
-              {t.period && <span class="text-sm text-slate">{t.period}</span>}
-            </div>
-            <ul class="mt-6 space-y-2.5 text-[14px] text-graphite">
-              {
-                t.features.map((f) => (
+        tiers.map((tier) => {
+          const features = Array.from({ length: tier.featureCount }, (_, i) =>
+            t(`pricing.${tier.id}.f${i + 1}` as any)
+          );
+          return (
+            <div
+              class={`relative flex flex-col rounded-xl border bg-pearl p-7 ${
+                tier.accent
+                  ? 'border-2 border-signal shadow-[0_20px_50px_-15px_rgba(230,57,70,0.3)]'
+                  : 'border-stone'
+              }`}
+            >
+              {tier.accent && (
+                <span class="absolute -top-3 right-6 rounded-full bg-signal px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-white">
+                  {t('pricing.recommended')}
+                </span>
+              )}
+              <h3 class="text-[20px] font-bold tracking-tight-2 text-ink">{t(`pricing.${tier.id}.name` as any)}</h3>
+              <p class="mt-2 text-sm text-slate">{t(`pricing.${tier.id}.desc` as any)}</p>
+              <div class="mt-5 flex items-baseline gap-1.5">
+                <span class="text-3xl font-bold tracking-tight-3 text-ink">{t(`pricing.${tier.id}.price` as any)}</span>
+                {t(`pricing.${tier.id}.period` as any) && (
+                  <span class="text-sm text-slate">{t(`pricing.${tier.id}.period` as any)}</span>
+                )}
+              </div>
+              <ul class="mt-6 space-y-2.5 text-[14px] text-graphite">
+                {features.map((f) => (
                   <li class="flex items-start gap-2.5">
                     <svg class="mt-[3px] h-4 w-4 flex-shrink-0 text-verde" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
                     {f}
                   </li>
-                ))
-              }
-            </ul>
-            <a
-              href="#contact"
-              class={`mt-7 ${t.accent ? 'btn-primary' : 'btn-secondary'} w-full`}
-            >
-              {t.cta}
-            </a>
-          </div>
-        ))
+                ))}
+              </ul>
+              <a
+                href={home + '#contact'}
+                class={`mt-7 ${tier.accent ? 'btn-primary' : 'btn-secondary'} w-full`}
+              >
+                {t(`pricing.${tier.id}.cta` as any)}
+              </a>
+            </div>
+          );
+        })
       }
     </div>
 
     <p class="mx-auto mt-10 max-w-xl text-center text-sm text-slate">
-      Všechny ceny bez DPH. Roční předplatné = 2 měsíce zdarma.
-      Specifická pravidla pro neziskové sportovní organizace — napište nám.
+      {t('pricing.footnote')}
     </p>
   </div>
 </section>

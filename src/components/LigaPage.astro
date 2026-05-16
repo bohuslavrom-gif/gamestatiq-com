@@ -1,0 +1,320 @@
+---
+import { getLangFromUrl, useTranslations, localizedPath } from '../i18n/utils';
+
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+const home = localizedPath('/', lang);
+
+// ─── Mock data ───────────────────────────────────────────────────────
+// Club + player names are proper nouns and not translated.
+
+type Club = {
+  rank: number;
+  name: string;
+  city: string;
+  abbr: string;
+  played: number;
+  w: number;
+  d: number;
+  l: number;
+  scored: number;
+  conceded: number;
+  points: number;
+  form: ('W' | 'L' | 'D')[];
+};
+
+const clubs: Club[] = [
+  { rank: 1, name: 'Praha Lions',     city: 'Praha',         abbr: 'PRA', played: 8, w: 8, d: 0, l: 0, scored: 340, conceded: 142, points: 24, form: ['W','W','W','W','W'] },
+  { rank: 2, name: 'Brno Wolves',     city: 'Brno',          abbr: 'BRN', played: 8, w: 6, d: 0, l: 2, scored: 287, conceded: 198, points: 18, form: ['W','W','L','W','W'] },
+  { rank: 3, name: 'Ostrava Eagles',  city: 'Ostrava',       abbr: 'OST', played: 8, w: 5, d: 1, l: 2, scored: 256, conceded: 220, points: 16, form: ['W','W','D','L','W'] },
+  { rank: 4, name: 'Plzeň Bears',     city: 'Plzeň',         abbr: 'PLZ', played: 8, w: 4, d: 2, l: 2, scored: 234, conceded: 231, points: 14, form: ['D','W','W','D','L'] },
+  { rank: 5, name: 'Liberec Sharks',  city: 'Liberec',       abbr: 'LBC', played: 8, w: 3, d: 1, l: 4, scored: 198, conceded: 245, points: 10, form: ['L','W','L','D','W'] },
+  { rank: 6, name: 'Olomouc Hawks',   city: 'Olomouc',       abbr: 'OLO', played: 8, w: 2, d: 1, l: 5, scored: 176, conceded: 268, points: 7,  form: ['L','L','W','D','L'] },
+  { rank: 7, name: 'Hradec Tigers',   city: 'Hradec Králové',abbr: 'HRA', played: 8, w: 1, d: 1, l: 6, scored: 152, conceded: 289, points: 4,  form: ['L','L','D','L','W'] },
+  { rank: 8, name: 'Vary Phoenix',    city: 'Karlovy Vary',  abbr: 'KVA', played: 8, w: 0, d: 0, l: 8, scored: 98,  conceded: 348, points: 0,  form: ['L','L','L','L','L'] },
+];
+
+const formLabel: Record<'W'|'L'|'D', string> = {
+  W: t('liga.standings.form.win'),
+  D: t('liga.standings.form.draw'),
+  L: t('liga.standings.form.loss'),
+};
+
+const teamHighlights = [
+  { id: 'h1', value: '42.5', team: 'Praha Lions',    accent: 'signal' },
+  { id: 'h2', value: '17.8', team: 'Praha Lions',    accent: 'verde' },
+  { id: 'h3', value: '8',    team: 'Praha Lions',    accent: 'spark' },
+  { id: 'h4', value: '+4',   team: 'Liberec Sharks', accent: 'plum' },
+] as const;
+
+const topScorers = [
+  { rank: 1, name: 'Tomáš Vacek',    club: 'Praha Lions',     value: 96 },
+  { rank: 2, name: 'Lukáš Macho',    club: 'Brno Wolves',     value: 82 },
+  { rank: 3, name: 'Petr Červenka',  club: 'Ostrava Eagles',  value: 71 },
+  { rank: 4, name: 'Josef Drmla',    club: 'Praha Lions',     value: 64 },
+  { rank: 5, name: 'Nikolas Kopecký',club: 'Plzeň Bears',     value: 58 },
+];
+
+const topAssists = [
+  { rank: 1, name: 'Adam Beck',      club: 'Praha Lions',     value: 41 },
+  { rank: 2, name: 'David Krása',    club: 'Brno Wolves',     value: 34 },
+  { rank: 3, name: 'Filip Šťastný',  club: 'Liberec Sharks',  value: 29 },
+  { rank: 4, name: 'Martin Pokorný', club: 'Ostrava Eagles',  value: 26 },
+  { rank: 5, name: 'Jan Novotný',    club: 'Plzeň Bears',     value: 22 },
+];
+
+const topDefenders = [
+  { rank: 1, name: 'Patrik Souček',  club: 'Praha Lions',     value: 47 },
+  { rank: 2, name: 'Václav Horák',   club: 'Brno Wolves',     value: 39 },
+  { rank: 3, name: 'Marek Dvořák',   club: 'Ostrava Eagles',  value: 36 },
+  { rank: 4, name: 'Roman Veselý',   club: 'Liberec Sharks',  value: 31 },
+  { rank: 5, name: 'Tomáš Šimek',    club: 'Hradec Tigers',   value: 28 },
+];
+
+const accentMap: Record<string, string> = {
+  signal: 'bg-signal/10 text-signal',
+  verde:  'bg-verde/15 text-[#1B6E62]',
+  spark:  'bg-spark/15 text-[#A0531B]',
+  plum:   'bg-plum/15 text-[#4F3878]',
+};
+---
+
+<!-- Page header -->
+<section class="border-b border-stone bg-ink text-white">
+  <div class="container-pm py-14 lg:py-20">
+    <div class="flex flex-wrap items-center gap-3">
+      <span class="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80">
+        <span class="h-1.5 w-1.5 rounded-full bg-signal"></span>
+        {t('liga.badge')}
+      </span>
+      <span class="text-[11px] uppercase tracking-[0.12em] text-white/40">{t('liga.season')}</span>
+    </div>
+    <h1 class="h-display mt-5 text-white">{t('liga.title')}</h1>
+    <p class="lead mt-5 max-w-2xl text-white/75">{t('liga.lead')}</p>
+    <div class="mt-7 grid max-w-2xl grid-cols-2 gap-6 border-t border-white/10 pt-6 sm:grid-cols-4">
+      <div>
+        <p class="text-2xl font-bold tabular-nums tracking-tight-2 text-white">8</p>
+        <p class="mt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-white/50">{t('liga.kpi.clubs')}</p>
+      </div>
+      <div>
+        <p class="text-2xl font-bold tabular-nums tracking-tight-2 text-white">32</p>
+        <p class="mt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-white/50">{t('liga.kpi.matches')}</p>
+      </div>
+      <div>
+        <p class="text-2xl font-bold tabular-nums tracking-tight-2 text-white">1 741</p>
+        <p class="mt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-white/50">{t('liga.kpi.points')}</p>
+      </div>
+      <div>
+        <p class="text-2xl font-bold tabular-nums tracking-tight-2 text-white">192</p>
+        <p class="mt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-white/50">{t('liga.kpi.players')}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Standings -->
+<section class="bg-pearl py-16 lg:py-20">
+  <div class="container-pm">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p class="eyebrow">{t('liga.standings.eyebrow')}</p>
+        <h2 class="h-section mt-3">{t('liga.standings.title')}</h2>
+        <p class="lead mt-3 max-w-xl">{t('liga.standings.lead')}</p>
+      </div>
+      <span class="rounded-md border border-stone bg-mist px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate">
+        {t('liga.standings.updated')}
+      </span>
+    </div>
+
+    <div class="mt-10 overflow-x-auto rounded-xl border border-stone bg-pearl">
+      <table class="w-full min-w-[720px] text-left text-[14px]">
+        <thead class="border-b border-stone bg-mist text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">
+          <tr>
+            <th class="px-4 py-3 lg:px-6">#</th>
+            <th class="py-3">{t('liga.standings.col.club')}</th>
+            <th class="px-3 py-3 text-center tabular-nums">{t('liga.standings.col.played')}</th>
+            <th class="px-3 py-3 text-center tabular-nums">{t('liga.standings.col.w')}</th>
+            <th class="px-3 py-3 text-center tabular-nums">{t('liga.standings.col.d')}</th>
+            <th class="px-3 py-3 text-center tabular-nums">{t('liga.standings.col.l')}</th>
+            <th class="px-3 py-3 text-center tabular-nums">{t('liga.standings.col.diff')}</th>
+            <th class="px-3 py-3 text-center tabular-nums">{t('liga.standings.col.score')}</th>
+            <th class="px-3 py-3 text-center">{t('liga.standings.col.form')}</th>
+            <th class="px-4 py-3 text-right tabular-nums lg:px-6">{t('liga.standings.col.points')}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-stone">
+          {clubs.map((c) => (
+            <tr class={`group transition-colors hover:bg-mist/60 ${c.rank === 1 ? 'bg-signal/[0.03]' : ''}`}>
+              <td class="px-4 py-3.5 lg:px-6">
+                <span class={`inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded font-mono text-[12px] font-bold ${c.rank === 1 ? 'bg-signal text-white' : c.rank <= 3 ? 'bg-mist text-ink' : 'text-graphite'}`}>
+                  {c.rank}
+                </span>
+              </td>
+              <td class="py-3.5">
+                <div class="flex items-center gap-3">
+                  <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-[10px] font-bold tracking-[0.04em] text-white">{c.abbr}</span>
+                  <div>
+                    <p class="text-[15px] font-semibold tracking-tight-2 text-ink">{c.name}</p>
+                    <p class="text-[11px] text-slate">{c.city}</p>
+                  </div>
+                </div>
+              </td>
+              <td class="px-3 py-3.5 text-center tabular-nums text-graphite">{c.played}</td>
+              <td class="px-3 py-3.5 text-center font-semibold tabular-nums text-verde">{c.w}</td>
+              <td class="px-3 py-3.5 text-center tabular-nums text-graphite">{c.d}</td>
+              <td class="px-3 py-3.5 text-center tabular-nums text-slate">{c.l}</td>
+              <td class="px-3 py-3.5 text-center tabular-nums text-graphite">
+                <span class="text-ink">{c.scored}</span><span class="text-stone-2"> / </span><span class="text-slate">{c.conceded}</span>
+              </td>
+              <td class="px-3 py-3.5 text-center tabular-nums">
+                <span class={c.scored - c.conceded > 0 ? 'font-semibold text-verde' : c.scored - c.conceded < 0 ? 'text-slate' : 'text-graphite'}>
+                  {c.scored - c.conceded > 0 ? '+' : ''}{c.scored - c.conceded}
+                </span>
+              </td>
+              <td class="px-3 py-3.5">
+                <div class="flex items-center justify-center gap-1">
+                  {c.form.map((f) => (
+                    <span class={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold ${
+                      f === 'W' ? 'bg-verde/20 text-[#1B6E62]' :
+                      f === 'D' ? 'bg-spark/20 text-[#A0531B]' :
+                      'bg-stone text-slate'
+                    }`}>{formLabel[f]}</span>
+                  ))}
+                </div>
+              </td>
+              <td class="px-4 py-3.5 text-right tabular-nums lg:px-6">
+                <span class="text-[17px] font-bold tracking-tight-2 text-ink">{c.points}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <p class="mt-4 text-[12px] text-slate">{t('liga.standings.legend')}</p>
+  </div>
+</section>
+
+<!-- Team highlights -->
+<section class="border-t border-stone bg-mist py-16 lg:py-20">
+  <div class="container-pm">
+    <div class="max-w-2xl">
+      <p class="eyebrow">{t('liga.highlights.eyebrow')}</p>
+      <h2 class="h-section mt-3">{t('liga.highlights.title')}</h2>
+      <p class="lead mt-3">{t('liga.highlights.lead')}</p>
+    </div>
+
+    <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+      {teamHighlights.map((h) => (
+        <div class="rounded-xl border border-stone bg-pearl p-6">
+          <span class={`inline-flex items-center rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${accentMap[h.accent]}`}>
+            {t(`liga.${h.id}.label` as any)}
+          </span>
+          <div class="mt-4 flex items-baseline gap-1.5">
+            <span class="text-3xl font-bold tabular-nums tracking-tight-3 text-ink">{h.value}</span>
+            <span class="text-[12px] font-medium text-slate">{t(`liga.${h.id}.unit` as any)}</span>
+          </div>
+          <p class="mt-4 text-[15px] font-semibold tracking-tight-2 text-ink">{h.team}</p>
+          <p class="mt-1 text-[13px] text-graphite">{t(`liga.${h.id}.sub` as any)}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<!-- Cross-club leaderboards -->
+<section class="border-t border-stone bg-pearl py-16 lg:py-20">
+  <div class="container-pm">
+    <div class="max-w-2xl">
+      <p class="eyebrow">{t('liga.leaders.eyebrow')}</p>
+      <h2 class="h-section mt-3">{t('liga.leaders.title')}</h2>
+      <p class="lead mt-3">{t('liga.leaders.lead')}</p>
+    </div>
+
+    <div class="mt-10 grid gap-5 lg:grid-cols-3">
+      <div class="rounded-xl border border-stone bg-pearl">
+        <div class="flex items-center justify-between border-b border-stone px-6 py-4">
+          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">{t('liga.leaders.scorers.title')}</p>
+          <span class="rounded-md bg-signal/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-signal">{t('liga.leaders.scorers.badge')}</span>
+        </div>
+        <ol class="divide-y divide-stone">
+          {topScorers.map((p) => (
+            <li class="flex items-center gap-4 px-6 py-3.5">
+              <span class={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold tabular-nums ${p.rank === 1 ? 'bg-signal text-white' : 'bg-mist text-graphite'}`}>{p.rank}</span>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[14px] font-semibold text-ink">{p.name}</p>
+                <p class="truncate text-[12px] text-slate">{p.club}</p>
+              </div>
+              <p class="text-[15px] font-bold tabular-nums tracking-tight-2 text-ink">{p.value}<span class="ml-0.5 text-[11px] font-medium text-slate">{t('liga.leaders.scorers.unit')}</span></p>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <div class="rounded-xl border border-stone bg-pearl">
+        <div class="flex items-center justify-between border-b border-stone px-6 py-4">
+          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">{t('liga.leaders.assists.title')}</p>
+          <span class="rounded-md bg-sky/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1B5E83]">{t('liga.leaders.assists.badge')}</span>
+        </div>
+        <ol class="divide-y divide-stone">
+          {topAssists.map((p) => (
+            <li class="flex items-center gap-4 px-6 py-3.5">
+              <span class={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold tabular-nums ${p.rank === 1 ? 'bg-sky/30 text-[#1B5E83]' : 'bg-mist text-graphite'}`}>{p.rank}</span>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[14px] font-semibold text-ink">{p.name}</p>
+                <p class="truncate text-[12px] text-slate">{p.club}</p>
+              </div>
+              <p class="text-[15px] font-bold tabular-nums tracking-tight-2 text-ink">{p.value}</p>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <div class="rounded-xl border border-stone bg-pearl">
+        <div class="flex items-center justify-between border-b border-stone px-6 py-4">
+          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">{t('liga.leaders.defenders.title')}</p>
+          <span class="rounded-md bg-verde/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1B6E62]">{t('liga.leaders.defenders.badge')}</span>
+        </div>
+        <ol class="divide-y divide-stone">
+          {topDefenders.map((p) => (
+            <li class="flex items-center gap-4 px-6 py-3.5">
+              <span class={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold tabular-nums ${p.rank === 1 ? 'bg-verde/30 text-[#1B6E62]' : 'bg-mist text-graphite'}`}>{p.rank}</span>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[14px] font-semibold text-ink">{p.name}</p>
+                <p class="truncate text-[12px] text-slate">{p.club}</p>
+              </div>
+              <p class="text-[15px] font-bold tabular-nums tracking-tight-2 text-ink">{p.value}</p>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Bottom CTA -->
+<section class="bg-ink py-16 lg:py-20 text-white">
+  <div class="container-pm">
+    <div class="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.04] to-white/[0.01] p-8 lg:p-12">
+      <div class="grid items-center gap-8 lg:grid-cols-[1.4fr_1fr]">
+        <div>
+          <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-signal">{t('liga.cta.eyebrow')}</p>
+          <h2 class="h-section mt-3 text-white">{t('liga.cta.title.1')} {t('liga.cta.title.2')}</h2>
+          <p class="mt-4 max-w-xl text-[17px] leading-relaxed text-white/75">
+            {t('liga.cta.lead.1')} <span class="text-white">{t('liga.cta.lead.2')}</span>{t('liga.cta.lead.3')}
+          </p>
+        </div>
+        <div class="flex flex-col gap-3 lg:items-end">
+          <a
+            href={home + '#contact'}
+            class="inline-flex items-center justify-center gap-2 rounded-lg bg-signal px-6 py-3.5 text-[15px] font-semibold text-white transition-all hover:bg-[#C8313D] active:scale-[0.98]"
+          >
+            {t('liga.cta.button')}
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </a>
+          <p class="text-[12px] text-white/40 lg:text-right">{t('liga.cta.subline')}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

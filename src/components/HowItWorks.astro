@@ -1,42 +1,25 @@
 ---
+import { getLangFromUrl, useTranslations } from '../i18n/utils';
+
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+
 const steps = [
-  {
-    n: '01',
-    title: 'Statistik u hřiště',
-    body:
-      'Mobilní app na PWA — žádná instalace přes app store. Statistik tap-tap zachycuje hru během 1–2 sekund na akci.',
-  },
-  {
-    n: '02',
-    title: 'Sync do Sheets',
-    body:
-      'Po zápase jeden tap → všechna data (drives, plays, fauly, per-hráč staty) se uloží do strukturovaného Google Sheets vašeho klubu.',
-  },
-  {
-    n: '03',
-    title: 'Live na webu pro fanoušky',
-    body:
-      'Public widget se aktualizuje automaticky. Fanoušci, sponzoři i federace vidí stejný profi scoreboard.',
-  },
-  {
-    n: '04',
-    title: 'Trenérská analytika',
-    body:
-      'Coach widget agreguje sezónu — down distance, playbook efficiency, opponent yardage. Příprava na další zápas v jednom view.',
-  },
-];
+  { n: '01', id: 's1' },
+  { n: '02', id: 's2' },
+  { n: '03', id: 's3' },
+  { n: '04', id: 's4' },
+] as const;
 ---
 
 <section id="how" class="bg-pearl py-20 lg:py-28">
   <div class="container-pm">
     <div class="grid gap-12 lg:grid-cols-[0.9fr_1.1fr]">
       <div>
-        <p class="eyebrow">Jak to funguje</p>
-        <h2 class="h-section mt-3">Čtyři kroky od zápasu k analytice.</h2>
+        <p class="eyebrow">{t('how.eyebrow')}</p>
+        <h2 class="h-section mt-3">{t('how.title')}</h2>
         <p class="lead mt-4 max-w-md">
-          GameStatiq odděluje sběr dat (jeden statistik s mobilem) od distribuce
-          (web pro fanoušky + analytika pro trenéry). Žádné přepisování ze sešitu,
-          žádné duplikáty.
+          {t('how.lead')}
         </p>
       </div>
 
@@ -48,8 +31,8 @@ const steps = [
                 {s.n}
               </span>
               <div>
-                <h3 class="text-[16px] font-semibold tracking-tight-2 text-ink">{s.title}</h3>
-                <p class="mt-1.5 text-[14px] leading-relaxed text-graphite">{s.body}</p>
+                <h3 class="text-[16px] font-semibold tracking-tight-2 text-ink">{t(`how.${s.id}.title` as any)}</h3>
+                <p class="mt-1.5 text-[14px] leading-relaxed text-graphite">{t(`how.${s.id}.body` as any)}</p>
               </div>
             </li>
           ))

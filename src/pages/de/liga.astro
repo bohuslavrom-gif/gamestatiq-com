@@ -1,0 +1,11 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import LigaPage from '../../components/LigaPage.astro';
+import { useTranslations } from '../../i18n/utils';
+
+const t = useTranslations('de');
+---
+
+<BaseLayout title={t('meta.liga.title')} description={t('meta.liga.description')}>
+  <LigaPage />
+</BaseLayout>

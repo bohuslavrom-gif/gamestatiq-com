@@ -1,4 +1,9 @@
 ---
+import { getLangFromUrl, useTranslations, localizedPath } from '../i18n/utils';
+
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+const home = localizedPath('/', lang);
 ---
 
 <section class="relative overflow-hidden bg-pearl">
@@ -7,56 +12,52 @@
       <div>
         <p class="eyebrow inline-flex items-center gap-2">
           <span class="h-1.5 w-1.5 rounded-full bg-signal"></span>
-          Sport stats platforma
+          {t('hero.eyebrow')}
         </p>
         <h1 class="h-display mt-5">
-          Měřte každou hru.
-          <span class="text-signal">Od amatérského</span>
+          {t('hero.title.1')}
+          <span class="text-signal">{t('hero.title.2')}</span>
           <br class="hidden sm:block" />
-          zápasu po ligové finále.
+          {t('hero.title.3')}
         </h1>
         <p class="lead mt-6 max-w-xl">
-          GameStatiq je live stats platforma pro vážné týmy, ligy a svazy.
-          Sbírejte data v reálném čase, sdílejte je s fanoušky a dejte
-          trenérům analytiku, která pomůže vyhrát další zápas.
+          {t('hero.lead')}
         </p>
 
         <div class="mt-8 flex flex-wrap gap-3">
-          <a href="#contact" class="btn-primary">
-            Vyžádat demo
+          <a href={home + '#contact'} class="btn-primary">
+            {t('hero.cta.primary')}
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
           </a>
-          <a href="/liga" class="btn-secondary">
-            Live demo: liga
+          <a href={localizedPath('/liga', lang)} class="btn-secondary">
+            {t('hero.cta.secondary')}
           </a>
         </div>
 
         <div class="mt-10 grid grid-cols-3 gap-6 border-t border-stone pt-6 sm:max-w-md">
           <div>
-            <p class="text-2xl font-bold tracking-tight-2 tabular-nums">5<span class="text-signal">+</span></p>
-            <p class="mt-1 text-xs font-medium uppercase tracking-[0.08em] text-slate">Klubů v pilotu</p>
+            <p class="text-2xl font-bold tracking-tight-2 tabular-nums">{t('hero.stat.1.value')}<span class="text-signal">+</span></p>
+            <p class="mt-1 text-xs font-medium uppercase tracking-[0.08em] text-slate">{t('hero.stat.1.label')}</p>
           </div>
           <div>
-            <p class="text-2xl font-bold tracking-tight-2 tabular-nums">120<span class="text-signal">+</span></p>
-            <p class="mt-1 text-xs font-medium uppercase tracking-[0.08em] text-slate">Zápasů zachyceno</p>
+            <p class="text-2xl font-bold tracking-tight-2 tabular-nums">{t('hero.stat.2.value')}<span class="text-signal">+</span></p>
+            <p class="mt-1 text-xs font-medium uppercase tracking-[0.08em] text-slate">{t('hero.stat.2.label')}</p>
           </div>
           <div>
-            <p class="text-2xl font-bold tracking-tight-2 tabular-nums">{`<2 s`}</p>
-            <p class="mt-1 text-xs font-medium uppercase tracking-[0.08em] text-slate">Latence k fanouškům</p>
+            <p class="text-2xl font-bold tracking-tight-2 tabular-nums">{t('hero.stat.3.value')}</p>
+            <p class="mt-1 text-xs font-medium uppercase tracking-[0.08em] text-slate">{t('hero.stat.3.label')}</p>
           </div>
         </div>
       </div>
 
       <!-- Visual: real screenshots — PC widget (background) + Mobile app (foreground) -->
       <div class="relative min-h-[540px] lg:min-h-[620px]">
-        <!-- Soft brand backdrop -->
         <div class="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-br from-mist via-pearl to-mist"></div>
         <div class="absolute -top-4 -right-2 -z-10 h-40 w-40 rounded-full bg-signal/10 blur-3xl"></div>
         <div class="absolute bottom-0 -left-4 -z-10 h-48 w-48 rounded-full bg-sky/20 blur-3xl"></div>
 
-        <!-- PC monitor (background, real screenshot of public stats page) -->
+        <!-- PC monitor (background) -->
         <div class="absolute left-0 top-2 w-[92%] max-w-[480px] lg:left-[-4%] lg:top-0">
-          <!-- Monitor bezel -->
           <div class="rounded-[14px] bg-ink p-2 shadow-[0_30px_60px_-20px_rgba(15,27,45,0.4)] ring-1 ring-black/10">
             <div class="overflow-hidden rounded-[8px] bg-pearl">
               <img
@@ -69,12 +70,11 @@
               />
             </div>
           </div>
-          <!-- Monitor stand -->
           <div class="mx-auto mt-1 h-1.5 w-1/3 rounded-b-md bg-ink/80"></div>
           <div class="mx-auto h-2 w-2/3 rounded-full bg-ink/15"></div>
         </div>
 
-        <!-- Mobile phone (foreground, real screenshot of scorer app) -->
+        <!-- Mobile phone (foreground) -->
         <div class="absolute bottom-0 right-0 w-[38%] max-w-[180px] lg:right-4">
           <div class="rounded-[2rem] bg-ink p-1.5 shadow-[0_40px_80px_-20px_rgba(15,27,45,0.55)] ring-1 ring-black/20">
             <div class="overflow-hidden rounded-[1.55rem] bg-pearl">
@@ -89,7 +89,6 @@
             </div>
           </div>
         </div>
-
       </div>
     </div>
   </div>

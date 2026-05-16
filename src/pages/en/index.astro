@@ -1,0 +1,19 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Hero from '../../components/Hero.astro';
+import Features from '../../components/Features.astro';
+import HowItWorks from '../../components/HowItWorks.astro';
+import Pricing from '../../components/Pricing.astro';
+import ContactCTA from '../../components/ContactCTA.astro';
+import { useTranslations } from '../../i18n/utils';
+
+const t = useTranslations('en');
+---
+
+<BaseLayout title={t('meta.home.title')} description={t('meta.home.description')}>
+  <Hero />
+  <Features />
+  <HowItWorks />
+  <Pricing />
+  <ContactCTA />
+</BaseLayout>

@@ -5,12 +5,12 @@ import Features from '../components/Features.astro';
 import HowItWorks from '../components/HowItWorks.astro';
 import Pricing from '../components/Pricing.astro';
 import ContactCTA from '../components/ContactCTA.astro';
+import { getLangFromUrl, useTranslations } from '../i18n/utils';
+
+const t = useTranslations(getLangFromUrl(Astro.url));
 ---
 
-<BaseLayout
-  title="GameStatiq — Sport stats platforma pro týmy, ligy a svazy"
-  description="Měřte každou hru. Live stats, public widget pro fanoušky, trenérská analytika. Pro vážné amatérské týmy a národní svazy."
->
+<BaseLayout title={t('meta.home.title')} description={t('meta.home.description')}>
   <Hero />
   <Features />
   <HowItWorks />

@@ -1,48 +1,17 @@
 ---
+import { getLangFromUrl, useTranslations } from '../i18n/utils';
+
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+
 const features = [
-  {
-    iconPath: 'M3 3v18h18 M7 13h3v6 M13 9h3v10 M19 5h3v14',
-    title: 'Live tracking během zápasu',
-    body:
-      'Mobilní app pro statistika u hřiště. Tap-tap zachycuje plays, drives, fauly. Žádné tlustopisy, žádné Excel po zápase.',
-    accent: 'sky',
-  },
-  {
-    iconPath: 'M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1 M16 3.13a4 4 0 0 1 0 7.75 M21 21v-1a5 5 0 0 0-3-4.58',
-    title: 'Profily hráčů a týmů',
-    body:
-      'Per-hráč statistiky (QB, WR, DB), career totals, foto roster. Sdílíš veřejně, fanoušci se vrací.',
-    accent: 'signal',
-  },
-  {
-    iconPath: 'M8 4v16 M8 4h12l-3 5 3 5H8',
-    title: 'Trenérská analytika',
-    body:
-      'Down distance, playbook efficiency, opponent tendencies. Data co před appem viděl jen pro tým hráč na YouTube.',
-    accent: 'verde',
-  },
-  {
-    iconPath: 'M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z M12 3v9l5 3',
-    title: 'Real-time data fanouškům',
-    body:
-      'Public widget se updatuje live během zápasu. Fanoušci kolem stadionu i doma vidí stejný scoreboard jako trenér.',
-    accent: 'spark',
-  },
-  {
-    iconPath: 'M3 7h18 M5 11h14 M7 15h10 M9 19h6',
-    title: 'Ligová tabulka v jednom místě',
-    body:
-      'Federace získá master view: standings, leaderboardy, head-to-head napříč všemi kluby svazu.',
-    accent: 'plum',
-  },
-  {
-    iconPath: 'M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z M17 21v-8H7v8 M7 3v5h8',
-    title: 'Export do Google Sheets',
-    body:
-      'Každý zápas se ukládá do strukturovaného Sheetu — historie, audit, vlastní reporty. Vaše data zůstávají vaše.',
-    accent: 'sky',
-  },
-];
+  { id: 'f1', iconPath: 'M3 3v18h18 M7 13h3v6 M13 9h3v10 M19 5h3v14', accent: 'sky' },
+  { id: 'f2', iconPath: 'M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1 M16 3.13a4 4 0 0 1 0 7.75 M21 21v-1a5 5 0 0 0-3-4.58', accent: 'signal' },
+  { id: 'f3', iconPath: 'M8 4v16 M8 4h12l-3 5 3 5H8', accent: 'verde' },
+  { id: 'f4', iconPath: 'M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z M12 3v9l5 3', accent: 'spark' },
+  { id: 'f5', iconPath: 'M3 7h18 M5 11h14 M7 15h10 M9 19h6', accent: 'plum' },
+  { id: 'f6', iconPath: 'M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z M17 21v-8H7v8 M7 3v5h8', accent: 'sky' },
+] as const;
 
 const accentBgClass: Record<string, string> = {
   signal: 'bg-signal/10 text-signal',
@@ -56,11 +25,10 @@ const accentBgClass: Record<string, string> = {
 <section id="features" class="bg-mist py-20 lg:py-28">
   <div class="container-pm">
     <div class="max-w-2xl">
-      <p class="eyebrow">Funkce</p>
-      <h2 class="h-section mt-3">Stats infrastruktura, ne další tabulka.</h2>
+      <p class="eyebrow">{t('features.eyebrow')}</p>
+      <h2 class="h-section mt-3">{t('features.title')}</h2>
       <p class="lead mt-4">
-        Každá funkce je navržená pro reálný zápas — od statistika u hřiště
-        po trenéra v autobuse cestou domů.
+        {t('features.lead')}
       </p>
     </div>
 
@@ -73,8 +41,8 @@ const accentBgClass: Record<string, string> = {
                 <path d={f.iconPath} />
               </svg>
             </div>
-            <h3 class="mt-4 text-[17px] font-semibold tracking-tight-2 text-ink">{f.title}</h3>
-            <p class="mt-2 text-[14px] leading-relaxed text-graphite">{f.body}</p>
+            <h3 class="mt-4 text-[17px] font-semibold tracking-tight-2 text-ink">{t(`features.${f.id}.title` as any)}</h3>
+            <p class="mt-2 text-[14px] leading-relaxed text-graphite">{t(`features.${f.id}.body` as any)}</p>
           </div>
         ))
       }
