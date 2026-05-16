@@ -1,0 +1,137 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+
+const teamStats = [
+  { label: 'Body / zápas',        value: '50.0', sub: '+12.3 vs liga avg' },
+  { label: 'Obdržené / zápas',    value: '18.7', sub: '−14.1 vs liga avg' },
+  { label: 'Yards / hra',         value: '6.8',  sub: 'Top 1 v lize' },
+  { label: 'Time of possession',  value: '32:48',sub: 'Top 2 v lize' },
+  { label: '3rd down conv. %',    value: '64%',  sub: '+18 vs liga avg' },
+  { label: 'Red zone TD %',       value: '78%',  sub: 'Top 1 v lize' },
+  { label: 'Turnover differential', value: '+14',sub: 'Top 1 v lize' },
+  { label: 'Penalties / zápas',   value: '3.2',  sub: '−2.1 vs liga avg' },
+];
+
+const topPlayers = [
+  { name: 'Tomáš Vacek', pos: 'QB · #12', stat: '35 TD passes', sub: '231 / 255 cmp, 90.6%' },
+  { name: 'Josef Drmla', pos: 'WR · #2',  stat: '16 TD catches', sub: '58 cmp, 97% efficiency' },
+  { name: 'Nikolas Kopecký', pos: 'WR · #1', stat: '14 TD catches', sub: '66 cmp, 94% efficiency' },
+  { name: 'Patrik Souček', pos: 'DB · #21', stat: '47 zákroků', sub: '5 INTs · 3 forced fumbles' },
+  { name: 'Adam Beck', pos: 'WR · #15', stat: '12 TD catches', sub: 'Top deep ball threat' },
+];
+---
+
+<AppLayout
+  title="Statistiky · GameStatiq"
+  active="stats"
+  pageTitle="Statistiky klubu"
+  pageSub="Sezóna 2026 · Bobcats Muži · 9 z 10 zápasů"
+>
+  <!-- Tabs -->
+  <div class="mb-6 flex flex-wrap gap-1 rounded-lg border border-stone bg-pearl p-1">
+    <button class="rounded-md bg-ink px-4 py-2 text-[13px] font-medium text-white">Tým</button>
+    <button class="rounded-md px-4 py-2 text-[13px] font-medium text-graphite hover:bg-mist">Hráči</button>
+    <button class="rounded-md px-4 py-2 text-[13px] font-medium text-graphite hover:bg-mist">Soupeř (head-to-head)</button>
+    <button class="rounded-md px-4 py-2 text-[13px] font-medium text-graphite hover:bg-mist">Trendy</button>
+  </div>
+
+  <!-- Public stats link -->
+  <div class="mb-6 flex flex-col items-start justify-between gap-3 rounded-lg border border-sky/30 bg-sky/5 p-4 sm:flex-row sm:items-center">
+    <div class="flex items-start gap-3">
+      <svg class="mt-0.5 h-5 w-5 flex-shrink-0 text-[#1B5E83]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18 M12 3a14 14 0 0 1 0 18 M12 3a14 14 0 0 0 0 18"/></svg>
+      <div>
+        <p class="text-[14px] font-semibold text-ink">Veřejná stránka klubu</p>
+        <p class="text-[12px] text-graphite">Tohle vidí fanoušci, sponzoři a federace. URL: liga.gamestatiq.com/bobcats</p>
+      </div>
+    </div>
+    <a href="https://bohuslavrom-gif.github.io/bobcats-stats/public.html?team=Muži" target="_blank" rel="noopener" class="rounded-lg bg-pearl px-4 py-2 text-[13px] font-medium text-ink hover:bg-mist">Otevřít →</a>
+  </div>
+
+  <!-- KPI grid -->
+  <div class="rounded-xl border border-stone bg-pearl">
+    <div class="border-b border-stone px-5 py-4">
+      <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Týmové metriky</p>
+    </div>
+    <div class="grid divide-x divide-y divide-stone sm:grid-cols-2 lg:grid-cols-4">
+      {teamStats.map((s) => (
+        <div class="p-5">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">{s.label}</p>
+          <p class="mt-3 text-[28px] font-bold tabular-nums tracking-tight-3 text-ink">{s.value}</p>
+          <p class="mt-1 text-[12px] text-graphite">{s.sub}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+
+  <!-- Trend chart -->
+  <div class="mt-6 rounded-xl border border-stone bg-pearl p-5 lg:p-6">
+    <div class="flex items-end justify-between">
+      <div>
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Body / zápas · trend sezóny</p>
+        <p class="text-[12px] text-slate">Bobcats vs. liga průměr · 9 zápasů</p>
+      </div>
+      <span class="rounded-md bg-signal/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-signal">+12.3 nad ligou</span>
+    </div>
+    <div class="mt-6 h-56 w-full">
+      <svg viewBox="0 0 600 200" class="h-full w-full" preserveAspectRatio="none">
+        <!-- Grid -->
+        <line x1="0" y1="50"  x2="600" y2="50"  stroke="#E1E5EB" stroke-width="1" stroke-dasharray="2 4"/>
+        <line x1="0" y1="100" x2="600" y2="100" stroke="#E1E5EB" stroke-width="1" stroke-dasharray="2 4"/>
+        <line x1="0" y1="150" x2="600" y2="150" stroke="#E1E5EB" stroke-width="1" stroke-dasharray="2 4"/>
+        <!-- League average baseline -->
+        <line x1="0" y1="125" x2="600" y2="125" stroke="#5B6B7E" stroke-width="1" stroke-dasharray="4 4"/>
+        <!-- Bobcats area gradient -->
+        <defs>
+          <linearGradient id="statsGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#E63946" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#E63946" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d="M0 70 L75 55 L150 80 L225 35 L300 60 L375 25 L450 40 L525 20 L600 30 L600 200 L0 200 Z" fill="url(#statsGrad)"/>
+        <!-- Bobcats line -->
+        <path d="M0 70 L75 55 L150 80 L225 35 L300 60 L375 25 L450 40 L525 20 L600 30" fill="none" stroke="#E63946" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Points -->
+        <circle cx="0"   cy="70"  r="4" fill="#E63946"/>
+        <circle cx="75"  cy="55"  r="4" fill="#E63946"/>
+        <circle cx="150" cy="80"  r="4" fill="#E63946"/>
+        <circle cx="225" cy="35"  r="4" fill="#E63946"/>
+        <circle cx="300" cy="60"  r="4" fill="#E63946"/>
+        <circle cx="375" cy="25"  r="4" fill="#E63946"/>
+        <circle cx="450" cy="40"  r="4" fill="#E63946"/>
+        <circle cx="525" cy="20"  r="4" fill="#E63946"/>
+        <circle cx="600" cy="30"  r="4" fill="#E63946"/>
+      </svg>
+    </div>
+    <div class="mt-3 flex items-center gap-6 text-[12px]">
+      <span class="inline-flex items-center gap-2"><span class="h-2 w-3 rounded-full bg-signal"></span>Bobcats</span>
+      <span class="inline-flex items-center gap-2"><span class="h-0.5 w-3 bg-slate"></span>Liga průměr (37.7)</span>
+    </div>
+  </div>
+
+  <!-- Top performers -->
+  <div class="mt-6 rounded-xl border border-stone bg-pearl">
+    <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+      <div>
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Top hráči sezóny</p>
+        <p class="text-[12px] text-slate">Per-hráč staty · řazeno dle MVP score</p>
+      </div>
+      <a href="/app/players" class="text-[12px] font-semibold text-signal hover:underline">Celá soupiska →</a>
+    </div>
+    <ul class="divide-y divide-stone">
+      {topPlayers.map((p, i) => (
+        <li class="flex items-center gap-4 px-5 py-4">
+          <span class={`inline-flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-bold tabular-nums ${i === 0 ? 'bg-signal text-white' : 'bg-mist text-graphite'}`}>{i + 1}</span>
+          <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-ink/5 text-[12px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0]).join('')}</span>
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-[14px] font-semibold text-ink">{p.name}</p>
+            <p class="truncate text-[12px] text-slate">{p.pos}</p>
+          </div>
+          <div class="text-right">
+            <p class="text-[14px] font-bold tabular-nums tracking-tight-2 text-ink">{p.stat}</p>
+            <p class="text-[11px] text-slate">{p.sub}</p>
+          </div>
+        </li>
+      ))}
+    </ul>
+  </div>
+</AppLayout>

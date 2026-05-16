@@ -1,0 +1,121 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+
+type Player = {
+  number: number;
+  name: string;
+  position: 'QB' | 'WR' | 'RB' | 'OL' | 'DL' | 'LB' | 'DB' | 'ST';
+  age: number;
+  games: number;
+  primary: string;
+  status: 'active' | 'injured' | 'suspended';
+};
+
+const players: Player[] = [
+  { number: 12, name: 'Tomáš Vacek',     position: 'QB', age: 28, games: 9, primary: '35 TD pass', status: 'active' },
+  { number: 21, name: 'Lukáš Macho',     position: 'QB', age: 24, games: 6, primary: '4 TD pass',  status: 'active' },
+  { number: 2,  name: 'Josef Drmla',     position: 'WR', age: 26, games: 9, primary: '16 TD catch',status: 'active' },
+  { number: 1,  name: 'Nikolas Kopecký', position: 'WR', age: 22, games: 9, primary: '14 TD catch',status: 'active' },
+  { number: 15, name: 'Adam Beck',       position: 'WR', age: 25, games: 8, primary: '12 TD catch',status: 'active' },
+  { number: 45, name: 'Petr Červenka',   position: 'RB', age: 27, games: 9, primary: '8 TD rush',  status: 'active' },
+  { number: 33, name: 'Václav Horák',    position: 'OL', age: 31, games: 9, primary: '3 sacks allowed',status: 'active' },
+  { number: 50, name: 'Marek Dvořák',    position: 'DL', age: 29, games: 9, primary: '12 sacks',    status: 'active' },
+  { number: 7,  name: 'Roman Veselý',    position: 'LB', age: 26, games: 8, primary: '47 zákroků',  status: 'injured' },
+  { number: 23, name: 'Patrik Souček',   position: 'DB', age: 24, games: 9, primary: '5 INT',       status: 'active' },
+  { number: 4,  name: 'David Krása',     position: 'DB', age: 23, games: 9, primary: '4 INT',       status: 'active' },
+  { number: 99, name: 'Tomáš Šimek',     position: 'LB', age: 30, games: 9, primary: '38 zákroků',  status: 'active' },
+];
+
+const posColor: Record<string, string> = {
+  QB: 'bg-signal/15 text-signal',
+  WR: 'bg-sky/15 text-[#1B5E83]',
+  RB: 'bg-spark/15 text-[#A0531B]',
+  OL: 'bg-stone text-graphite',
+  DL: 'bg-verde/15 text-[#1B6E62]',
+  LB: 'bg-plum/15 text-[#4F3878]',
+  DB: 'bg-verde/15 text-[#1B6E62]',
+  ST: 'bg-stone text-graphite',
+};
+
+const statusBadge: Record<string, string> = {
+  active:    'bg-verde/15 text-[#1B6E62]',
+  injured:   'bg-spark/15 text-[#A0531B]',
+  suspended: 'bg-signal/15 text-signal',
+};
+const statusLabel: Record<string, string> = {
+  active: 'Aktivní',
+  injured: 'Zranění',
+  suspended: 'Suspenze',
+};
+---
+
+<AppLayout
+  title="Soupiska · GameStatiq"
+  active="players"
+  pageTitle="Soupiska"
+  pageSub={`Bobcats Muži · ${players.length} hráčů · sezóna 2026`}
+>
+  <!-- Filters -->
+  <div class="mb-5 flex flex-wrap items-center gap-2">
+    <button class="rounded-full bg-ink px-3 py-1.5 text-[12px] font-medium text-white">Všichni ({players.length})</button>
+    <button class="rounded-full border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Útok</button>
+    <button class="rounded-full border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Obrana</button>
+    <button class="rounded-full border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Special teams</button>
+    <span class="ml-auto inline-flex items-center gap-2">
+      <button disabled class="cursor-not-allowed rounded-lg border border-stone bg-mist px-3 py-1.5 text-[12px] font-medium text-stone-2">+ Přidat hráče</button>
+      <span class="rounded-md bg-signal/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-signal">Liga tier ↗</span>
+    </span>
+  </div>
+
+  <!-- Player table -->
+  <div class="overflow-x-auto rounded-xl border border-stone bg-pearl">
+    <table class="w-full min-w-[720px] text-left text-[14px]">
+      <thead class="border-b border-stone bg-mist text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">
+        <tr>
+          <th class="px-5 py-3">#</th>
+          <th class="py-3">Hráč</th>
+          <th class="px-3 py-3">Pozice</th>
+          <th class="px-3 py-3 text-center tabular-nums">Věk</th>
+          <th class="px-3 py-3 text-center tabular-nums">Zápasů</th>
+          <th class="py-3">Hlavní stat</th>
+          <th class="px-3 py-3">Status</th>
+          <th class="px-5 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-stone">
+        {players.map((p) => (
+          <tr class="transition-colors hover:bg-mist/60">
+            <td class="px-5 py-3.5">
+              <span class="font-mono text-[14px] font-bold tabular-nums text-graphite">#{p.number}</span>
+            </td>
+            <td class="py-3.5">
+              <div class="flex items-center gap-3">
+                <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink/5 text-[11px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0]).join('')}</span>
+                <p class="text-[14px] font-semibold tracking-tight-2 text-ink">{p.name}</p>
+              </div>
+            </td>
+            <td class="px-3 py-3.5">
+              <span class={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${posColor[p.position]}`}>{p.position}</span>
+            </td>
+            <td class="px-3 py-3.5 text-center tabular-nums text-graphite">{p.age}</td>
+            <td class="px-3 py-3.5 text-center tabular-nums text-graphite">{p.games}</td>
+            <td class="py-3.5 text-[13px] text-graphite">{p.primary}</td>
+            <td class="px-3 py-3.5">
+              <span class={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold ${statusBadge[p.status]}`}>
+                <span class={`h-1.5 w-1.5 rounded-full ${p.status === 'active' ? 'bg-verde' : p.status === 'injured' ? 'bg-spark' : 'bg-signal'}`}></span>
+                {statusLabel[p.status]}
+              </span>
+            </td>
+            <td class="px-5 py-3.5 text-right">
+              <button class="text-[12px] font-semibold text-slate hover:text-ink">Detail →</button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="mt-4 text-[12px] text-slate">
+    Soupisku spravujete přes Scorer app · změny tady budou možné v tier <strong class="text-graphite">Liga</strong> a vyšším.
+  </p>
+</AppLayout>

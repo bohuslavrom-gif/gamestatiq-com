@@ -1,0 +1,43 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+}
+const { title = 'GameStatiq' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/brand/gamestatiq-favicon.svg" />
+    <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="bg-mist">
+    <div class="min-h-screen flex flex-col">
+      <header class="px-6 py-5">
+        <a href="/" class="inline-flex items-center gap-2.5" aria-label="GameStatiq">
+          <img src="/brand/gamestatiq-icon.svg" alt="" class="h-7 w-7" width="28" height="28" />
+          <span class="text-[17px] font-semibold tracking-tight-2">
+            Game<span class="font-bold text-signal">Statiq</span>
+          </span>
+        </a>
+      </header>
+      <main class="flex flex-1 items-center justify-center px-6 py-10">
+        <slot />
+      </main>
+      <footer class="px-6 py-6 text-center text-[12px] text-slate">
+        © {new Date().getFullYear()} GameStatiq · <a href="/podminky" class="hover:text-ink">Podmínky</a> · <a href="/soukromi" class="hover:text-ink">Soukromí</a>
+      </footer>
+    </div>
+  </body>
+</html>

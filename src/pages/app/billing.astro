@@ -1,0 +1,198 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+
+type Invoice = {
+  id: string;
+  date: string;
+  period: string;
+  amount: string;
+  status: 'paid' | 'open' | 'failed';
+};
+
+const invoices: Invoice[] = [
+  { id: 'INV-2026-005', date: '15. 5. 2026', period: 'květen 2026', amount: '690 Kč', status: 'paid' },
+  { id: 'INV-2026-004', date: '15. 4. 2026', period: 'duben 2026',  amount: '690 Kč', status: 'paid' },
+  { id: 'INV-2026-003', date: '15. 3. 2026', period: 'březen 2026', amount: '690 Kč', status: 'paid' },
+  { id: 'INV-2026-002', date: '15. 2. 2026', period: 'únor 2026',   amount: '690 Kč', status: 'paid' },
+  { id: 'INV-2026-001', date: '15. 1. 2026', period: 'leden 2026',  amount: '690 Kč', status: 'paid' },
+];
+
+const tiers = [
+  {
+    name: 'Klub',
+    price: '690 Kč',
+    period: '/ měs',
+    desc: 'Jeden tým, app, public widget, coach analytika.',
+    current: true,
+    features: ['Live tracking', 'Public widget', 'Coach analytika', 'E-mail support'],
+  },
+  {
+    name: 'Liga',
+    price: 'od 2 490 Kč',
+    period: '/ měs',
+    desc: 'Pro svazy a ligy. Master view + custom branding.',
+    current: false,
+    features: ['Vše z Klubu', 'Master league standings', 'Cross-club leaderboardy', 'Custom domain', 'Vlastní branding', 'Dedikovaný AM'],
+  },
+  {
+    name: 'Federace',
+    price: 'Enterprise',
+    period: '',
+    desc: 'White-label + API + integrace s existujícími systémy.',
+    current: false,
+    features: ['Vše z Liga', 'White-label', 'API + webhooky', 'SLA + 24/7 support', 'On-premise option'],
+  },
+];
+
+const statusBadge: Record<string, string> = {
+  paid:   'bg-verde/15 text-[#1B6E62]',
+  open:   'bg-spark/15 text-[#A0531B]',
+  failed: 'bg-signal/15 text-signal',
+};
+const statusLabel: Record<string, string> = {
+  paid: 'Zaplaceno',
+  open: 'Čeká',
+  failed: 'Selhalo',
+};
+---
+
+<AppLayout
+  title="Předplatné · GameStatiq"
+  active="billing"
+  pageTitle="Předplatné a faktury"
+  pageSub="Spravujte svůj plán, platební metodu a stahujte faktury"
+>
+  <!-- Current plan banner -->
+  <div class="rounded-xl border border-signal/30 bg-gradient-to-br from-signal/5 to-signal/10 p-6 lg:p-8">
+    <div class="flex flex-wrap items-start justify-between gap-6">
+      <div>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-signal">Aktuální plán</p>
+        <div class="mt-2 flex items-baseline gap-2">
+          <h2 class="text-[28px] font-bold tracking-tight-2 text-ink">Klub</h2>
+          <span class="text-[18px] font-semibold text-graphite">·</span>
+          <span class="text-[18px] font-semibold tabular-nums tracking-tight-2 text-ink">690 Kč / měs</span>
+        </div>
+        <p class="mt-3 max-w-md text-[14px] text-graphite">
+          Předplatné se obnoví automaticky <strong class="text-ink">15. 6. 2026</strong>. Můžete kdykoli zrušit nebo upgradovat.
+        </p>
+        <div class="mt-5 flex flex-wrap gap-2">
+          <button class="rounded-lg bg-ink px-4 py-2.5 text-[13px] font-medium text-white hover:bg-[#1A2B45]">
+            Spravovat v Stripe Customer Portal
+          </button>
+          <button class="rounded-lg border border-stone bg-pearl px-4 py-2.5 text-[13px] font-medium text-graphite hover:border-stone-2 hover:bg-mist">
+            Změnit platební metodu
+          </button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4 rounded-lg bg-pearl p-4 lg:gap-6 lg:p-5">
+        <div>
+          <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Příští platba</p>
+          <p class="mt-1 text-[15px] font-bold tabular-nums text-ink">15. 6. 2026</p>
+        </div>
+        <div>
+          <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Platební metoda</p>
+          <p class="mt-1 text-[15px] font-bold text-ink">Visa **4242</p>
+        </div>
+        <div>
+          <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Customer ID</p>
+          <p class="mt-1 font-mono text-[13px] text-ink">cus_QzABbobs</p>
+        </div>
+        <div>
+          <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Účet od</p>
+          <p class="mt-1 text-[15px] font-bold tabular-nums text-ink">15. 1. 2026</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tier comparison -->
+  <div class="mt-8">
+    <h2 class="text-[20px] font-bold tracking-tight-2 text-ink">Změna plánu</h2>
+    <p class="mt-1 text-[14px] text-slate">Upgrade i downgrade se aplikuje proporcionálně k aktuálnímu fakturačnímu období.</p>
+    <div class="mt-5 grid gap-5 lg:grid-cols-3">
+      {tiers.map((t) => (
+        <div class={`relative flex flex-col rounded-xl border bg-pearl p-6 ${t.current ? 'border-2 border-signal' : 'border-stone'}`}>
+          {t.current && (
+            <span class="absolute -top-3 left-6 rounded-full bg-signal px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-white">Váš plán</span>
+          )}
+          <h3 class="text-[18px] font-bold tracking-tight-2 text-ink">{t.name}</h3>
+          <p class="mt-1 text-[13px] text-slate">{t.desc}</p>
+          <div class="mt-4 flex items-baseline gap-1.5">
+            <span class="text-2xl font-bold tracking-tight-3 text-ink">{t.price}</span>
+            {t.period && <span class="text-[13px] text-slate">{t.period}</span>}
+          </div>
+          <ul class="mt-5 space-y-2 text-[13px] text-graphite">
+            {t.features.map((f) => (
+              <li class="flex items-start gap-2">
+                <svg class="mt-[3px] h-3.5 w-3.5 flex-shrink-0 text-verde" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+                {f}
+              </li>
+            ))}
+          </ul>
+          <div class="mt-6">
+            {t.current ? (
+              <button disabled class="w-full cursor-not-allowed rounded-lg border border-stone bg-mist px-4 py-2.5 text-[13px] font-medium text-stone-2">Aktuální plán</button>
+            ) : t.name === 'Federace' ? (
+              <a href="/#contact" class="block w-full rounded-lg border border-stone bg-pearl px-4 py-2.5 text-center text-[13px] font-medium text-ink hover:bg-mist">Kontaktovat sales</a>
+            ) : (
+              <button class="w-full rounded-lg bg-signal px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#C8313D]">Upgradovat na {t.name}</button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+
+  <!-- Invoices -->
+  <div class="mt-8 rounded-xl border border-stone bg-pearl">
+    <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+      <div>
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Faktury</p>
+        <p class="text-[12px] text-slate">Posledních 5 · DPH 21 % zahrnuto v ceně</p>
+      </div>
+      <button class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Stáhnout všechny</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[640px] text-left text-[14px]">
+        <thead class="border-b border-stone bg-mist text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">
+          <tr>
+            <th class="px-5 py-3">Číslo</th>
+            <th class="py-3">Období</th>
+            <th class="px-3 py-3">Datum</th>
+            <th class="px-3 py-3 tabular-nums">Částka</th>
+            <th class="px-3 py-3">Status</th>
+            <th class="px-5 py-3"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-stone">
+          {invoices.map((inv) => (
+            <tr class="transition-colors hover:bg-mist/60">
+              <td class="px-5 py-3.5">
+                <span class="font-mono text-[13px] font-semibold text-ink">{inv.id}</span>
+              </td>
+              <td class="py-3.5 text-graphite">{inv.period}</td>
+              <td class="px-3 py-3.5 tabular-nums text-graphite">{inv.date}</td>
+              <td class="px-3 py-3.5 font-semibold tabular-nums text-ink">{inv.amount}</td>
+              <td class="px-3 py-3.5">
+                <span class={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold ${statusBadge[inv.status]}`}>
+                  <span class={`h-1.5 w-1.5 rounded-full ${inv.status === 'paid' ? 'bg-verde' : inv.status === 'open' ? 'bg-spark' : 'bg-signal'}`}></span>
+                  {statusLabel[inv.status]}
+                </span>
+              </td>
+              <td class="px-5 py-3.5 text-right">
+                <button class="inline-flex items-center gap-1.5 text-[12px] font-semibold text-signal hover:underline">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3"/></svg>
+                  PDF
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="mt-5 text-[12px] text-slate">
+    Fakturujeme jako <strong class="text-graphite">GameStatiq s.r.o.</strong> · IČO 12345678 · DIČ CZ12345678. Pro změny fakturačních údajů kontaktujte <a href="mailto:billing@gamestatiq.com" class="text-signal hover:underline">billing@gamestatiq.com</a>.
+  </p>
+</AppLayout>

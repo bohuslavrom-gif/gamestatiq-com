@@ -1,0 +1,190 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+---
+
+<AppLayout
+  title="Nastavení · GameStatiq"
+  active="settings"
+  pageTitle="Nastavení klubu"
+  pageSub="Údaje o klubu, branding a integrace"
+>
+  <div class="grid gap-6 lg:grid-cols-[1fr_280px]">
+    <div class="space-y-6">
+      <!-- Club info -->
+      <section class="rounded-xl border border-stone bg-pearl">
+        <div class="border-b border-stone px-5 py-4">
+          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Informace o klubu</p>
+          <p class="text-[12px] text-slate">Veřejné údaje, které se zobrazují fanoušků na public stránce</p>
+        </div>
+        <form class="space-y-5 p-5 lg:p-6">
+          <div class="grid gap-5 sm:grid-cols-2">
+            <label class="block">
+              <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Název klubu</span>
+              <input type="text" value="Bobcats" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+            </label>
+            <label class="block">
+              <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Slug (URL)</span>
+              <div class="mt-1.5 flex items-center overflow-hidden rounded-lg border border-stone bg-pearl">
+                <span class="bg-mist px-3 py-2.5 text-[13px] text-slate">liga.gamestatiq.com/</span>
+                <input type="text" value="bobcats" class="block w-full bg-pearl px-3 py-2.5 text-[14px] text-ink focus:outline-none" />
+              </div>
+            </label>
+          </div>
+          <div class="grid gap-5 sm:grid-cols-3">
+            <label class="block sm:col-span-2">
+              <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Sport / disciplína</span>
+              <select class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none">
+                <option>Americký fotbal — 11s</option>
+                <option>Flag football — 5s</option>
+                <option>Basketbal</option>
+                <option>Lední hokej</option>
+                <option>Florbal</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Rok založení</span>
+              <input type="text" value="2018" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] tabular-nums text-ink focus:border-signal focus:outline-none" />
+            </label>
+          </div>
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Krátký popis klubu</span>
+            <textarea rows="3" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20">Bobcats jsou ambiciózní český tým amerického fotbalu s mužskou a ženskou složkou. Hrajeme v top divizi české ligy.</textarea>
+          </label>
+          <div class="flex justify-end gap-2 border-t border-stone pt-5">
+            <button type="button" class="rounded-lg border border-stone bg-pearl px-4 py-2 text-[13px] font-medium text-graphite hover:bg-mist">Zrušit</button>
+            <button type="submit" class="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1A2B45]">Uložit změny</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Branding -->
+      <section class="rounded-xl border border-stone bg-pearl">
+        <div class="border-b border-stone px-5 py-4">
+          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Branding</p>
+          <p class="text-[12px] text-slate">Logo, barvy a custom doména pro veřejnou stránku</p>
+        </div>
+        <div class="space-y-5 p-5 lg:p-6">
+          <div class="flex items-center gap-5">
+            <span class="inline-flex h-16 w-16 items-center justify-center rounded-xl bg-ink text-[14px] font-bold tracking-[0.04em] text-white">BOB</span>
+            <div>
+              <p class="text-[14px] font-semibold text-ink">Logo klubu</p>
+              <p class="text-[12px] text-slate">SVG, PNG nebo JPG. Doporučené 512×512 px.</p>
+              <div class="mt-2 flex gap-2">
+                <button class="rounded-md border border-stone bg-mist px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-stone/30">Nahrát nové</button>
+                <button class="rounded-md px-3 py-1.5 text-[12px] font-medium text-slate hover:text-signal">Odebrat</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block">
+              <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Primární barva</span>
+              <div class="mt-1.5 flex items-center gap-2 rounded-lg border border-stone bg-pearl p-1.5">
+                <span class="h-7 w-7 rounded-md bg-signal"></span>
+                <input type="text" value="#E63946" class="flex-1 bg-transparent px-2 font-mono text-[13px] text-ink focus:outline-none" />
+              </div>
+            </label>
+            <label class="block">
+              <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Sekundární barva</span>
+              <div class="mt-1.5 flex items-center gap-2 rounded-lg border border-stone bg-pearl p-1.5">
+                <span class="h-7 w-7 rounded-md bg-ink"></span>
+                <input type="text" value="#0F1B2D" class="flex-1 bg-transparent px-2 font-mono text-[13px] text-ink focus:outline-none" />
+              </div>
+            </label>
+          </div>
+
+          <div class="flex items-center justify-between rounded-lg border border-stone bg-mist p-4">
+            <div>
+              <p class="text-[14px] font-semibold text-ink">Custom doména</p>
+              <p class="text-[12px] text-graphite">Např. stats.bobcats.cz · vyžaduje DNS CNAME na cname.gamestatiq.com</p>
+            </div>
+            <span class="rounded-md bg-signal/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-signal">Liga tier ↗</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Team admins -->
+      <section class="rounded-xl border border-stone bg-pearl">
+        <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+          <div>
+            <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Lidé v klubu</p>
+            <p class="text-[12px] text-slate">3 uživatelé s přístupem do portálu</p>
+          </div>
+          <button class="rounded-md bg-ink px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#1A2B45]">+ Pozvat</button>
+        </div>
+        <ul class="divide-y divide-stone">
+          {[
+            { name: 'Bohuslav Rom',  email: 'bohuslav.rom@gmail.com', role: 'Admin',      you: true },
+            { name: 'Petr Trenér',   email: 'petr@bobcats.cz',         role: 'Trenér',     you: false },
+            { name: 'Jana Statistik',email: 'jana@bobcats.cz',         role: 'Statistik',  you: false },
+          ].map((u) => (
+            <li class="flex items-center gap-4 px-5 py-3.5">
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-mist text-[12px] font-semibold text-ink">{u.name.split(' ').map((w) => w[0]).join('')}</span>
+              <div class="min-w-0 flex-1">
+                <p class="text-[14px] font-semibold text-ink">{u.name} {u.you && <span class="ml-1 rounded bg-mist px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate">vy</span>}</p>
+                <p class="truncate text-[12px] text-slate">{u.email}</p>
+              </div>
+              <span class="rounded-md bg-mist px-2 py-1 text-[11px] font-semibold text-graphite">{u.role}</span>
+              {!u.you && <button class="text-[12px] font-semibold text-slate hover:text-signal">Odebrat</button>}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <!-- Danger zone -->
+      <section class="rounded-xl border border-signal/30 bg-signal/5 p-5 lg:p-6">
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Smazat klub</p>
+        <p class="mt-1 text-[13px] text-graphite">
+          Trvale odstraní všechna data klubu, hráčů a zápasů. Faktury z minulosti zůstanou ve Stripe.
+          Akce je nevratná.
+        </p>
+        <button class="mt-4 rounded-lg border border-signal bg-pearl px-4 py-2 text-[13px] font-semibold text-signal hover:bg-signal hover:text-white">
+          Smazat klub
+        </button>
+      </section>
+    </div>
+
+    <!-- Right column -->
+    <aside class="space-y-5">
+      <div class="rounded-xl border border-stone bg-pearl p-5">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Integrace</p>
+        <ul class="mt-4 space-y-3">
+          <li class="flex items-center gap-3">
+            <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-verde/15 text-[#1B6E62]">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18 M9 21V9"/></svg>
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="text-[13px] font-semibold text-ink">Google Sheets</p>
+              <p class="text-[11px] text-verde">Připojeno · bobcats-stats.xlsx</p>
+            </div>
+          </li>
+          <li class="flex items-center gap-3">
+            <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-mist text-slate">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z M4 9h16 M9 4v16"/></svg>
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="text-[13px] font-semibold text-ink">Slack</p>
+              <p class="text-[11px] text-slate">Nepřipojeno</p>
+            </div>
+            <button class="text-[12px] font-semibold text-signal hover:underline">Připojit</button>
+          </li>
+          <li class="flex items-center gap-3">
+            <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-mist text-slate">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3 7 12 13 21 7"/></svg>
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="text-[13px] font-semibold text-ink">Newsletter</p>
+              <p class="text-[11px] text-slate">Nepřipojeno</p>
+            </div>
+            <button class="text-[12px] font-semibold text-signal hover:underline">Připojit</button>
+          </li>
+        </ul>
+      </div>
+
+      <div class="rounded-xl border border-stone bg-mist p-5">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Potřebujete pomoc?</p>
+        <p class="mt-2 text-[13px] text-graphite">Napište nám na <a href="mailto:hello@gamestatiq.com" class="text-signal hover:underline">hello@gamestatiq.com</a> nebo si objednejte 30min onboarding session.</p>
+      </div>
+    </aside>
+  </div>
+</AppLayout>
