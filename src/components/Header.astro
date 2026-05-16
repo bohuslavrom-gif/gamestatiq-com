@@ -13,18 +13,14 @@ const navLinks = [
 ];
 const homeHref = localizedPath('/', lang);
 const contactHref = localizedPath('/', lang) + '#contact';
+
+const isLoggedIn = !!Astro.locals.user;
 ---
 
 <header class="sticky top-0 z-40 border-b border-stone bg-pearl/85 backdrop-blur">
   <div class="container-pm flex h-16 items-center justify-between">
     <a href={homeHref} class="flex items-center gap-2.5" aria-label="GameStatiq">
-      <img
-        src="/brand/gamestatiq-icon.svg"
-        alt=""
-        width="28"
-        height="28"
-        class="h-7 w-7"
-      />
+      <img src="/brand/gamestatiq-icon.svg" alt="" width="28" height="28" class="h-7 w-7" />
       <span class="text-[17px] font-semibold tracking-tight-2">
         Game<span class="font-bold text-signal">Statiq</span>
       </span>
@@ -32,27 +28,40 @@ const contactHref = localizedPath('/', lang) + '#contact';
 
     <!-- Desktop nav -->
     <nav class="hidden items-center gap-7 md:flex">
-      {
-        navLinks.map((link) => (
-          <a
-            href={link.href}
-            class="text-[14px] font-medium text-graphite transition-colors hover:text-ink"
-          >
-            {link.label}
-          </a>
-        ))
-      }
+      {navLinks.map((link) => (
+        <a href={link.href} class="text-[14px] font-medium text-graphite transition-colors hover:text-ink">
+          {link.label}
+        </a>
+      ))}
     </nav>
 
     <div class="flex items-center gap-2 sm:gap-3">
       <LanguageSwitcher />
 
-      <a
-        href={contactHref}
-        class="hidden items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[14px] font-medium text-white transition-all hover:bg-[#1A2B45] lg:inline-flex"
-      >
-        {t('nav.cta')}
-      </a>
+      {isLoggedIn ? (
+        <a
+          href="/app"
+          class="hidden items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[14px] font-medium text-white transition-all hover:bg-[#1A2B45] lg:inline-flex"
+        >
+          {t('nav.portal')}
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </a>
+      ) : (
+        <>
+          <a
+            href="/login"
+            class="hidden text-[14px] font-medium text-graphite transition-colors hover:text-ink lg:inline-flex"
+          >
+            {t('nav.login')}
+          </a>
+          <a
+            href={contactHref}
+            class="hidden items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[14px] font-medium text-white transition-all hover:bg-[#1A2B45] lg:inline-flex"
+          >
+            {t('nav.cta')}
+          </a>
+        </>
+      )}
 
       <button
         type="button"
@@ -78,26 +87,39 @@ const contactHref = localizedPath('/', lang) + '#contact';
   <div id="mobile-menu" class="hidden border-t border-stone bg-pearl md:hidden">
     <nav class="container-pm py-4">
       <ul class="flex flex-col">
-        {
-          navLinks.map((link) => (
-            <li>
-              <a
-                href={link.href}
-                class="mobile-nav-link block rounded-md px-3 py-3 text-[15px] font-medium text-graphite transition-colors hover:bg-mist hover:text-ink"
-              >
-                {link.label}
-              </a>
-            </li>
-          ))
-        }
+        {navLinks.map((link) => (
+          <li>
+            <a href={link.href} class="mobile-nav-link block rounded-md px-3 py-3 text-[15px] font-medium text-graphite transition-colors hover:bg-mist hover:text-ink">
+              {link.label}
+            </a>
+          </li>
+        ))}
       </ul>
-      <a
-        href={contactHref}
-        class="mobile-nav-link mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-ink px-4 py-3 text-[15px] font-medium text-white transition-all hover:bg-[#1A2B45]"
-      >
-        {t('nav.cta')}
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-      </a>
+      {isLoggedIn ? (
+        <a
+          href="/app"
+          class="mobile-nav-link mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-ink px-4 py-3 text-[15px] font-medium text-white transition-all hover:bg-[#1A2B45]"
+        >
+          {t('nav.portal')}
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </a>
+      ) : (
+        <div class="mt-3 flex flex-col gap-2">
+          <a
+            href="/login"
+            class="mobile-nav-link inline-flex w-full items-center justify-center rounded-md border border-stone bg-pearl px-4 py-3 text-[15px] font-medium text-ink transition-all hover:bg-mist"
+          >
+            {t('nav.login')}
+          </a>
+          <a
+            href={contactHref}
+            class="mobile-nav-link inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-ink px-4 py-3 text-[15px] font-medium text-white transition-all hover:bg-[#1A2B45]"
+          >
+            {t('nav.cta')}
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </a>
+        </div>
+      )}
     </nav>
   </div>
 </header>
