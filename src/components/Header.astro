@@ -22,6 +22,7 @@ const navLinks = [
       </span>
     </a>
 
+    <!-- Desktop nav -->
     <nav class="hidden items-center gap-7 md:flex">
       {
         navLinks.map((link) => (
@@ -38,10 +39,99 @@ const navLinks = [
     <div class="flex items-center gap-3">
       <a
         href="/#contact"
-        class="hidden items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[14px] font-medium text-white transition-all hover:bg-[#1A2B45] sm:inline-flex"
+        class="hidden items-center gap-1.5 rounded-md bg-ink px-4 py-2 text-[14px] font-medium text-white transition-all hover:bg-[#1A2B45] sm:inline-flex md:hidden lg:inline-flex"
       >
         Vyžádat demo
       </a>
+
+      <!-- Mobile menu toggle -->
+      <button
+        type="button"
+        id="mobile-menu-toggle"
+        aria-label="Otevřít menu"
+        aria-controls="mobile-menu"
+        aria-expanded="false"
+        class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-stone bg-pearl text-ink transition-colors hover:bg-mist md:hidden"
+      >
+        <svg id="mobile-menu-icon-open" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="4" y1="7" x2="20" y2="7"/>
+          <line x1="4" y1="12" x2="20" y2="12"/>
+          <line x1="4" y1="17" x2="20" y2="17"/>
+        </svg>
+        <svg id="mobile-menu-icon-close" class="hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="6" y1="6" x2="18" y2="18"/>
+          <line x1="6" y1="18" x2="18" y2="6"/>
+        </svg>
+      </button>
     </div>
   </div>
+
+  <!-- Mobile menu (slide-down) -->
+  <div
+    id="mobile-menu"
+    class="hidden border-t border-stone bg-pearl md:hidden"
+  >
+    <nav class="container-pm py-4">
+      <ul class="flex flex-col">
+        {
+          navLinks.map((link) => (
+            <li>
+              <a
+                href={link.href}
+                class="mobile-nav-link block rounded-md px-3 py-3 text-[15px] font-medium text-graphite transition-colors hover:bg-mist hover:text-ink"
+              >
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+      <a
+        href="/#contact"
+        class="mobile-nav-link mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-ink px-4 py-3 text-[15px] font-medium text-white transition-all hover:bg-[#1A2B45]"
+      >
+        Vyžádat demo
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </a>
+    </nav>
+  </div>
 </header>
+
+<script>
+  const toggle = document.getElementById('mobile-menu-toggle');
+  const menu = document.getElementById('mobile-menu');
+  const iconOpen = document.getElementById('mobile-menu-icon-open');
+  const iconClose = document.getElementById('mobile-menu-icon-close');
+
+  function setOpen(open: boolean) {
+    if (!menu || !toggle || !iconOpen || !iconClose) return;
+    if (open) {
+      menu.classList.remove('hidden');
+      iconOpen.classList.add('hidden');
+      iconClose.classList.remove('hidden');
+      toggle.setAttribute('aria-expanded', 'true');
+      toggle.setAttribute('aria-label', 'Zavřít menu');
+    } else {
+      menu.classList.add('hidden');
+      iconOpen.classList.remove('hidden');
+      iconClose.classList.add('hidden');
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.setAttribute('aria-label', 'Otevřít menu');
+    }
+  }
+
+  toggle?.addEventListener('click', () => {
+    const isOpen = menu?.classList.contains('hidden') === false;
+    setOpen(!isOpen);
+  });
+
+  // Zavřít menu po kliknutí na link (kvůli anchor scrollu)
+  document.querySelectorAll('.mobile-nav-link').forEach((link) => {
+    link.addEventListener('click', () => setOpen(false));
+  });
+
+  // Zavřít menu po Esc
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') setOpen(false);
+  });
+</script>
