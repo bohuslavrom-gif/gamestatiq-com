@@ -1,46 +1,57 @@
 ---
+import { getSupabaseAdmin, type Club } from '../lib/supabase';
+
 interface Props {
   active?: 'dashboard' | 'stats' | 'players' | 'billing' | 'settings';
 }
 const { active = 'dashboard' } = Astro.props;
 
+const user = Astro.locals.user;
+let userName = '—';
+let userInitials = '—';
+let userRole = 'Admin';
+let club: { name: string; sport: string | null; abbr: string } | null = null;
+
+if (user) {
+  const admin = getSupabaseAdmin();
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('first_name,last_name,email')
+    .eq('id', user.id)
+    .maybeSingle();
+  const fn = profile?.first_name ?? '';
+  const ln = profile?.last_name ?? '';
+  userName = (fn + ' ' + ln).trim() || (profile?.email ?? user.email ?? '—');
+  userInitials = ((fn[0] ?? '') + (ln[0] ?? '')).toUpperCase() || (user.email?.[0] ?? '?').toUpperCase();
+
+  const { data: membership } = await admin
+    .from('club_members')
+    .select('role, clubs(name, sport)')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (membership) {
+    userRole = ({ admin: 'Admin', coach: 'Trenér', stats: 'Statistik', viewer: 'Pozorovatel' } as Record<string, string>)[membership.role] ?? 'Admin';
+    const c = (membership as any).clubs as Pick<Club, 'name' | 'sport'> | null;
+    if (c) {
+      const abbr = c.name.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || 'KLB';
+      club = { name: c.name, sport: c.sport, abbr };
+    }
+  }
+}
+
 const navItems = [
-  {
-    key: 'dashboard',
-    label: 'Dashboard',
-    href: '/app',
-    icon: 'M3 12l9-9 9 9 M5 10v10h14V10',
-  },
-  {
-    key: 'stats',
-    label: 'Statistiky',
-    href: '/app/stats',
-    icon: 'M3 3v18h18 M7 13h3v6 M13 9h3v10 M19 5h3v14',
-  },
-  {
-    key: 'players',
-    label: 'Soupiska',
-    href: '/app/players',
-    icon: 'M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1 M16 3.13a4 4 0 0 1 0 7.75 M21 21v-1a5 5 0 0 0-3-4.58',
-  },
-  {
-    key: 'billing',
-    label: 'Předplatné',
-    href: '/app/billing',
-    icon: 'M3 7h18 M3 12h18 M3 17h18',
-  },
-  {
-    key: 'settings',
-    label: 'Nastavení',
-    href: '/app/settings',
-    icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z',
-  },
+  { key: 'dashboard', label: 'Dashboard',  href: '/app',          icon: 'M3 12l9-9 9 9 M5 10v10h14V10' },
+  { key: 'stats',     label: 'Statistiky', href: '/app/stats',    icon: 'M3 3v18h18 M7 13h3v6 M13 9h3v10 M19 5h3v14' },
+  { key: 'players',   label: 'Soupiska',   href: '/app/players',  icon: 'M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1' },
+  { key: 'billing',   label: 'Předplatné', href: '/app/billing',  icon: 'M3 7h18 M3 12h18 M3 17h18' },
+  { key: 'settings',  label: 'Nastavení',  href: '/app/settings', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z' },
 ];
 ---
 
 <aside class="app-sidebar fixed inset-y-0 left-0 z-30 w-64 flex-shrink-0 -translate-x-full transform border-r border-stone bg-pearl transition-transform duration-200 lg:translate-x-0">
   <div class="flex h-full flex-col">
-    <!-- Logo -->
     <div class="flex h-16 items-center gap-2.5 border-b border-stone px-5">
       <img src="/brand/gamestatiq-icon.svg" alt="" class="h-7 w-7" width="28" height="28" />
       <span class="text-[17px] font-semibold tracking-tight-2">
@@ -48,25 +59,17 @@ const navItems = [
       </span>
     </div>
 
-    <!-- Club switcher -->
     <div class="border-b border-stone px-3 py-4">
-      <button
-        type="button"
-        class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-mist"
-        aria-label="Přepnout klub"
-      >
-        <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-[11px] font-bold tracking-[0.04em] text-white">BOB</span>
+      <button type="button" class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-mist" aria-label="Přepnout klub">
+        <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-[11px] font-bold tracking-[0.04em] text-white">{club?.abbr ?? '?'}</span>
         <div class="min-w-0 flex-1">
-          <p class="truncate text-[14px] font-semibold tracking-tight-2 text-ink">Bobcats</p>
-          <p class="truncate text-[11px] text-slate">Muži · sezóna 2026</p>
+          <p class="truncate text-[14px] font-semibold tracking-tight-2 text-ink">{club?.name ?? 'Vyberte klub'}</p>
+          <p class="truncate text-[11px] text-slate">{club?.sport ? 'sezóna 2026' : '—'}</p>
         </div>
-        <svg class="h-4 w-4 flex-shrink-0 text-slate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        <svg class="h-4 w-4 flex-shrink-0 text-slate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
     </div>
 
-    <!-- Nav -->
     <nav class="flex-1 overflow-y-auto px-3 py-4">
       <ul class="space-y-0.5">
         {navItems.map((item) => (
@@ -89,7 +92,6 @@ const navItems = [
         ))}
       </ul>
 
-      <!-- Upgrade card -->
       <div class="mt-6 rounded-lg border border-signal/20 bg-signal/5 p-4">
         <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-signal">Upgrade na Liga</p>
         <p class="mt-2 text-[12px] leading-relaxed text-graphite">
@@ -102,19 +104,20 @@ const navItems = [
       </div>
     </nav>
 
-    <!-- User block -->
     <div class="border-t border-stone p-3">
       <div class="flex items-center gap-3 rounded-lg px-2 py-2">
-        <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-mist text-[12px] font-semibold text-ink">BR</span>
+        <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-mist text-[12px] font-semibold text-ink">{userInitials}</span>
         <div class="min-w-0 flex-1">
-          <p class="truncate text-[13px] font-semibold text-ink">Bohuslav Rom</p>
-          <p class="truncate text-[11px] text-slate">Admin</p>
+          <p class="truncate text-[13px] font-semibold text-ink">{userName}</p>
+          <p class="truncate text-[11px] text-slate">{userRole}</p>
         </div>
-        <a href="/login" aria-label="Odhlásit se" class="text-slate hover:text-ink">
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9" />
-          </svg>
-        </a>
+        <form method="POST" action="/api/auth/logout">
+          <button type="submit" aria-label="Odhlásit se" class="text-slate hover:text-ink">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9" />
+            </svg>
+          </button>
+        </form>
       </div>
     </div>
   </div>

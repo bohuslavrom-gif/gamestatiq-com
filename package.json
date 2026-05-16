@@ -1,7 +1,7 @@
 {
   "name": "gamestatiq-website",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "astro dev",
@@ -14,6 +14,10 @@
     "astro": "^5.1.1",
     "@astrojs/tailwind": "^5.1.4",
     "@astrojs/sitemap": "^3.2.1",
+    "@astrojs/vercel": "^8.0.0",
+    "@supabase/supabase-js": "^2.45.4",
+    "@supabase/ssr": "^0.5.2",
+    "stripe": "^17.4.0",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2"
   },

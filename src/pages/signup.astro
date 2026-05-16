@@ -1,5 +1,10 @@
 ---
 import AuthLayout from '../layouts/AuthLayout.astro';
+
+export const prerender = false;
+
+const url = new URL(Astro.request.url);
+const error = url.searchParams.get('error');
 ---
 
 <AuthLayout title="Registrace · GameStatiq">
@@ -11,52 +16,40 @@ import AuthLayout from '../layouts/AuthLayout.astro';
       <h1 class="mt-4 text-[24px] font-bold tracking-tight-2 text-ink">Začněte s GameStatiq</h1>
       <p class="mt-1.5 text-[14px] text-slate">Vytvořte si účet a aktivujte 30denní free trial</p>
 
-      <div class="mt-6 space-y-2.5">
-        <button class="flex w-full items-center justify-center gap-2.5 rounded-lg border border-stone bg-pearl px-4 py-2.5 text-[14px] font-medium text-ink transition-colors hover:bg-mist">
-          <svg class="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09Z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.99.66-2.25 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23Z"/>
-            <path fill="#FBBC05" d="M5.84 14.09a6.97 6.97 0 0 1 0-4.18V7.07H2.18a11.02 11.02 0 0 0 0 9.86l3.66-2.84Z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38Z"/>
-          </svg>
-          Pokračovat přes Google
-        </button>
-      </div>
+      {error && (
+        <div class="mt-5 rounded-lg border border-signal/30 bg-signal/5 px-3 py-2.5 text-[13px] text-signal">
+          {error}
+        </div>
+      )}
 
-      <div class="my-6 flex items-center gap-3">
-        <span class="h-px flex-1 bg-stone"></span>
-        <span class="text-[11px] uppercase tracking-[0.1em] text-slate">nebo e-mailem</span>
-        <span class="h-px flex-1 bg-stone"></span>
-      </div>
-
-      <form class="space-y-4">
+      <form method="POST" action="/api/auth/signup" class="mt-6 space-y-4">
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block">
             <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Jméno</span>
-            <input type="text" placeholder="Jan" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+            <input type="text" name="first_name" required autocomplete="given-name" placeholder="Jan" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
           </label>
           <label class="block">
             <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Příjmení</span>
-            <input type="text" placeholder="Novák" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+            <input type="text" name="last_name" autocomplete="family-name" placeholder="Novák" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
           </label>
         </div>
         <label class="block">
           <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Název klubu</span>
-          <input type="text" placeholder="Bobcats" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+          <input type="text" name="club_name" required placeholder="Bobcats" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
         </label>
         <label class="block">
           <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">E-mail</span>
-          <input type="email" placeholder="vy@klub.cz" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+          <input type="email" name="email" required autocomplete="email" placeholder="vy@klub.cz" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
         </label>
         <label class="block">
           <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Heslo</span>
-          <input type="password" placeholder="alespoň 8 znaků" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
-          <p class="mt-1 text-[11px] text-slate">Použijte alespoň 8 znaků, jedno velké a jednu číslici.</p>
+          <input type="password" name="password" required minlength="8" autocomplete="new-password" placeholder="alespoň 8 znaků" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+          <p class="mt-1 text-[11px] text-slate">Použijte alespoň 8 znaků.</p>
         </label>
         <label class="flex items-start gap-2.5 text-[12px] text-graphite">
-          <input type="checkbox" class="mt-0.5 h-4 w-4 rounded border-stone text-signal focus:ring-signal" />
+          <input type="checkbox" name="consent" required class="mt-0.5 h-4 w-4 rounded border-stone text-signal focus:ring-signal" />
           <span>
-            Souhlasím s <a href="/podminky" class="text-signal hover:underline">podmínkami</a> a <a href="/soukromi" class="text-signal hover:underline">ochranou údajů</a>. GameStatiq mi může posílat produktové novinky.
+            Souhlasím s <a href="/podminky" class="text-signal hover:underline">podmínkami</a> a <a href="/soukromi" class="text-signal hover:underline">ochranou údajů</a>.
           </span>
         </label>
         <button type="submit" class="block w-full rounded-lg bg-signal px-4 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-[#C8313D]">
