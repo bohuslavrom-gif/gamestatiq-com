@@ -7,6 +7,9 @@ export default defineConfig({
   site: 'https://gamestatiq.com',
   output: 'server',
   adapter: vercel(),
+  security: {
+    checkOrigin: false,
+  },
   i18n: {
     defaultLocale: 'cs',
     locales: ['cs', 'en', 'de'],
