@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { stripe, STRIPE_PRICE_KLUB } from '../../../lib/stripe';
 import { getSupabaseAdmin } from '../../../lib/supabase';
+import { publicOrigin } from '../../../lib/url';
 
 export const prerender = false;
 
@@ -19,7 +20,6 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   }
 
   const admin = getSupabaseAdmin();
-  // Find user's primary club (the one they own)
   const { data: club } = await admin
     .from('clubs')
     .select('id, stripe_customer_id, name')
@@ -32,7 +32,6 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     return redirect(`/app/billing?error=${encodeURIComponent('Klub nenalezen.')}`, 303);
   }
 
-  // Create or reuse Stripe customer
   let customerId = club.stripe_customer_id;
   if (!customerId) {
     const customer = await stripe.customers.create({
@@ -44,7 +43,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     await admin.from('clubs').update({ stripe_customer_id: customerId }).eq('id', club.id);
   }
 
-  const origin = new URL(request.url).origin;
+  const origin = publicOrigin(request);
 
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',

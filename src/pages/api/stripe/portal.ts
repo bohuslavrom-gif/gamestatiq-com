@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { stripe } from '../../../lib/stripe';
 import { getSupabaseAdmin } from '../../../lib/supabase';
+import { publicOrigin } from '../../../lib/url';
 
 export const prerender = false;
 
@@ -21,7 +22,7 @@ const handler: APIRoute = async ({ request, locals, redirect }) => {
     return redirect(`/app/billing?error=${encodeURIComponent('Nejdřív aktivujte předplatné.')}`, 303);
   }
 
-  const origin = new URL(request.url).origin;
+  const origin = publicOrigin(request);
   const session = await stripe.billingPortal.sessions.create({
     customer: club.stripe_customer_id,
     return_url: `${origin}/app/billing`,
