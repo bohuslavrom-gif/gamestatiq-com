@@ -1,27 +1,29 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
+import { fetchPublicStats } from '../../lib/bobcats';
 
-// Mock data
+export const prerender = false;
+
+const stats = await fetchPublicStats('Muži');
+
+const winsLosses = stats ? `${stats.record.wins}-${stats.record.losses}${stats.record.ties ? '-' + stats.record.ties : ''}` : '—';
+const matches = stats?.record.matches ?? 0;
+const totalRoster = stats
+  ? new Set([
+      ...stats.qbStats.map((p) => p.name),
+      ...stats.wrStats.map((p) => p.name),
+      ...stats.defenseLeaders.map((p) => p.name),
+    ]).size
+  : 0;
+
 const kpis = [
-  { label: 'Bilance', value: '9-0', unit: 'V-P', accent: 'verde' },
-  { label: 'Bodů skórovaných', value: '450', unit: '50 / zápas', accent: 'signal' },
-  { label: 'Bodů obdržených', value: '168', unit: '18.7 / zápas', accent: 'sky' },
-  { label: 'Hráčů na soupisce', value: '24', unit: 'sezóna 2026', accent: 'plum' },
+  { label: 'Bilance', value: winsLosses, unit: 'V-P', accent: 'verde' },
+  { label: 'Bodů skórovaných', value: stats ? String(stats.points.for) : '—', unit: stats ? `${stats.points.forAvg.toFixed(1)} / zápas` : '', accent: 'signal' },
+  { label: 'Bodů obdržených', value: stats ? String(stats.points.against) : '—', unit: stats ? `${stats.points.againstAvg.toFixed(1)} / zápas` : '', accent: 'sky' },
+  { label: 'Hráčů ve statistikách', value: String(totalRoster), unit: `sezóna 2026`, accent: 'plum' },
 ];
 
-const recentGames = [
-  { date: '12. 5. 2026', opp: 'Brno Wolves', result: 'V', score: '54 : 28', mvp: 'T. Vacek (3 TD)', away: false },
-  { date: '5. 5. 2026',  opp: 'Ostrava Eagles', result: 'V', score: '42 : 24', mvp: 'J. Drmla (2 TD)', away: true },
-  { date: '28. 4. 2026', opp: 'Plzeň Bears', result: 'V', score: '48 : 14', mvp: 'L. Macho (1 TD, 4 cmp)', away: false },
-  { date: '21. 4. 2026', opp: 'Liberec Sharks', result: 'V', score: '63 : 21', mvp: 'T. Vacek (4 TD)', away: true },
-  { date: '14. 4. 2026', opp: 'Olomouc Hawks', result: 'V', score: '56 : 17', mvp: 'A. Beck (3 catch TD)', away: false },
-];
-
-const upcoming = [
-  { date: '19. 5. 2026', opp: 'Praha Lions', venue: 'Doma · Bobcats Arena', kickoff: '15:00' },
-  { date: '26. 5. 2026', opp: 'Hradec Tigers', venue: 'Venku · Hradec Králové', kickoff: '14:00' },
-  { date: '2. 6. 2026',  opp: 'Vary Phoenix', venue: 'Doma · Bobcats Arena', kickoff: '15:00' },
-];
+const recentGames = stats?.recentMatches.slice(0, 5) ?? [];
 
 const accentMap: Record<string, string> = {
   signal: 'text-signal',
@@ -30,15 +32,24 @@ const accentMap: Record<string, string> = {
   spark:  'text-[#A0531B]',
   plum:   'text-[#4F3878]',
 };
+
+// Best QB and WR for "coach insight" highlight
+const topQb = stats?.qbStats[0];
+const topWr = stats?.wrStats[0];
 ---
 
 <AppLayout
   title="Dashboard · GameStatiq"
   active="dashboard"
-  pageTitle="Dobrý den, Bohuslave"
-  pageSub="Pohled na klub Bobcats — Muži, sezóna 2026"
+  pageTitle={stats ? `Bobcats · ${stats.team}` : 'Dashboard'}
+  pageSub={stats ? `Sezóna 2026 · ${matches} odehraných zápasů` : 'Načítám klubová data…'}
 >
-  <!-- KPI row -->
+  {!stats && (
+    <div class="mb-6 rounded-lg border border-spark/30 bg-spark/5 px-4 py-3 text-[14px] text-[#A0531B]">
+      Nepodařilo se načíst live data ze Sheets. Zkuste obnovit stránku za chvíli.
+    </div>
+  )}
+
   <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
     {kpis.map((k) => (
       <div class="rounded-xl border border-stone bg-pearl p-5">
@@ -49,104 +60,111 @@ const accentMap: Record<string, string> = {
     ))}
   </div>
 
-  <!-- Tier banner -->
   <div class="mt-6 flex flex-col items-start justify-between gap-4 rounded-xl border border-stone bg-pearl p-5 lg:flex-row lg:items-center">
     <div class="flex items-center gap-4">
       <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-signal/10 text-signal">
         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 15 8l7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z"/></svg>
       </span>
       <div>
-        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Aktuální plán</p>
-        <p class="text-[17px] font-bold tracking-tight-2 text-ink">Klub · 690 Kč / měs</p>
-        <p class="text-[12px] text-graphite">Příští platba 15. 6. 2026</p>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Live data</p>
+        <p class="text-[17px] font-bold tracking-tight-2 text-ink">Google Sheets · Bobcats stats</p>
+        <p class="text-[12px] text-graphite">Synchronizováno automaticky po každém odehraném zápase</p>
       </div>
     </div>
     <div class="flex gap-2">
-      <a href="/app/billing" class="rounded-lg border border-stone bg-mist px-4 py-2 text-[13px] font-medium text-graphite hover:border-stone-2 hover:bg-stone/30">Faktury</a>
+      <a href="https://bohuslavrom-gif.github.io/bobcats-stats/public.html?team=Muži" target="_blank" rel="noopener" class="rounded-lg border border-stone bg-mist px-4 py-2 text-[13px] font-medium text-graphite hover:border-stone-2 hover:bg-stone/30">Veřejná stránka</a>
       <a href="/app/billing" class="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1A2B45]">Upgrade na Liga</a>
     </div>
   </div>
 
-  <!-- Two-column section -->
   <div class="mt-6 grid gap-5 lg:grid-cols-[1.3fr_1fr]">
-    <!-- Recent games -->
     <div class="rounded-xl border border-stone bg-pearl">
       <div class="flex items-center justify-between border-b border-stone px-5 py-4">
         <div>
           <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Poslední zápasy</p>
-          <p class="text-[12px] text-slate">Last 5 · klubová série 9-0</p>
+          <p class="text-[12px] text-slate">Top {recentGames.length} podle data</p>
         </div>
         <a href="/app/stats" class="text-[12px] font-semibold text-signal hover:underline">Všechny stats →</a>
       </div>
-      <ul class="divide-y divide-stone">
-        {recentGames.map((g) => (
-          <li class="flex items-center gap-4 px-5 py-3.5">
-            <span class={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-[12px] font-bold ${
-              g.result === 'V' ? 'bg-verde/15 text-[#1B6E62]' : 'bg-stone text-slate'
-            }`}>{g.result}</span>
-            <div class="min-w-0 flex-1">
-              <p class="text-[14px] font-semibold text-ink">
-                {g.away ? 'venku · ' : 'doma · '}<span class="text-graphite">{g.opp}</span>
-              </p>
-              <p class="text-[11px] text-slate">{g.date} · MVP {g.mvp}</p>
-            </div>
-            <p class="text-[15px] font-bold tabular-nums tracking-tight-2 text-ink">{g.score}</p>
-          </li>
-        ))}
-      </ul>
+      {recentGames.length === 0 ? (
+        <div class="p-8 text-center text-[13px] text-slate">Žádné odehrané zápasy.</div>
+      ) : (
+        <ul class="divide-y divide-stone">
+          {recentGames.map((g) => (
+            <li class="flex items-center gap-4 px-5 py-3.5">
+              <span class={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-[12px] font-bold ${
+                g.result === 'W' ? 'bg-verde/15 text-[#1B6E62]' :
+                g.result === 'L' ? 'bg-signal/15 text-signal' :
+                'bg-stone text-slate'
+              }`}>{g.result === 'W' ? 'V' : g.result === 'L' ? 'P' : 'R'}</span>
+              <div class="min-w-0 flex-1">
+                <p class="text-[14px] font-semibold text-ink">{g.opponent}</p>
+                <p class="text-[11px] text-slate">{g.date}</p>
+              </div>
+              <p class="text-[15px] font-bold tabular-nums tracking-tight-2 text-ink">{g.ourScore} : {g.oppScore}</p>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
 
-    <!-- Upcoming -->
     <div class="rounded-xl border border-stone bg-pearl">
       <div class="flex items-center justify-between border-b border-stone px-5 py-4">
-        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Nadcházející zápasy</p>
-        <span class="rounded-md bg-mist px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">{upcoming.length}</span>
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Top hráči</p>
+        <span class="rounded-md bg-mist px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">živě</span>
       </div>
       <ul class="divide-y divide-stone">
-        {upcoming.map((g) => (
+        {topQb && (
           <li class="px-5 py-4">
-            <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-signal">{g.date} · {g.kickoff}</p>
-            <p class="mt-1 text-[14px] font-semibold text-ink">{g.opp}</p>
-            <p class="text-[12px] text-slate">{g.venue}</p>
+            <p class="text-[10px] font-semibold uppercase tracking-[0.08em] text-signal">Top quarterback</p>
+            <p class="mt-1 text-[14px] font-semibold text-ink">{topQb.name} · #{topQb.jersey}</p>
+            <p class="text-[12px] text-slate">{topQb.qb.td} TD · {topQb.qb.comp}/{topQb.qb.att} cmp ({Math.round((topQb.qb.comp / Math.max(topQb.qb.att, 1)) * 100)}%)</p>
           </li>
-        ))}
+        )}
+        {topWr && (
+          <li class="px-5 py-4">
+            <p class="text-[10px] font-semibold uppercase tracking-[0.08em] text-sky">Top wide receiver</p>
+            <p class="mt-1 text-[14px] font-semibold text-ink">{topWr.name} · #{topWr.jersey}</p>
+            <p class="text-[12px] text-slate">{topWr.wr.td} TD · {topWr.wr.rec}/{topWr.wr.targets} cmp · {topWr.wr.pts} bodů</p>
+          </li>
+        )}
+        {!topQb && !topWr && (
+          <li class="px-5 py-8 text-center text-[13px] text-slate">Zatím žádná data o hráčích.</li>
+        )}
       </ul>
       <div class="border-t border-stone px-5 py-3">
-        <a href="/app/stats" class="text-[12px] font-semibold text-signal hover:underline">Plný rozpis →</a>
+        <a href="/app/players" class="text-[12px] font-semibold text-signal hover:underline">Celá soupiska →</a>
       </div>
     </div>
   </div>
 
-  <!-- Coach insight -->
-  <div class="mt-6 rounded-xl border border-stone bg-gradient-to-br from-ink to-[#1A2B45] p-6 text-white lg:p-8">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-signal">Coach insight · poslední zápas</p>
-        <h2 class="mt-2 text-[22px] font-bold tracking-tight-2">Pass-heavy attack proti Brnu fungoval na 78&nbsp;%</h2>
-        <p class="mt-3 max-w-2xl text-[14px] leading-relaxed text-white/75">
-          Vacek dokončil 18 z 23 passů na 287 yardů. 3 TD všechny v Q3 — naše pass-RPO série rozbila jejich nickel coverage.
-          Doporučení na příští zápas: zachovat 65/35 pass-rush ratio, ale připravit run option proti dime defense Praha Lions.
-        </p>
-      </div>
-      <span class="rounded-md bg-signal/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-signal">Liga tier ↗</span>
-    </div>
-    <div class="mt-6 grid gap-4 border-t border-white/10 pt-5 sm:grid-cols-4">
-      <div>
-        <p class="text-[10px] uppercase tracking-[0.08em] text-white/50">Completion %</p>
-        <p class="text-2xl font-bold tabular-nums tracking-tight-2">78</p>
-      </div>
-      <div>
-        <p class="text-[10px] uppercase tracking-[0.08em] text-white/50">Pass yards</p>
-        <p class="text-2xl font-bold tabular-nums tracking-tight-2">287</p>
-      </div>
-      <div>
-        <p class="text-[10px] uppercase tracking-[0.08em] text-white/50">3rd down conv.</p>
-        <p class="text-2xl font-bold tabular-nums tracking-tight-2">7/10</p>
-      </div>
-      <div>
-        <p class="text-[10px] uppercase tracking-[0.08em] text-white/50">Time of poss.</p>
-        <p class="text-2xl font-bold tabular-nums tracking-tight-2">33:12</p>
+  {stats && (
+    <div class="mt-6 rounded-xl border border-stone bg-gradient-to-br from-ink to-[#1A2B45] p-6 text-white lg:p-8">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-signal">Coach insight · sezóna</p>
+      <h2 class="mt-2 text-[22px] font-bold tracking-tight-2">
+        Skórujete <span class="text-signal">{stats.points.forAvg.toFixed(1)}</span> bodů na zápas — inkasujete jen <span class="text-signal">{stats.points.againstAvg.toFixed(1)}</span>
+      </h2>
+      <p class="mt-3 max-w-2xl text-[14px] leading-relaxed text-white/75">
+        Rozdíl <strong class="text-white">{(stats.points.forAvg - stats.points.againstAvg).toFixed(1)}</strong> bodů na zápas vás řadí mezi top týmy ligy. Útok produkuje stabilně, obrana drží zadní vrátka.
+      </p>
+      <div class="mt-6 grid gap-4 border-t border-white/10 pt-5 sm:grid-cols-4">
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.08em] text-white/50">Zápasů</p>
+          <p class="text-2xl font-bold tabular-nums tracking-tight-2">{stats.record.matches}</p>
+        </div>
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.08em] text-white/50">Výher</p>
+          <p class="text-2xl font-bold tabular-nums tracking-tight-2">{stats.record.wins}</p>
+        </div>
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.08em] text-white/50">Bodů celkem</p>
+          <p class="text-2xl font-bold tabular-nums tracking-tight-2">{stats.points.for}</p>
+        </div>
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.08em] text-white/50">Obdržených</p>
+          <p class="text-2xl font-bold tabular-nums tracking-tight-2">{stats.points.against}</p>
+        </div>
       </div>
     </div>
-  </div>
+  )}
 </AppLayout>
