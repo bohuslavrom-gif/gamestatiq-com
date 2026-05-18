@@ -10,7 +10,7 @@ const user = Astro.locals.user;
 let userName = '—';
 let userInitials = '—';
 let userRole = 'Admin';
-let club: { name: string; sport: string | null; abbr: string } | null = null;
+let club: { name: string; sport: string | null; abbr: string; logoUrl: string | null } | null = null;
 
 if (user) {
   const admin = getSupabaseAdmin();
@@ -26,17 +26,17 @@ if (user) {
 
   const { data: membership } = await admin
     .from('club_members')
-    .select('role, clubs(name, sport)')
+    .select('role, clubs(name, sport, logo_url)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
   if (membership) {
     userRole = ({ admin: 'Admin', coach: 'Trenér', stats: 'Statistik', viewer: 'Pozorovatel' } as Record<string, string>)[membership.role] ?? 'Admin';
-    const c = (membership as any).clubs as Pick<Club, 'name' | 'sport'> | null;
+    const c = (membership as any).clubs as Pick<Club, 'name' | 'sport' | 'logo_url'> | null;
     if (c) {
       const abbr = c.name.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || 'KLB';
-      club = { name: c.name, sport: c.sport, abbr };
+      club = { name: c.name, sport: c.sport, abbr, logoUrl: c.logo_url };
     }
   }
 }
@@ -61,7 +61,11 @@ const navItems = [
 
     <div class="border-b border-stone px-3 py-4">
       <button type="button" class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-mist" aria-label="Přepnout klub">
-        <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-[11px] font-bold tracking-[0.04em] text-white">{club?.abbr ?? '?'}</span>
+        {club?.logoUrl ? (
+          <img src={club.logoUrl} alt="" class="h-9 w-9 rounded-lg bg-mist object-contain" />
+        ) : (
+          <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-[11px] font-bold tracking-[0.04em] text-white">{club?.abbr ?? '?'}</span>
+        )}
         <div class="min-w-0 flex-1">
           <p class="truncate text-[14px] font-semibold tracking-tight-2 text-ink">{club?.name ?? 'Vyberte klub'}</p>
           <p class="truncate text-[11px] text-slate">{club?.sport ? 'sezóna 2026' : '—'}</p>
