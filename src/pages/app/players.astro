@@ -44,6 +44,8 @@ const savedParam = url.searchParams.get('saved');
 const errorParam = url.searchParams.get('error');
 const editId = url.searchParams.get('edit');
 const editingPlayer = editId ? players.find((p: any) => p.id === editId) : null;
+const addMode = url.searchParams.get('add') === '1';
+const showForm = canEdit && (addMode || !!editingPlayer);
 
 const positions = [
   { code: 'QB', label: 'Quarterback' },
@@ -125,20 +127,23 @@ const stCount  = players.filter((p: any) => ['ST','K','P'].includes(p.position))
 
     <div class="ml-auto">
       {canEdit ? (
-        <details class="group relative">
-          <summary class="list-none cursor-pointer rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1A2B45] inline-flex items-center gap-1.5">
+        showForm ? (
+          <a href="/app/players" class="rounded-lg border border-stone bg-pearl px-4 py-2 text-[13px] font-medium text-graphite hover:bg-mist inline-flex items-center gap-1.5">
+            Zavřít formulář
+          </a>
+        ) : (
+          <a href="/app/players?add=1#player-form" class="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1A2B45] inline-flex items-center gap-1.5">
             + Přidat hráče
-          </summary>
-          <!-- form rendered in main below -->
-        </details>
+          </a>
+        )
       ) : (
         <button disabled class="cursor-not-allowed rounded-lg border border-stone bg-mist px-3 py-1.5 text-[12px] font-medium text-stone-2">+ Přidat hráče (jen Admin/Trenér)</button>
       )}
     </div>
   </div>
 
-  {/* Add/Edit Form (inline section) */}
-  {canEdit && (
+  {/* Add/Edit Form (inline section — only when add/edit mode) */}
+  {showForm && (
     <section id="player-form" class="mb-6 rounded-xl border border-stone bg-pearl">
       <div class="border-b border-stone px-5 py-4">
         <p class="text-[15px] font-semibold tracking-tight-2 text-ink">
@@ -349,8 +354,9 @@ const stCount  = players.filter((p: any) => ['ST','K','P'].includes(p.position))
 </AppLayout>
 
 <script is:inline>
-  // Scroll to form if edit param is present
-  if (new URLSearchParams(location.search).get('edit')) {
+  // Scroll to form if edit or add param is present
+  const _qs = new URLSearchParams(location.search);
+  if (_qs.get('edit') || _qs.get('add')) {
     document.getElementById('player-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 </script>
