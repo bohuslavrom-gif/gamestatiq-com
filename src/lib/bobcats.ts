@@ -58,9 +58,26 @@ export type MatchLogEntry = {
   qbAtt?: number; qbComp?: number; qbTD?: number; qbINT?: number; qbYds?: number; passPct?: number;
   rushYds?: number; passYds?: number; totalYds?: number;
   oppPassYds?: number; oppRushYds?: number; oppTotalYds?: number;
-  penCount?: number; penYds?: number; tdPct?: number; stopPct?: number; xp?: number;
+  penCount?: number; penYds?: number; tdPct?: number; stopPct?: number;
+  xp1Att?: number; xp1Ok?: number; xp1Pct?: number;
+  xp2Att?: number; xp2Ok?: number; xp2Pct?: number;
   downDist?: Record<string, DownBreakdown>;
   playbookAkce?: PlaybookAction[];
+};
+
+export type OffSnapshot = {
+  points?: number; pointsAvg?: number;
+  rushYds?: number; passYds?: number; totalYds?: number;
+  drives?: number; td?: number; driveEffPct?: number;
+  qbAtt?: number; qbComp?: number; qbYds?: number; qbTD?: number; qbINT?: number; passPct?: number;
+  xp1Att?: number; xp1Ok?: number; xp1Pct?: number;
+  xp2Att?: number; xp2Ok?: number; xp2Pct?: number;
+};
+
+export type DefSnapshot = {
+  pointsAgainst?: number; pointsAvg?: number;
+  drives?: number; stops?: number; stopPct?: number;
+  rushYds?: number; passYds?: number; totalYds?: number;
 };
 
 export type CoachStats = {
@@ -71,9 +88,12 @@ export type CoachStats = {
   matchCount: number;
   matchLog: MatchLogEntry[];
   totals: {
+    matches?: number;
+    off?: OffSnapshot;
+    def?: DefSnapshot;
+    fauly?: { count: number; yds: number };
     downDist?: Record<string, DownBreakdown>;
     playbookAkce?: PlaybookAction[];
-    fauly?: { count: number; yds: number };
   };
 };
 
