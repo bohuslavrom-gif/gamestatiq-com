@@ -47,6 +47,28 @@ const editingPlayer = editId ? players.find((p: any) => p.id === editId) : null;
 const addMode = url.searchParams.get('add') === '1';
 const showForm = canEdit && (addMode || !!editingPlayer);
 
+// Filter by position group
+const filterParam = url.searchParams.get('filter') ?? 'all';
+const POSITIONS_OFF = new Set(['QB', 'RB', 'WR', 'OL']);
+const POSITIONS_DEF = new Set(['DL', 'LB', 'DB']);
+const POSITIONS_ST  = new Set(['ST', 'K', 'P']);
+const filteredPlayers = players.filter((p: any) => {
+  if (filterParam === 'offense') return POSITIONS_OFF.has(p.position);
+  if (filterParam === 'defense') return POSITIONS_DEF.has(p.position);
+  if (filterParam === 'st')      return POSITIONS_ST.has(p.position);
+  return true;
+});
+
+// Helper to preserve other params (edit/add) when changing filter
+const filterHref = (f: string) => {
+  const u = new URLSearchParams();
+  if (f !== 'all') u.set('filter', f);
+  if (editId) u.set('edit', editId);
+  if (addMode) u.set('add', '1');
+  const qs = u.toString();
+  return '/app/players' + (qs ? '?' + qs : '');
+};
+
 const positions = [
   { code: 'QB', label: 'Quarterback' },
   { code: 'RB', label: 'Running back' },
@@ -120,10 +142,10 @@ const stCount  = players.filter((p: any) => ['ST','K','P'].includes(p.position))
 
   <!-- Filters / Add button -->
   <div class="mb-5 flex flex-wrap items-center gap-2">
-    <button class="rounded-full bg-ink px-3 py-1.5 text-[12px] font-medium text-white">Všichni ({players.length})</button>
-    <button class="rounded-full border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Útok ({offCount})</button>
-    <button class="rounded-full border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Obrana ({defCount})</button>
-    <button class="rounded-full border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Special teams ({stCount})</button>
+    <a href={filterHref('all')} class={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${filterParam === 'all' ? 'bg-ink text-white' : 'border border-stone bg-pearl text-graphite hover:bg-mist'}`}>Všichni ({players.length})</a>
+    <a href={filterHref('offense')} class={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${filterParam === 'offense' ? 'bg-ink text-white' : 'border border-stone bg-pearl text-graphite hover:bg-mist'}`}>Útok ({offCount})</a>
+    <a href={filterHref('defense')} class={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${filterParam === 'defense' ? 'bg-ink text-white' : 'border border-stone bg-pearl text-graphite hover:bg-mist'}`}>Obrana ({defCount})</a>
+    <a href={filterHref('st')} class={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${filterParam === 'st' ? 'bg-ink text-white' : 'border border-stone bg-pearl text-graphite hover:bg-mist'}`}>Special teams ({stCount})</a>
 
     <div class="ml-auto">
       {canEdit ? (
@@ -280,11 +302,15 @@ const stCount  = players.filter((p: any) => ['ST','K','P'].includes(p.position))
         </tr>
       </thead>
       <tbody class="divide-y divide-stone">
-        {players.length === 0 ? (
+        {filteredPlayers.length === 0 ? (
           <tr><td colspan={canEdit ? 6 : 5} class="px-5 py-16 text-center">
-            <p class="text-[14px] font-semibold text-ink">Soupiska je prázdná</p>
+            <p class="text-[14px] font-semibold text-ink">
+              {players.length === 0 ? 'Soupiska je prázdná' : 'V této kategorii zatím žádný hráč'}
+            </p>
             <p class="mt-1 text-[13px] text-slate">
-              {canEdit ? 'Klikni "+ Přidat hráče" výše a začněte budovat soupisku.' : 'Admin nebo trenér musí přidat hráče.'}
+              {players.length === 0
+                ? (canEdit ? 'Klikni "+ Přidat hráče" výše a začněte budovat soupisku.' : 'Admin nebo trenér musí přidat hráče.')
+                : 'Zkuste jiný filtr nebo přidejte hráče s odpovídající pozicí.'}
             </p>
             {showGasFallback && gasStats && (
               <p class="mt-4 text-[12px] text-slate">
@@ -293,7 +319,7 @@ const stCount  = players.filter((p: any) => ['ST','K','P'].includes(p.position))
             )}
           </td></tr>
         ) : (
-          players.map((p: any) => (
+          filteredPlayers.map((p: any) => (
             <tr class="transition-colors hover:bg-mist/60">
               <td class="px-5 py-3.5">
                 <span class="font-mono text-[14px] font-bold tabular-nums text-graphite">
