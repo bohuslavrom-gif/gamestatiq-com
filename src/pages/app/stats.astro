@@ -224,34 +224,62 @@ const chartPathOpp = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toF
               <span class="text-[12px] text-stone-2">Po novém uložení zápasu se začnou plnit.</span>
             </div>
           ) : (
-            <div class="space-y-3 p-5">
-              {([1, 2, 3, 4] as const).map((n) => {
-                const d = downs[n];
-                const pct = downsTotal > 0 ? Math.round((d.total / downsTotal) * 100) : 0;
-                const barWidth = (d.total / downsMax) * 100;
-                return (
-                  <div>
-                    <div class="flex items-baseline justify-between text-[12px]">
-                      <span class="font-semibold text-ink">{n}st down</span>
-                      <span class="text-slate">
-                        <strong class="text-ink tabular-nums">{d.total}</strong>
-                        <span class="ml-1 tabular-nums text-stone-2">· {pct}%</span>
-                      </span>
-                    </div>
-                    <div class="mt-1 h-2 w-full overflow-hidden rounded-full bg-mist">
-                      <div class="h-full rounded-full bg-signal" style={`width:${barWidth}%`}></div>
-                    </div>
-                    {!d._legacy && (d.short + d.medium + d.long) > 0 && (
-                      <div class="mt-1 flex gap-3 text-[11px] text-slate">
-                        <span>krátká: <strong class="text-graphite tabular-nums">{d.short}</strong></span>
-                        <span>střední: <strong class="text-graphite tabular-nums">{d.medium}</strong></span>
-                        <span>dlouhá: <strong class="text-graphite tabular-nums">{d.long}</strong></span>
+            <>
+              <div class="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-stone bg-mist/40 px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-4 rounded-sm bg-stone-2"></span>Krátké (0–7 yd)</span>
+                <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-4 rounded-sm" style="background:#1B5E83"></span>Střední (8–15 yd)</span>
+                <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-4 rounded-sm bg-signal"></span>Dlouhé (16+ yd)</span>
+              </div>
+              <div class="space-y-4 p-5">
+                {([1, 2, 3, 4] as const).map((n) => {
+                  const d = downs[n];
+                  const pct = downsTotal > 0 ? Math.round((d.total / downsTotal) * 100) : 0;
+                  const rowWidth = downsMax > 0 ? (d.total / downsMax) * 100 : 0;
+                  const shortPct = d.total > 0 ? (d.short / d.total) * 100 : 0;
+                  const medPct   = d.total > 0 ? (d.medium / d.total) * 100 : 0;
+                  const longPct  = d.total > 0 ? (d.long / d.total) * 100 : 0;
+                  const knownSum = d.short + d.medium + d.long;
+                  const unknown  = Math.max(0, d.total - knownSum);
+                  const unknownPct = d.total > 0 ? (unknown / d.total) * 100 : 0;
+                  return (
+                    <div class="flex items-center gap-4">
+                      <div class="w-20 flex-shrink-0">
+                        <p class="text-[14px] font-semibold text-ink">{n}. down</p>
+                        <p class="text-[11px] text-slate">{pct}% celku</p>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex h-7 overflow-hidden rounded-full bg-mist" style={`width:${Math.max(rowWidth, d.total > 0 ? 8 : 0)}%`}>
+                          {d.short > 0 && (
+                            <div class="flex h-full items-center justify-center bg-stone-2 text-[11px] font-bold text-white" style={`width:${shortPct}%`}>
+                              {shortPct > 12 ? d.short : ''}
+                            </div>
+                          )}
+                          {d.medium > 0 && (
+                            <div class="flex h-full items-center justify-center text-[11px] font-bold text-white" style={`width:${medPct}%; background:#1B5E83`}>
+                              {medPct > 12 ? d.medium : ''}
+                            </div>
+                          )}
+                          {d.long > 0 && (
+                            <div class="flex h-full items-center justify-center bg-signal text-[11px] font-bold text-white" style={`width:${longPct}%`}>
+                              {longPct > 12 ? d.long : ''}
+                            </div>
+                          )}
+                          {unknown > 0 && (
+                            <div class="flex h-full items-center justify-center bg-stone text-[11px] font-bold text-slate" style={`width:${unknownPct}%`}>
+                              {unknownPct > 12 ? unknown : ''}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div class="w-14 flex-shrink-0 text-right">
+                        <p class="text-[17px] font-bold tabular-nums text-ink">{d.total}</p>
+                        <p class="text-[10px] uppercase tracking-wider text-slate">plays</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
 
