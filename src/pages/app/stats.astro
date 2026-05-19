@@ -1,24 +1,24 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
-import { fetchPublicStats } from '../../lib/bobcats';
+import { fetchPublicStats, fetchCoachStats, type DownBreakdown } from '../../lib/bobcats';
 
 export const prerender = false;
 
-const stats = await fetchPublicStats('Muži');
+const [stats, coach] = await Promise.all([
+  fetchPublicStats('Muži'),
+  fetchCoachStats('Muži'),
+]);
 
+// ── Public-stats derived metrics ────────────────────────────
 const winPct = stats && stats.record.matches > 0
-  ? Math.round((stats.record.wins / stats.record.matches) * 100)
-  : 0;
-
+  ? Math.round((stats.record.wins / stats.record.matches) * 100) : 0;
 const ptDiff = stats ? stats.points.for - stats.points.against : 0;
 const ptDiffPerGame = stats && stats.record.matches > 0
-  ? (ptDiff / stats.record.matches).toFixed(1)
-  : '0';
-
-const totalQbTds = stats?.qbStats.reduce((sum, p) => sum + p.qb.td, 0) ?? 0;
-const totalWrTds = stats?.wrStats.reduce((sum, p) => sum + p.wr.td, 0) ?? 0;
-const totalSacks = stats?.defenseLeaders.reduce((sum, p) => sum + p.db.sack, 0) ?? 0;
-const totalInts = stats?.defenseLeaders.reduce((sum, p) => sum + p.db.int, 0) ?? 0;
+  ? (ptDiff / stats.record.matches).toFixed(1) : '0';
+const totalQbTds = stats?.qbStats.reduce((s, p) => s + p.qb.td, 0) ?? 0;
+const totalWrTds = stats?.wrStats.reduce((s, p) => s + p.wr.td, 0) ?? 0;
+const totalSacks = stats?.defenseLeaders.reduce((s, p) => s + p.db.sack, 0) ?? 0;
+const totalInts = stats?.defenseLeaders.reduce((s, p) => s + p.db.int, 0) ?? 0;
 
 const teamStats = stats ? [
   { label: 'Win %', value: `${winPct}%`, sub: `${stats.record.wins} V z ${stats.record.matches} zápasů` },
@@ -31,7 +31,61 @@ const teamStats = stats ? [
   { label: 'Interceptions', value: String(totalInts), sub: 'Defenzivní zákroky' },
 ] : [];
 
-// Build a per-game scoring trend chart
+// ── Coach-stats: down distribution ──────────────────────────
+function asBreakdown(v: DownBreakdown | undefined) {
+  if (v == null) return { total: 0, short: 0, medium: 0, long: 0, _legacy: false };
+  if (typeof v === 'number') return { total: v, short: 0, medium: 0, long: 0, _legacy: true };
+  return {
+    total: v.total ?? 0,
+    short: v.short ?? 0,
+    medium: v.medium ?? 0,
+    long: v.long ?? 0,
+    _legacy: false,
+  };
+}
+
+const downs = coach?.totals.downDist
+  ? {
+      1: asBreakdown(coach.totals.downDist['1']),
+      2: asBreakdown(coach.totals.downDist['2']),
+      3: asBreakdown(coach.totals.downDist['3']),
+      4: asBreakdown(coach.totals.downDist['4']),
+    }
+  : null;
+const downsTotal = downs ? (downs[1].total + downs[2].total + downs[3].total + downs[4].total) : 0;
+const downsMax = downs ? Math.max(1, downs[1].total, downs[2].total, downs[3].total, downs[4].total) : 1;
+
+// ── Coach-stats: playbook actions ───────────────────────────
+const playbook = (coach?.totals.playbookAkce ?? []).slice().sort((a, b) => b.count - a.count);
+const playbookMaxCount = playbook.length > 0 ? Math.max(1, ...playbook.map((a) => a.count)) : 1;
+
+// ── Drive results ───────────────────────────────────────────
+const dr = coach?.driveResults ?? {};
+const drOther = (dr.halftime ?? 0) + (dr.eog ?? 0) + (dr.turnover ?? 0) + (dr.other ?? 0);
+const driveCells = coach ? [
+  { label: 'TD',     value: dr.td ?? 0,     accent: 'verde' },
+  { label: 'Downs',  value: dr.downs ?? 0,  accent: 'graphite' },
+  { label: 'INT',    value: dr.int ?? 0,    accent: 'signal' },
+  { label: 'Safety', value: dr.safety ?? 0, accent: 'spark' },
+  { label: 'Ostatní',value: drOther,        accent: 'slate' },
+] : [];
+
+const driveAccent: Record<string, string> = {
+  verde: 'text-verde',
+  graphite: 'text-graphite',
+  signal: 'text-signal',
+  spark: 'text-[#A0531B]',
+  slate: 'text-slate',
+};
+
+// ── Fauly ──────────────────────────────────────────────────
+const fauly = coach?.faulyBreakdown ?? [];
+const faulyMax = fauly.length > 0 ? Math.max(1, ...fauly.map((f) => f.count)) : 1;
+
+// ── Match log ──────────────────────────────────────────────
+const matchLog = (coach?.matchLog ?? []).slice().reverse();
+
+// ── Chart points for trend (public stats) ──────────────────
 const trend = (stats?.recentMatches ?? []).slice().reverse();
 const maxScore = Math.max(...trend.flatMap((g) => [g.ourScore, g.oppScore]), 50);
 const chartPoints = trend.map((g, i) => {
@@ -40,12 +94,8 @@ const chartPoints = trend.map((g, i) => {
   const yOpp = 200 - (g.oppScore / maxScore) * 170;
   return { x, yOur, yOpp, label: g.opponent, our: g.ourScore, opp: g.oppScore };
 });
-
 const chartPathOur = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(0)} ${p.yOur.toFixed(0)}`).join(' ');
 const chartPathOpp = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(0)} ${p.yOpp.toFixed(0)}`).join(' ');
-
-const topQbs = (stats?.qbStats ?? []).slice(0, 3);
-const topWrs = (stats?.wrStats ?? []).slice(0, 5);
 ---
 
 <AppLayout
@@ -78,6 +128,7 @@ const topWrs = (stats?.wrStats ?? []).slice(0, 5);
     <a href="https://bohuslavrom-gif.github.io/bobcats-stats/public.html?team=Muži" target="_blank" rel="noopener" class="rounded-lg bg-pearl px-4 py-2 text-[13px] font-medium text-ink hover:bg-mist">Otevřít →</a>
   </div>
 
+  <!-- ── Týmové metriky (beze změny) ── -->
   <div class="rounded-xl border border-stone bg-pearl">
     <div class="border-b border-stone px-5 py-4">
       <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Týmové metriky</p>
@@ -97,6 +148,7 @@ const topWrs = (stats?.wrStats ?? []).slice(0, 5);
     </div>
   </div>
 
+  {/* ── Skóre po zápasech (chart) ── */}
   {chartPoints.length > 0 && (
     <div class="mt-6 rounded-xl border border-stone bg-pearl p-5 lg:p-6">
       <div class="flex items-end justify-between">
@@ -130,53 +182,213 @@ const topWrs = (stats?.wrStats ?? []).slice(0, 5);
     </div>
   )}
 
-  {(topQbs.length > 0 || topWrs.length > 0) && (
-    <div class="mt-6 rounded-xl border border-stone bg-pearl">
-      <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+  {/* ── COACH WIDGET section ── */}
+  {coach && (
+    <>
+      <div class="mt-10 mb-5 flex items-end justify-between">
         <div>
-          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Top hráči sezóny</p>
-          <p class="text-[12px] text-slate">Per-hráč staty · živě ze Sheets</p>
+          <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-signal">Coach view</p>
+          <h2 class="mt-1 text-[22px] font-bold tracking-tight-2 text-ink">Analytika ze Scorer appky</h2>
+          <p class="mt-1 text-[13px] text-slate">Agregace ze všech {coach.matchCount} odehraných zápasů</p>
         </div>
-        <a href="/app/players" class="text-[12px] font-semibold text-signal hover:underline">Celá soupiska →</a>
       </div>
-      <ul class="divide-y divide-stone">
-        {topQbs.map((p, i) => (
-          <li class="flex items-center gap-4 px-5 py-4">
-            <span class={`inline-flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-bold tabular-nums ${i === 0 ? 'bg-signal text-white' : 'bg-mist text-graphite'}`}>{i + 1}</span>
-            {p.photoUrl ? (
-              <img src={p.photoUrl} alt="" loading="lazy" class="h-10 w-10 rounded-full object-cover" />
-            ) : (
-              <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-ink/5 text-[12px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0]).join('').slice(0,2)}</span>
-            )}
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-[14px] font-semibold text-ink">{p.name}</p>
-              <p class="truncate text-[12px] text-slate">QB · #{p.jersey}</p>
+
+      {/* ── Drives souhrn ── */}
+      {coach.driveCount > 0 && (
+        <div class="mt-2 rounded-xl border border-stone bg-pearl">
+          <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+            <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Útočné drives — souhrn</p>
+            <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{coach.driveCount} drives</span>
+          </div>
+          <div class="grid divide-x divide-stone sm:grid-cols-5">
+            {driveCells.map((c) => (
+              <div class="p-5 text-center">
+                <p class={`text-3xl font-bold tabular-nums tracking-tight-3 ${driveAccent[c.accent]}`}>{c.value}</p>
+                <p class="mt-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">{c.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div class="mt-6 grid gap-5 lg:grid-cols-2">
+        {/* ── Down distribuce ── */}
+        <div class="rounded-xl border border-stone bg-pearl">
+          <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+            <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Down distribuce</p>
+            <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{downsTotal > 0 ? `${downsTotal} útočných plays` : 'útočné plays'}</span>
+          </div>
+          {!downs || downsTotal === 0 ? (
+            <div class="p-8 text-center text-[13px] text-slate">
+              Žádná per-play data v této sezóně.<br/>
+              <span class="text-[12px] text-stone-2">Po novém uložení zápasu se začnou plnit.</span>
             </div>
-            <div class="text-right">
-              <p class="text-[14px] font-bold tabular-nums tracking-tight-2 text-ink">{p.qb.td} TD passes</p>
-              <p class="text-[11px] text-slate">{p.qb.comp}/{p.qb.att} cmp · {p.qb.yds} yds</p>
+          ) : (
+            <div class="space-y-3 p-5">
+              {([1, 2, 3, 4] as const).map((n) => {
+                const d = downs[n];
+                const pct = downsTotal > 0 ? Math.round((d.total / downsTotal) * 100) : 0;
+                const barWidth = (d.total / downsMax) * 100;
+                return (
+                  <div>
+                    <div class="flex items-baseline justify-between text-[12px]">
+                      <span class="font-semibold text-ink">{n}st down</span>
+                      <span class="text-slate">
+                        <strong class="text-ink tabular-nums">{d.total}</strong>
+                        <span class="ml-1 tabular-nums text-stone-2">· {pct}%</span>
+                      </span>
+                    </div>
+                    <div class="mt-1 h-2 w-full overflow-hidden rounded-full bg-mist">
+                      <div class="h-full rounded-full bg-signal" style={`width:${barWidth}%`}></div>
+                    </div>
+                    {!d._legacy && (d.short + d.medium + d.long) > 0 && (
+                      <div class="mt-1 flex gap-3 text-[11px] text-slate">
+                        <span>krátká: <strong class="text-graphite tabular-nums">{d.short}</strong></span>
+                        <span>střední: <strong class="text-graphite tabular-nums">{d.medium}</strong></span>
+                        <span>dlouhá: <strong class="text-graphite tabular-nums">{d.long}</strong></span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          </li>
-        ))}
-        {topWrs.map((p, i) => (
-          <li class="flex items-center gap-4 px-5 py-4">
-            <span class="inline-flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-bold tabular-nums bg-mist text-graphite">{topQbs.length + i + 1}</span>
-            {p.photoUrl ? (
-              <img src={p.photoUrl} alt="" loading="lazy" class="h-10 w-10 rounded-full object-cover" />
-            ) : (
-              <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-ink/5 text-[12px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0]).join('').slice(0,2)}</span>
-            )}
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-[14px] font-semibold text-ink">{p.name}</p>
-              <p class="truncate text-[12px] text-slate">WR · #{p.jersey}</p>
-            </div>
-            <div class="text-right">
-              <p class="text-[14px] font-bold tabular-nums tracking-tight-2 text-ink">{p.wr.td} TD catches</p>
-              <p class="text-[11px] text-slate">{p.wr.rec}/{p.wr.targets} cmp · {p.wr.pts} bodů</p>
-            </div>
-          </li>
-        ))}
-      </ul>
+          )}
+        </div>
+
+        {/* ── Fauly podle typu ── */}
+        <div class="rounded-xl border border-stone bg-pearl">
+          <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+            <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Fauly podle typu</p>
+            <span class="text-[11px] uppercase tracking-[0.1em] text-slate">strana faulu</span>
+          </div>
+          {fauly.length === 0 ? (
+            <div class="p-8 text-center text-[13px] text-slate">Žádné fauly v sezóně.</div>
+          ) : (
+            <>
+              <div class="flex items-center gap-4 border-b border-stone px-5 py-2 text-[11px] text-slate">
+                <span class="inline-flex items-center gap-1.5"><span class="h-2 w-3 rounded-full bg-signal"></span>Útok</span>
+                <span class="inline-flex items-center gap-1.5"><span class="h-2 w-3 rounded-full bg-ink"></span>Obrana</span>
+              </div>
+              <div class="space-y-2.5 p-5">
+                {fauly.map((f) => {
+                  const w = (f.count / faulyMax) * 100;
+                  const cls = f.side === 'Útok' ? 'bg-signal' : f.side === 'Obrana' ? 'bg-ink' : 'bg-graphite';
+                  return (
+                    <div>
+                      <div class="flex items-baseline justify-between text-[12px]">
+                        <span class="truncate text-graphite">{f.type}</span>
+                        <span class="font-semibold tabular-nums text-ink">{f.count}</span>
+                      </div>
+                      <div class="mt-1 h-2 w-full overflow-hidden rounded-full bg-mist">
+                        <div class={`h-full rounded-full ${cls}`} style={`width:${w}%`}></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── Playbook akce ── */}
+      <div class="mt-6 rounded-xl border border-stone bg-pearl">
+        <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Playbook akce</p>
+          <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{playbook.length > 0 ? `${playbook.length} různých akcí` : 'úspěšnost per akce'}</span>
+        </div>
+        {playbook.length === 0 ? (
+          <div class="p-8 text-center text-[13px] text-slate">
+            Zatím žádné pojmenované akce z playbooku.<br/>
+            <span class="text-[12px] text-stone-2">V appce pojmenujte akce v poli "Název hry" — pak se zde agregují.</span>
+          </div>
+        ) : (
+          <div class="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3">
+            {playbook.map((a) => {
+              const totalYds = a.totalYds ?? 0;
+              const avgYds = a.avgYds ?? 0;
+              const td = a.td ?? 0;
+              const sign = totalYds >= 0 ? '+' : '';
+              const fill = (a.count / playbookMaxCount) * 100;
+              return (
+                <div class="rounded-lg border border-stone bg-pearl p-4">
+                  <div class="flex items-start justify-between gap-2">
+                    <p class="truncate text-[13px] font-semibold text-ink" title={a.name}>{a.name}</p>
+                    <span class="rounded bg-mist px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate">{a.count}×</span>
+                  </div>
+                  <div class="mt-3 flex items-baseline gap-2">
+                    <span class="text-2xl font-bold tabular-nums tracking-tight-3 text-ink">{sign}{totalYds}<span class="ml-0.5 text-[12px] font-medium text-slate">yd</span></span>
+                    {td > 0 && (
+                      <span class="rounded bg-signal/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-signal">{td} TD</span>
+                    )}
+                  </div>
+                  <p class="mt-1 text-[11px] text-slate">ø {avgYds} yd / play</p>
+                  <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-mist">
+                    <div class="h-full rounded-full bg-signal" style={`width:${fill}%`}></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Match log ── */}
+      {matchLog.length > 0 && (
+        <div class="mt-6 overflow-hidden rounded-xl border border-stone bg-pearl">
+          <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+            <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Match log</p>
+            <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{coach.matchCount} zápasů</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[820px] text-left text-[13px]">
+              <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                <tr>
+                  <th class="px-5 py-3">Soupeř</th>
+                  <th class="px-3 py-3 text-center tabular-nums">Skóre</th>
+                  <th class="px-3 py-3 text-center tabular-nums" title="QB: cmp/att">QB cmp/att</th>
+                  <th class="px-3 py-3 text-center tabular-nums" title="QB TD passes">TD</th>
+                  <th class="px-3 py-3 text-center tabular-nums" title="QB INT">INT</th>
+                  <th class="px-3 py-3 text-center tabular-nums" title="Total yds">Yds</th>
+                  <th class="px-3 py-3 text-center tabular-nums" title="Off drives → TD">TD%</th>
+                  <th class="px-3 py-3 text-center tabular-nums" title="Def stops %">Stop%</th>
+                  <th class="px-3 py-3 text-center tabular-nums" title="Fauly">Faul</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-stone">
+                {matchLog.map((m) => (
+                  <tr class="transition-colors hover:bg-mist/60">
+                    <td class="px-5 py-3">
+                      <p class="font-semibold text-ink">{m.opponent}</p>
+                      <p class="text-[11px] text-slate">{m.date}</p>
+                    </td>
+                    <td class="px-3 py-3 text-center">
+                      <span class={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[12px] font-bold tabular-nums ${
+                        m.result === 'W' ? 'bg-verde/15 text-[#1B6E62]' :
+                        m.result === 'L' ? 'bg-signal/15 text-signal' :
+                        'bg-stone text-slate'
+                      }`}>{m.ourScore}–{m.oppScore}</span>
+                    </td>
+                    <td class="px-3 py-3 text-center tabular-nums text-graphite">{(m.qbComp ?? 0)}/{(m.qbAtt ?? 0)}</td>
+                    <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.qbTD ?? 0}</td>
+                    <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.qbINT ?? 0}</td>
+                    <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.totalYds ?? 0}</td>
+                    <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.tdPct != null ? Math.round(m.tdPct * 100) : '—'}{m.tdPct != null ? '%' : ''}</td>
+                    <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.stopPct != null ? Math.round(m.stopPct * 100) : '—'}{m.stopPct != null ? '%' : ''}</td>
+                    <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.penCount ?? 0}{m.penYds ? <span class="text-[10px] text-stone-2"> ({m.penYds}yd)</span> : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </>
+  )}
+
+  {!coach && stats && (
+    <div class="mt-6 rounded-lg border border-stone bg-mist p-4 text-[13px] text-slate">
+      Coach view metriky se právě připojují — pro tento tým ještě nejsou všechna data.
     </div>
   )}
 </AppLayout>
