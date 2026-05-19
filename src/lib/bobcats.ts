@@ -131,3 +131,36 @@ async function fetchGAS<T>(action: string, team: TeamName): Promise<T | null> {
 
 export const fetchPublicStats = (team: TeamName) => fetchGAS<PublicStats>('publicStats', team);
 export const fetchCoachStats  = (team: TeamName) => fetchGAS<CoachStats>('coachStats', team);
+
+// ── Per-match player stats (single match) ──────────────────
+export type PlayerMatchStats = {
+  team: string;
+  date: string;
+  opponent: string;
+  qbStats: QbPlayer[];
+  wrStats: WrPlayer[];
+  defenseLeaders: DbPlayer[];
+};
+
+export async function fetchPlayerMatchStats(team: TeamName, date: string, opponent: string): Promise<PlayerMatchStats | null> {
+  const key = `playerMatchStats:${team}:${date}:${opponent}`;
+  const now = Date.now();
+  const c = cache.get(key);
+  if (c && now - c.ts < TTL) return c.data as PlayerMatchStats;
+
+  const cb = `cb_${now}`;
+  const url = `${GAS_URL}?action=playerMatchStats&team=${encodeURIComponent(team)}&date=${encodeURIComponent(date)}&opponent=${encodeURIComponent(opponent)}&callback=${cb}`;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000), redirect: 'follow' });
+    if (!res.ok) { console.warn('[bobcats] playerMatchStats responded', res.status); return null; }
+    const text = await res.text();
+    const stripped = text.replace(/^\s*[a-zA-Z0-9_]+\s*\(/, '').replace(/\)\s*;?\s*$/, '');
+    const data = JSON.parse(stripped) as PlayerMatchStats;
+    cache.set(key, { ts: now, data });
+    return data;
+  } catch (err) {
+    console.warn('[bobcats] playerMatchStats failed', err);
+    return null;
+  }
+}
+

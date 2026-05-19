@@ -1,6 +1,6 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
-import { fetchPublicStats, fetchCoachStats, type DownBreakdown, type OffSnapshot, type PlaybookAction } from '../../lib/bobcats';
+import { fetchPublicStats, fetchCoachStats, fetchPlayerMatchStats, type DownBreakdown, type OffSnapshot, type PlaybookAction } from '../../lib/bobcats';
 
 export const prerender = false;
 
@@ -21,6 +21,11 @@ const isSingleMatch = !!selectedMatch;
 const scopeLabel = selectedMatch
   ? `${selectedMatch.opponent} · ${selectedMatch.date}`
   : 'celá sezóna';
+
+// Per-match player stats — only fetched when view=players AND a single match is selected
+const matchPlayerStats = (view === 'players' && selectedMatch)
+  ? await fetchPlayerMatchStats('Muži', selectedMatch.date, selectedMatch.opponent)
+  : null;
 
 // Helper to build URL preserving other params
 const buildHref = (overrides: Record<string, string>) => {
@@ -549,52 +554,25 @@ const tabs = [
   {/* ═════════════════════════ PLAYERS VIEW ═════════════════════════ */}
   {view === 'players' && (
     <>
-      {isSingleMatch && (
-        <div class="mb-6 rounded-lg border border-sky/30 bg-sky/5 px-4 py-3 text-[13px] text-graphite">
-          <p class="font-semibold text-ink">Per-hráč breakdown pro jednotlivé zápasy zatím není dostupný.</p>
-          <p class="mt-1">Scorer app v současnosti exportuje per-hráč staty jen jako sezónní agregát. Níže ukazuje <strong>týmové QB / útočné / obranné statistiky</strong> pro tento zápas. Per-hráč rozpis přidáme v dalším update GAS endpointu.</p>
+      {/* If single-match: use per-match player stats list; if season: use stats.qbStats etc */}
+      {isSingleMatch && !matchPlayerStats && (
+        <div class="mb-6 rounded-lg border border-spark/30 bg-spark/5 px-4 py-3 text-[14px] text-[#A0531B]">
+          Nepodařilo se načíst per-hráč data pro tento zápas. Zkuste obnovit stránku.
         </div>
       )}
 
-      {/* Single-match: team-level summary card */}
-      {isSingleMatch && selectedMatch && (
-        <div class="mb-6 rounded-xl border border-stone bg-pearl">
-          <div class="border-b border-stone px-5 py-4">
-            <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Týmové staty v zápase · {selectedMatch.opponent}</p>
-          </div>
-          <div class="grid divide-x divide-y divide-stone sm:grid-cols-2 lg:grid-cols-4">
-            <div class="p-5">
-              <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">QB COMP/ATT</p>
-              <p class="mt-2 text-[24px] font-bold tabular-nums tracking-tight-3 text-ink">{selectedMatch.qbComp ?? 0}/{selectedMatch.qbAtt ?? 0}</p>
-              <p class="mt-1 text-[12px] text-graphite">{passEffectPct}% completion</p>
-            </div>
-            <div class="p-5">
-              <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">QB TD / INT</p>
-              <p class="mt-2 text-[24px] font-bold tabular-nums tracking-tight-3 text-ink">{selectedMatch.qbTD ?? 0} / {selectedMatch.qbINT ?? 0}</p>
-              <p class="mt-1 text-[12px] text-graphite">passing TD / interceptions</p>
-            </div>
-            <div class="p-5">
-              <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Pass yardů</p>
-              <p class="mt-2 text-[24px] font-bold tabular-nums tracking-tight-3 text-ink">{selectedMatch.passYds ?? 0}</p>
-              <p class="mt-1 text-[12px] text-graphite">přihrávkou</p>
-            </div>
-            <div class="p-5">
-              <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Rush yardů</p>
-              <p class="mt-2 text-[24px] font-bold tabular-nums tracking-tight-3 text-ink">{selectedMatch.rushYds ?? 0}</p>
-              <p class="mt-1 text-[12px] text-graphite">naběhané</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── QB table (season only) ── */}
-      {!isSingleMatch && (
+      {/* Always render the 3 tables; data source switches by scope */}
+      {(() => {
+        const _qbList = isSingleMatch ? (matchPlayerStats?.qbStats ?? []) : qbList;
+        const _wrList = isSingleMatch ? (matchPlayerStats?.wrStats ?? []) : wrList;
+        const _dbList = isSingleMatch ? (matchPlayerStats?.defenseLeaders ?? []) : dbList;
+        return (
         <>
           <div class="rounded-xl border border-stone bg-pearl">
             <div class="flex items-center justify-between border-b border-stone px-5 py-4">
               <div>
                 <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Quarterback</p>
-                <p class="text-[12px] text-slate">{qbList.length} hráčů · řazeno podle TD pasů</p>
+                <p class="text-[12px] text-slate">{_qbList.length} hráčů · řazeno podle TD pasů</p>
               </div>
               <span class="rounded-md bg-signal/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-signal">QB</span>
             </div>
@@ -613,9 +591,9 @@ const tabs = [
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-stone">
-                  {qbList.length === 0 ? (
+                  {_qbList.length === 0 ? (
                     <tr><td colspan="8" class="px-5 py-12 text-center text-[13px] text-slate">Zatím žádné QB staty.</td></tr>
-                  ) : qbList.map((p, i) => {
+                  ) : _qbList.map((p, i) => {
                     const cmpPct = p.qb.att > 0 ? Math.round((p.qb.comp / p.qb.att) * 100) : 0;
                     return (
                       <tr class="transition-colors hover:bg-mist/60">
@@ -652,7 +630,7 @@ const tabs = [
             <div class="flex items-center justify-between border-b border-stone px-5 py-4">
               <div>
                 <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Wide receiver</p>
-                <p class="text-[12px] text-slate">{wrList.length} hráčů · řazeno podle TD chytů</p>
+                <p class="text-[12px] text-slate">{_wrList.length} hráčů · řazeno podle TD chytů</p>
               </div>
               <span class="rounded-md bg-sky/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1B5E83]">WR</span>
             </div>
@@ -671,9 +649,9 @@ const tabs = [
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-stone">
-                  {wrList.length === 0 ? (
+                  {_wrList.length === 0 ? (
                     <tr><td colspan="8" class="px-5 py-12 text-center text-[13px] text-slate">Zatím žádné WR staty.</td></tr>
-                  ) : wrList.map((p, i) => {
+                  ) : _wrList.map((p, i) => {
                     const recPct = p.wr.targets > 0 ? Math.round((p.wr.rec / p.wr.targets) * 100) : 0;
                     return (
                       <tr class="transition-colors hover:bg-mist/60">
@@ -710,7 +688,7 @@ const tabs = [
             <div class="flex items-center justify-between border-b border-stone px-5 py-4">
               <div>
                 <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Defender / Obrana</p>
-                <p class="text-[12px] text-slate">{dbList.length} hráčů · řazeno podle obranného přínosu</p>
+                <p class="text-[12px] text-slate">{_dbList.length} hráčů · řazeno podle obranného přínosu</p>
               </div>
               <span class="rounded-md bg-verde/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1B6E62]">DB</span>
             </div>
@@ -727,9 +705,9 @@ const tabs = [
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-stone">
-                  {dbList.length === 0 ? (
+                  {_dbList.length === 0 ? (
                     <tr><td colspan="6" class="px-5 py-12 text-center text-[13px] text-slate">Zatím žádné obranné staty.</td></tr>
-                  ) : dbList.map((p, i) => (
+                  ) : _dbList.map((p, i) => (
                     <tr class="transition-colors hover:bg-mist/60">
                       <td class="px-5 py-3"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'bg-verde/30 text-[#1B6E62]' : 'bg-mist text-graphite'}`}>{i + 1}</span></td>
                       <td class="py-3">
@@ -755,8 +733,8 @@ const tabs = [
               </table>
             </div>
           </div>
-        </>
-      )}
+        </>);
+      })()}
     </>
   )}
 
