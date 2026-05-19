@@ -1,10 +1,20 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import { fetchPublicStats } from '../../lib/bobcats';
+import { fetchPlayerEnrichmentByName, enrich } from '../../lib/players';
 
 export const prerender = false;
 
-const stats = await fetchPublicStats('Muži');
+const [stats, enrichmentMap] = await Promise.all([
+  fetchPublicStats('Muži'),
+  fetchPlayerEnrichmentByName(Astro.locals.user!.id),
+]);
+
+function photoOf(name: string, fallback?: string): string | undefined {
+  const e = enrich(enrichmentMap, name);
+  if (e?.photoUrl) return e.photoUrl;
+  return fallback;
+}
 
 const winsLosses = stats ? `${stats.record.wins}-${stats.record.losses}${stats.record.ties ? '-' + stats.record.ties : ''}` : '—';
 const matches = stats?.record.matches ?? 0;

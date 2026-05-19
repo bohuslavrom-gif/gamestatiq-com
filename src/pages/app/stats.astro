@@ -1,12 +1,14 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import { fetchPublicStats, fetchCoachStats, fetchPlayerMatchStats, type DownBreakdown, type OffSnapshot, type PlaybookAction } from '../../lib/bobcats';
+import { fetchPlayerEnrichmentByName, enrich } from '../../lib/players';
 
 export const prerender = false;
 
-const [stats, coach] = await Promise.all([
+const [stats, coach, enrichmentMap] = await Promise.all([
   fetchPublicStats('Muži'),
   fetchCoachStats('Muži'),
+  fetchPlayerEnrichmentByName(Astro.locals.user!.id),
 ]);
 
 // ── URL params ─────────────────────────────────────────────
@@ -159,6 +161,13 @@ const driveEffectPct = driveEff(off);
 const passEffectPct  = pctRender(off.qbComp, off.qbAtt, off.passPct);
 const xp1RenderPct   = pctRender(off.xp1Ok, off.xp1Att, off.xp1Pct);
 const xp2RenderPct   = pctRender(off.xp2Ok, off.xp2Att, off.xp2Pct);
+
+// ── Photo enrichment helper ────────────────────────────────
+function photoOf(name: string, fallback?: string): string | undefined {
+  const e = enrich(enrichmentMap, name);
+  if (e?.photoUrl) return e.photoUrl;
+  return fallback;
+}
 
 // ── Player tables (season-only via publicStats) ────────────
 const qbList = (stats?.qbStats ?? []).slice().sort((a, b) => b.qb.td - a.qb.td);
@@ -600,8 +609,8 @@ const tabs = [
                         <td class="px-5 py-3"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'bg-signal text-white' : 'bg-mist text-graphite'}`}>{i + 1}</span></td>
                         <td class="py-3">
                           <div class="flex items-center gap-3">
-                            {p.photoUrl ? (
-                              <img src={p.photoUrl} alt="" loading="lazy" class="h-8 w-8 flex-shrink-0 rounded-full object-cover" />
+                            {photoOf(p.name, p.photoUrl) ? (
+                              <img src={photoOf(p.name, p.photoUrl)} alt="" loading="lazy" class="h-8 w-8 flex-shrink-0 rounded-full object-cover" />
                             ) : (
                               <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink/5 text-[11px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2)}</span>
                             )}
@@ -658,8 +667,8 @@ const tabs = [
                         <td class="px-5 py-3"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'bg-sky/30 text-[#1B5E83]' : 'bg-mist text-graphite'}`}>{i + 1}</span></td>
                         <td class="py-3">
                           <div class="flex items-center gap-3">
-                            {p.photoUrl ? (
-                              <img src={p.photoUrl} alt="" loading="lazy" class="h-8 w-8 flex-shrink-0 rounded-full object-cover" />
+                            {photoOf(p.name, p.photoUrl) ? (
+                              <img src={photoOf(p.name, p.photoUrl)} alt="" loading="lazy" class="h-8 w-8 flex-shrink-0 rounded-full object-cover" />
                             ) : (
                               <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink/5 text-[11px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2)}</span>
                             )}
