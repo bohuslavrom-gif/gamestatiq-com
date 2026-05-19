@@ -45,7 +45,9 @@ export type DriveResults = {
 };
 
 export type FaulType = {
-  type: string; count: number;
+  name: string;
+  count: number;
+  yds?: number;
   side: 'Útok' | 'Obrana' | string;
 };
 

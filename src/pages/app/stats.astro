@@ -305,10 +305,11 @@ const chartPathOpp = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toF
                   const barColor = isOff ? 'bg-signal' : isDef ? 'bg-ink' : 'bg-graphite';
                   const sideBadge = isOff ? 'bg-signal/10 text-signal' : isDef ? 'bg-ink/10 text-ink' : 'bg-mist text-slate';
                   const sideLabel = f.side || '—';
+                  const yds = f.yds ?? 0;
                   return (
                     <div class="flex items-center gap-3">
-                      <div class="w-32 flex-shrink-0 sm:w-40">
-                        <p class="truncate text-[13px] font-semibold text-ink" title={f.type}>{f.type || 'Neoznačený'}</p>
+                      <div class="w-40 flex-shrink-0 sm:w-48">
+                        <p class="truncate text-[13px] font-semibold text-ink" title={f.name}>{f.name || '—'}</p>
                         <span class={`mt-0.5 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${sideBadge}`}>{sideLabel}</span>
                       </div>
                       <div class="min-w-0 flex-1">
@@ -316,9 +317,9 @@ const chartPathOpp = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toF
                           <div class={`h-full rounded-full ${barColor}`} style={`width:${Math.max(w, f.count > 0 ? 3 : 0)}%`}></div>
                         </div>
                       </div>
-                      <div class="w-12 flex-shrink-0 text-right">
-                        <p class="text-[16px] font-bold tabular-nums text-ink">{f.count}</p>
-                        <p class="text-[10px] uppercase tracking-wider text-slate">faulů</p>
+                      <div class="w-20 flex-shrink-0 text-right">
+                        <p class="text-[16px] font-bold tabular-nums text-ink">{f.count}<span class="ml-0.5 text-[11px] font-medium text-slate">×</span></p>
+                        {yds > 0 && <p class="text-[11px] tabular-nums text-slate">{yds} yd</p>}
                       </div>
                     </div>
                   );
