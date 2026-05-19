@@ -9,36 +9,44 @@ const [stats, coach] = await Promise.all([
   fetchCoachStats('Muži'),
 ]);
 
-// ── Scope resolution ────────────────────────────────────────
+// ── URL params ─────────────────────────────────────────────
 const url = new URL(Astro.request.url);
+const view = url.searchParams.get('view') ?? 'team';
 const scopeParam = url.searchParams.get('match') ?? 'all';
 
 const selectedMatch = scopeParam !== 'all'
   ? (coach?.matchLog ?? []).find((m) => String(m.idx) === scopeParam) ?? null
   : null;
-
 const isSingleMatch = !!selectedMatch;
 const scopeLabel = selectedMatch
   ? `${selectedMatch.opponent} · ${selectedMatch.date}`
   : 'celá sezóna';
 
-// ── Compute "off" snapshot for current scope ───────────────
+// Helper to build URL preserving other params
+const buildHref = (overrides: Record<string, string>) => {
+  const u = new URLSearchParams({ view, match: scopeParam });
+  for (const [k, v] of Object.entries(overrides)) {
+    if (v === '') u.delete(k); else u.set(k, v);
+  }
+  return '/app/stats?' + u.toString();
+};
+
+// ── Off snapshot (scope-aware) ─────────────────────────────
 const off: OffSnapshot = selectedMatch
   ? {
       points: selectedMatch.ourScore,
       pointsAvg: selectedMatch.ourScore,
       rushYds: selectedMatch.rushYds, passYds: selectedMatch.passYds, totalYds: selectedMatch.totalYds,
       drives: selectedMatch.offDrives, td: selectedMatch.offTD,
-      driveEffPct: selectedMatch.tdPct != null ? Math.round(selectedMatch.tdPct * (selectedMatch.tdPct > 1 ? 1 : 100)) : 0,
+      driveEffPct: selectedMatch.tdPct,
       qbAtt: selectedMatch.qbAtt, qbComp: selectedMatch.qbComp, qbYds: selectedMatch.qbYds,
       qbTD: selectedMatch.qbTD, qbINT: selectedMatch.qbINT,
-      passPct: selectedMatch.passPct != null ? Math.round(selectedMatch.passPct * (selectedMatch.passPct > 1 ? 1 : 100)) : 0,
+      passPct: selectedMatch.passPct,
       xp1Att: selectedMatch.xp1Att, xp1Ok: selectedMatch.xp1Ok, xp1Pct: selectedMatch.xp1Pct,
       xp2Att: selectedMatch.xp2Att, xp2Ok: selectedMatch.xp2Ok, xp2Pct: selectedMatch.xp2Pct,
     }
   : (coach?.totals.off ?? {});
 
-// ── Scoped fauly / downs / playbook ────────────────────────
 const scopedFaulyCount = selectedMatch
   ? (selectedMatch.penCount ?? 0)
   : (coach?.matchLog ?? []).reduce((s, m) => s + (m.penCount ?? 0), 0);
@@ -49,12 +57,11 @@ const scopedFaulyYds = selectedMatch
 const scopedDownDistRaw = selectedMatch ? selectedMatch.downDist : coach?.totals.downDist;
 const scopedPlaybook: PlaybookAction[] = (selectedMatch ? selectedMatch.playbookAkce : coach?.totals.playbookAkce) ?? [];
 
-// faulyBreakdown is season-only — hide breakdown for single-match scope
 const showFaulyBreakdown = !isSingleMatch;
 const fauly = coach?.faulyBreakdown ?? [];
 const faulyMax = fauly.length > 0 ? Math.max(1, ...fauly.map((f) => f.count)) : 1;
 
-// ── Public-stats derived metrics (header tiles) ────────────
+// ── Sezónní týmové metriky ────────────────────────────────
 const winPct = stats && stats.record.matches > 0
   ? Math.round((stats.record.wins / stats.record.matches) * 100) : 0;
 const ptDiff = stats ? stats.points.for - stats.points.against : 0;
@@ -76,31 +83,23 @@ const teamStats = stats ? [
   { label: 'Interceptions', value: String(totalInts), sub: 'Defenzivní zákroky' },
 ] : [];
 
-// ── Down distribuce — scoped ───────────────────────────────
+// ── Down distribuce ────────────────────────────────────────
 function asBreakdown(v: DownBreakdown | undefined) {
   if (v == null) return { total: 0, short: 0, medium: 0, long: 0, _legacy: false };
   if (typeof v === 'number') return { total: v, short: 0, medium: 0, long: 0, _legacy: true };
-  return {
-    total: v.total ?? 0,
-    short: v.short ?? 0,
-    medium: v.medium ?? 0,
-    long: v.long ?? 0,
-    _legacy: false,
-  };
+  return { total: v.total ?? 0, short: v.short ?? 0, medium: v.medium ?? 0, long: v.long ?? 0, _legacy: false };
 }
 
-const downs = scopedDownDistRaw
-  ? {
-      1: asBreakdown(scopedDownDistRaw['1']),
-      2: asBreakdown(scopedDownDistRaw['2']),
-      3: asBreakdown(scopedDownDistRaw['3']),
-      4: asBreakdown(scopedDownDistRaw['4']),
-    }
-  : null;
+const downs = scopedDownDistRaw ? {
+  1: asBreakdown(scopedDownDistRaw['1']),
+  2: asBreakdown(scopedDownDistRaw['2']),
+  3: asBreakdown(scopedDownDistRaw['3']),
+  4: asBreakdown(scopedDownDistRaw['4']),
+} : null;
 const downsTotal = downs ? (downs[1].total + downs[2].total + downs[3].total + downs[4].total) : 0;
 const downsMax = downs ? Math.max(1, downs[1].total, downs[2].total, downs[3].total, downs[4].total) : 1;
 
-// ── Drives — season-only (per coaches.html behavior) ───────
+// ── Drives (always season) ─────────────────────────────────
 const dr = coach?.driveResults ?? {};
 const drOther = (dr.halftime ?? 0) + (dr.eog ?? 0) + (dr.turnover ?? 0) + (dr.other ?? 0);
 const driveCells = coach ? [
@@ -118,14 +117,12 @@ const driveAccent: Record<string, string> = {
   slate: 'text-slate',
 };
 
-// ── Playbook sorted ────────────────────────────────────────
 const playbook = scopedPlaybook.slice().sort((a, b) => b.count - a.count);
 const playbookMaxCount = playbook.length > 0 ? Math.max(1, ...playbook.map((a) => a.count)) : 1;
 
-// ── Match log ──────────────────────────────────────────────
 const matchLog = (coach?.matchLog ?? []).slice().reverse();
 
-// ── Chart points for trend (public stats) ──────────────────
+// ── Trend chart ────────────────────────────────────────────
 const trend = (stats?.recentMatches ?? []).slice().reverse();
 const maxScore = Math.max(...trend.flatMap((g) => [g.ourScore, g.oppScore]), 50);
 const chartPoints = trend.map((g, i) => {
@@ -137,30 +134,38 @@ const chartPoints = trend.map((g, i) => {
 const chartPathOur = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(0)} ${p.yOur.toFixed(0)}`).join(' ');
 const chartPathOpp = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(0)} ${p.yOpp.toFixed(0)}`).join(' ');
 
-// ── KPI tile helpers ───────────────────────────────────────
+// ── KPI helpers ────────────────────────────────────────────
 const pct = (v: number | undefined) => {
   if (v == null) return 0;
   if (v > 1) return Math.round(v);
   return Math.round(v * 100);
 };
-
-// Compute drive efficiency percent if not provided
 function driveEff(o: OffSnapshot): number {
   if (o.driveEffPct != null) return pct(o.driveEffPct);
   if (o.td != null && o.drives && o.drives > 0) return Math.round((o.td / o.drives) * 100);
   return 0;
 }
-
 function pctRender(num?: number, den?: number, raw?: number): number {
   if (raw != null) return pct(raw);
   if (num != null && den && den > 0) return Math.round((num / den) * 100);
   return 0;
 }
-
 const driveEffectPct = driveEff(off);
 const passEffectPct  = pctRender(off.qbComp, off.qbAtt, off.passPct);
 const xp1RenderPct   = pctRender(off.xp1Ok, off.xp1Att, off.xp1Pct);
 const xp2RenderPct   = pctRender(off.xp2Ok, off.xp2Att, off.xp2Pct);
+
+// ── Player tables (season-only via publicStats) ────────────
+const qbList = (stats?.qbStats ?? []).slice().sort((a, b) => b.qb.td - a.qb.td);
+const wrList = (stats?.wrStats ?? []).slice().sort((a, b) => b.wr.td - a.wr.td);
+const dbList = (stats?.defenseLeaders ?? []).slice().sort((a, b) => (b.db.flagPull + b.db.sack * 2 + b.db.int * 3) - (a.db.flagPull + a.db.sack * 2 + a.db.int * 3));
+
+const tabs = [
+  { key: 'team',    label: 'Tým' },
+  { key: 'players', label: 'Hráči' },
+  { key: 'opp',     label: 'Soupeř (head-to-head)', disabled: true },
+  { key: 'trends',  label: 'Trendy', disabled: true },
+];
 ---
 
 <AppLayout
@@ -175,13 +180,26 @@ const xp2RenderPct   = pctRender(off.xp2Ok, off.xp2Att, off.xp2Pct);
     </div>
   )}
 
+  {/* Tab nav (real links) */}
   <div class="mb-6 flex flex-wrap gap-1 rounded-lg border border-stone bg-pearl p-1">
-    <button class="rounded-md bg-ink px-4 py-2 text-[13px] font-medium text-white">Tým</button>
-    <button class="rounded-md px-4 py-2 text-[13px] font-medium text-graphite hover:bg-mist">Hráči</button>
-    <button class="rounded-md px-4 py-2 text-[13px] font-medium text-graphite hover:bg-mist">Soupeř (head-to-head)</button>
-    <button class="rounded-md px-4 py-2 text-[13px] font-medium text-graphite hover:bg-mist">Trendy</button>
+    {tabs.map((t) => {
+      const isActive = view === t.key;
+      const href = t.disabled ? '#' : buildHref({ view: t.key });
+      return (
+        <a
+          href={href}
+          aria-disabled={t.disabled}
+          class={`rounded-md px-4 py-2 text-[13px] font-medium transition-colors ${
+            isActive ? 'bg-ink text-white' :
+            t.disabled ? 'cursor-not-allowed text-stone-2' :
+            'text-graphite hover:bg-mist'
+          }`}
+        >{t.label}</a>
+      );
+    })}
   </div>
 
+  <!-- Public stats link -->
   <div class="mb-6 flex flex-col items-start justify-between gap-3 rounded-lg border border-sky/30 bg-sky/5 p-4 sm:flex-row sm:items-center">
     <div class="flex items-start gap-3">
       <svg class="mt-0.5 h-5 w-5 flex-shrink-0 text-[#1B5E83]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18 M12 3a14 14 0 0 1 0 18 M12 3a14 14 0 0 0 0 18"/></svg>
@@ -193,77 +211,72 @@ const xp2RenderPct   = pctRender(off.xp2Ok, off.xp2Att, off.xp2Pct);
     <a href="https://bohuslavrom-gif.github.io/bobcats-stats/public.html?team=Muži" target="_blank" rel="noopener" class="rounded-lg bg-pearl px-4 py-2 text-[13px] font-medium text-ink hover:bg-mist">Otevřít →</a>
   </div>
 
-  <!-- ── Týmové metriky (sezónní, nemění se podle scope) ── -->
-  <div class="rounded-xl border border-stone bg-pearl">
-    <div class="border-b border-stone px-5 py-4">
-      <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Týmové metriky · sezónní souhrn</p>
-    </div>
-    <div class="grid divide-x divide-y divide-stone sm:grid-cols-2 lg:grid-cols-4">
-      {teamStats.length === 0 ? (
-        <div class="col-span-full p-8 text-center text-[13px] text-slate">Žádná data k zobrazení.</div>
-      ) : (
-        teamStats.map((s) => (
-          <div class="p-5">
-            <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">{s.label}</p>
-            <p class="mt-3 text-[28px] font-bold tabular-nums tracking-tight-3 text-ink">{s.value}</p>
-            <p class="mt-1 text-[12px] text-graphite">{s.sub}</p>
-          </div>
-        ))
-      )}
-    </div>
-  </div>
-
-  {chartPoints.length > 0 && (
-    <div class="mt-6 rounded-xl border border-stone bg-pearl p-5 lg:p-6">
-      <div class="flex items-end justify-between">
-        <div>
-          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Skóre po zápasech</p>
-          <p class="text-[12px] text-slate">Bobcats vs. soupeř · {chartPoints.length} zápasů</p>
+  {/* ═════════════════════════ TEAM VIEW ═════════════════════════ */}
+  {view === 'team' && (
+    <>
+      <!-- Týmové metriky -->
+      <div class="rounded-xl border border-stone bg-pearl">
+        <div class="border-b border-stone px-5 py-4">
+          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Týmové metriky · sezónní souhrn</p>
         </div>
-        <span class="rounded-md bg-signal/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-signal">
-          rozdíl {ptDiff > 0 ? '+' : ''}{ptDiff}
-        </span>
+        <div class="grid divide-x divide-y divide-stone sm:grid-cols-2 lg:grid-cols-4">
+          {teamStats.length === 0 ? (
+            <div class="col-span-full p-8 text-center text-[13px] text-slate">Žádná data k zobrazení.</div>
+          ) : (
+            teamStats.map((s) => (
+              <div class="p-5">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">{s.label}</p>
+                <p class="mt-3 text-[28px] font-bold tabular-nums tracking-tight-3 text-ink">{s.value}</p>
+                <p class="mt-1 text-[12px] text-graphite">{s.sub}</p>
+              </div>
+            ))
+          )}
+        </div>
       </div>
-      <div class="mt-6 h-56 w-full">
-        <svg viewBox="0 0 600 220" class="h-full w-full" preserveAspectRatio="none">
-          <line x1="0" y1="50"  x2="600" y2="50"  stroke="#E1E5EB" stroke-width="1" stroke-dasharray="2 4"/>
-          <line x1="0" y1="100" x2="600" y2="100" stroke="#E1E5EB" stroke-width="1" stroke-dasharray="2 4"/>
-          <line x1="0" y1="150" x2="600" y2="150" stroke="#E1E5EB" stroke-width="1" stroke-dasharray="2 4"/>
-          <path d={chartPathOpp} fill="none" stroke="#5B6B7E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 4"/>
-          <path d={chartPathOur} fill="none" stroke="#E63946" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          {chartPoints.map((p) => (
-            <>
-              <circle cx={p.x} cy={p.yOpp} r="3.5" fill="#5B6B7E"/>
-              <circle cx={p.x} cy={p.yOur} r="4" fill="#E63946"/>
-            </>
-          ))}
-        </svg>
-      </div>
-      <div class="mt-3 flex flex-wrap items-center gap-6 text-[12px]">
-        <span class="inline-flex items-center gap-2"><span class="h-2 w-3 rounded-full bg-signal"></span>Bobcats</span>
-        <span class="inline-flex items-center gap-2"><span class="h-0.5 w-3 bg-slate"></span>Soupeř</span>
-      </div>
-    </div>
+
+      {chartPoints.length > 0 && (
+        <div class="mt-6 rounded-xl border border-stone bg-pearl p-5 lg:p-6">
+          <div class="flex items-end justify-between">
+            <div>
+              <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Skóre po zápasech</p>
+              <p class="text-[12px] text-slate">Bobcats vs. soupeř · {chartPoints.length} zápasů</p>
+            </div>
+            <span class="rounded-md bg-signal/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-signal">rozdíl {ptDiff > 0 ? '+' : ''}{ptDiff}</span>
+          </div>
+          <div class="mt-6 h-56 w-full">
+            <svg viewBox="0 0 600 220" class="h-full w-full" preserveAspectRatio="none">
+              <line x1="0" y1="50"  x2="600" y2="50"  stroke="#E1E5EB" stroke-width="1" stroke-dasharray="2 4"/>
+              <line x1="0" y1="100" x2="600" y2="100" stroke="#E1E5EB" stroke-width="1" stroke-dasharray="2 4"/>
+              <line x1="0" y1="150" x2="600" y2="150" stroke="#E1E5EB" stroke-width="1" stroke-dasharray="2 4"/>
+              <path d={chartPathOpp} fill="none" stroke="#5B6B7E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 4"/>
+              <path d={chartPathOur} fill="none" stroke="#E63946" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              {chartPoints.map((p) => (<><circle cx={p.x} cy={p.yOpp} r="3.5" fill="#5B6B7E"/><circle cx={p.x} cy={p.yOur} r="4" fill="#E63946"/></>))}
+            </svg>
+          </div>
+          <div class="mt-3 flex flex-wrap items-center gap-6 text-[12px]">
+            <span class="inline-flex items-center gap-2"><span class="h-2 w-3 rounded-full bg-signal"></span>Bobcats</span>
+            <span class="inline-flex items-center gap-2"><span class="h-0.5 w-3 bg-slate"></span>Soupeř</span>
+          </div>
+        </div>
+      )}
+    </>
   )}
 
-  {/* ── COACH VIEW ── */}
+  {/* ═════════════ SHARED: Coach view header + scope picker ═════════════ */}
   {coach && (
     <>
       <div class="mt-10 mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-signal">Coach view</p>
-          <h2 class="mt-1 text-[22px] font-bold tracking-tight-2 text-ink">Analytika ze Scorer appky</h2>
+          <h2 class="mt-1 text-[22px] font-bold tracking-tight-2 text-ink">
+            {view === 'players' ? 'Detail hráčů' : 'Analytika ze Scorer appky'}
+          </h2>
           <p class="mt-1 text-[13px] text-slate">Zobrazený rozsah: <strong class="text-ink">{scopeLabel}</strong></p>
         </div>
-
-        {/* Scope picker */}
         <form method="GET" class="flex items-center gap-2">
+          <input type="hidden" name="view" value={view} />
           <label class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Období</label>
-          <select
-            name="match"
-            onchange="this.form.submit()"
-            class="min-w-[220px] rounded-lg border border-stone bg-pearl px-3 py-2 text-[13px] font-medium text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20"
-          >
+          <select name="match" onchange="this.form.submit()" class="min-w-[220px] rounded-lg border border-stone bg-pearl px-3 py-2 text-[13px] font-medium text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20">
             <option value="all" selected={scopeParam === 'all'}>Celá sezóna ({coach.matchCount} zápasů)</option>
             {(coach.matchLog ?? []).slice().reverse().map((m) => (
               <option value={m.idx} selected={String(m.idx) === scopeParam}>
@@ -273,8 +286,13 @@ const xp2RenderPct   = pctRender(off.xp2Ok, off.xp2Att, off.xp2Pct);
           </select>
         </form>
       </div>
+    </>
+  )}
 
-      {/* ── KPI tiles (10 tiles ve 3 řadách) ── */}
+  {/* ═════════════════════════ TEAM VIEW: Coach details ═════════════════════════ */}
+  {view === 'team' && coach && (
+    <>
+      {/* KPI tiles */}
       <div class="space-y-4">
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div class="rounded-xl border-l-4 border-signal border-y border-r border-stone bg-pearl p-5">
@@ -352,7 +370,6 @@ const xp2RenderPct   = pctRender(off.xp2Ok, off.xp2Att, off.xp2Pct);
         </div>
       </div>
 
-      {/* ── Drives souhrn (vždy celá sezóna) ── */}
       {coach.driveCount > 0 && (
         <div class="mt-6 rounded-xl border border-stone bg-pearl">
           <div class="flex items-center justify-between border-b border-stone px-5 py-4">
@@ -371,7 +388,6 @@ const xp2RenderPct   = pctRender(off.xp2Ok, off.xp2Att, off.xp2Pct);
       )}
 
       <div class="mt-6 grid gap-5 lg:grid-cols-2">
-        {/* ── Down distribuce ── */}
         <div class="rounded-xl border border-stone bg-pearl">
           <div class="flex items-center justify-between border-b border-stone px-5 py-4">
             <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Down distribuce</p>
@@ -408,26 +424,10 @@ const xp2RenderPct   = pctRender(off.xp2Ok, off.xp2Att, off.xp2Pct);
                       </div>
                       <div class="flex-1 min-w-0">
                         <div class="flex h-7 overflow-hidden rounded-full bg-mist" style={`width:${Math.max(rowWidth, d.total > 0 ? 8 : 0)}%`}>
-                          {d.short > 0 && (
-                            <div class="flex h-full items-center justify-center bg-stone-2 text-[11px] font-bold text-white" style={`width:${shortPct}%`}>
-                              {shortPct > 12 ? d.short : ''}
-                            </div>
-                          )}
-                          {d.medium > 0 && (
-                            <div class="flex h-full items-center justify-center text-[11px] font-bold text-white" style={`width:${medPct}%; background:#1B5E83`}>
-                              {medPct > 12 ? d.medium : ''}
-                            </div>
-                          )}
-                          {d.long > 0 && (
-                            <div class="flex h-full items-center justify-center bg-signal text-[11px] font-bold text-white" style={`width:${longPct}%`}>
-                              {longPct > 12 ? d.long : ''}
-                            </div>
-                          )}
-                          {unknown > 0 && (
-                            <div class="flex h-full items-center justify-center bg-stone text-[11px] font-bold text-slate" style={`width:${unknownPct}%`}>
-                              {unknownPct > 12 ? unknown : ''}
-                            </div>
-                          )}
+                          {d.short > 0 && (<div class="flex h-full items-center justify-center bg-stone-2 text-[11px] font-bold text-white" style={`width:${shortPct}%`}>{shortPct > 12 ? d.short : ''}</div>)}
+                          {d.medium > 0 && (<div class="flex h-full items-center justify-center text-[11px] font-bold text-white" style={`width:${medPct}%; background:#1B5E83`}>{medPct > 12 ? d.medium : ''}</div>)}
+                          {d.long > 0 && (<div class="flex h-full items-center justify-center bg-signal text-[11px] font-bold text-white" style={`width:${longPct}%`}>{longPct > 12 ? d.long : ''}</div>)}
+                          {unknown > 0 && (<div class="flex h-full items-center justify-center bg-stone text-[11px] font-bold text-slate" style={`width:${unknownPct}%`}>{unknownPct > 12 ? unknown : ''}</div>)}
                         </div>
                       </div>
                       <div class="w-14 flex-shrink-0 text-right">
@@ -442,7 +442,6 @@ const xp2RenderPct   = pctRender(off.xp2Ok, off.xp2Att, off.xp2Pct);
           )}
         </div>
 
-        {/* ── Fauly podle typu ── */}
         <div class="rounded-xl border border-stone bg-pearl">
           <div class="flex items-center justify-between border-b border-stone px-5 py-4">
             <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Fauly</p>
@@ -499,16 +498,13 @@ const xp2RenderPct   = pctRender(off.xp2Ok, off.xp2Att, off.xp2Pct);
                   })}
                 </div>
               ) : (
-                <div class="p-5 text-[13px] text-slate">
-                  Detailní rozpis podle typu je dostupný jen pro celou sezónu.
-                </div>
+                <div class="p-5 text-[13px] text-slate">Detailní rozpis podle typu je dostupný jen pro celou sezónu.</div>
               )}
             </>
           )}
         </div>
       </div>
 
-      {/* ── Playbook akce ── */}
       <div class="mt-6 rounded-xl border border-stone bg-pearl">
         <div class="flex items-center justify-between border-b border-stone px-5 py-4">
           <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Playbook akce</p>
@@ -535,9 +531,7 @@ const xp2RenderPct   = pctRender(off.xp2Ok, off.xp2Att, off.xp2Pct);
                   </div>
                   <div class="mt-3 flex items-baseline gap-2">
                     <span class="text-2xl font-bold tabular-nums tracking-tight-3 text-ink">{sign}{totalYds}<span class="ml-0.5 text-[12px] font-medium text-slate">yd</span></span>
-                    {td > 0 && (
-                      <span class="rounded bg-signal/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-signal">{td} TD</span>
-                    )}
+                    {td > 0 && (<span class="rounded bg-signal/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-signal">{td} TD</span>)}
                   </div>
                   <p class="mt-1 text-[11px] text-slate">ø {avgYds} yd / play</p>
                   <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-mist">
@@ -549,60 +543,270 @@ const xp2RenderPct   = pctRender(off.xp2Ok, off.xp2Att, off.xp2Pct);
           </div>
         )}
       </div>
+    </>
+  )}
 
-      {/* ── Match log ── */}
-      {matchLog.length > 0 && (
-        <div class="mt-6 overflow-hidden rounded-xl border border-stone bg-pearl">
-          <div class="flex items-center justify-between border-b border-stone px-5 py-4">
-            <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Match log</p>
-            <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{coach.matchCount} zápasů · klik na řádek otevře jen ten zápas</span>
+  {/* ═════════════════════════ PLAYERS VIEW ═════════════════════════ */}
+  {view === 'players' && (
+    <>
+      {isSingleMatch && (
+        <div class="mb-6 rounded-lg border border-sky/30 bg-sky/5 px-4 py-3 text-[13px] text-graphite">
+          <p class="font-semibold text-ink">Per-hráč breakdown pro jednotlivé zápasy zatím není dostupný.</p>
+          <p class="mt-1">Scorer app v současnosti exportuje per-hráč staty jen jako sezónní agregát. Níže ukazuje <strong>týmové QB / útočné / obranné statistiky</strong> pro tento zápas. Per-hráč rozpis přidáme v dalším update GAS endpointu.</p>
+        </div>
+      )}
+
+      {/* Single-match: team-level summary card */}
+      {isSingleMatch && selectedMatch && (
+        <div class="mb-6 rounded-xl border border-stone bg-pearl">
+          <div class="border-b border-stone px-5 py-4">
+            <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Týmové staty v zápase · {selectedMatch.opponent}</p>
           </div>
-          <div class="overflow-x-auto">
-            <table class="w-full min-w-[820px] text-left text-[13px]">
-              <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
-                <tr>
-                  <th class="px-5 py-3">Soupeř</th>
-                  <th class="px-3 py-3 text-center tabular-nums">Skóre</th>
-                  <th class="px-3 py-3 text-center tabular-nums">QB cmp/att</th>
-                  <th class="px-3 py-3 text-center tabular-nums">TD</th>
-                  <th class="px-3 py-3 text-center tabular-nums">INT</th>
-                  <th class="px-3 py-3 text-center tabular-nums">Yds</th>
-                  <th class="px-3 py-3 text-center tabular-nums">TD%</th>
-                  <th class="px-3 py-3 text-center tabular-nums">Stop%</th>
-                  <th class="px-3 py-3 text-center tabular-nums">Faul</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-stone">
-                {matchLog.map((m) => {
-                  const isActive = String(m.idx) === scopeParam;
-                  return (
-                    <tr class={`cursor-pointer transition-colors hover:bg-mist/60 ${isActive ? 'bg-signal/5' : ''}`} onclick={`location.href='/app/stats?match=${m.idx}'`}>
-                      <td class="px-5 py-3">
-                        <p class="font-semibold text-ink">{m.opponent}{isActive && <span class="ml-2 text-[10px] font-semibold uppercase tracking-wider text-signal">aktivní</span>}</p>
-                        <p class="text-[11px] text-slate">{m.date}</p>
-                      </td>
-                      <td class="px-3 py-3 text-center">
-                        <span class={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[12px] font-bold tabular-nums ${
-                          m.result === 'W' ? 'bg-verde/15 text-[#1B6E62]' :
-                          m.result === 'L' ? 'bg-signal/15 text-signal' :
-                          'bg-stone text-slate'
-                        }`}>{m.ourScore}–{m.oppScore}</span>
-                      </td>
-                      <td class="px-3 py-3 text-center tabular-nums text-graphite">{(m.qbComp ?? 0)}/{(m.qbAtt ?? 0)}</td>
-                      <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.qbTD ?? 0}</td>
-                      <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.qbINT ?? 0}</td>
-                      <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.totalYds ?? 0}</td>
-                      <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.tdPct != null ? Math.round(m.tdPct * (m.tdPct > 1 ? 1 : 100)) + '%' : '—'}</td>
-                      <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.stopPct != null ? Math.round(m.stopPct * (m.stopPct > 1 ? 1 : 100)) + '%' : '—'}</td>
-                      <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.penCount ?? 0}{m.penYds ? <span class="text-[10px] text-stone-2"> ({m.penYds}yd)</span> : ''}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div class="grid divide-x divide-y divide-stone sm:grid-cols-2 lg:grid-cols-4">
+            <div class="p-5">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">QB COMP/ATT</p>
+              <p class="mt-2 text-[24px] font-bold tabular-nums tracking-tight-3 text-ink">{selectedMatch.qbComp ?? 0}/{selectedMatch.qbAtt ?? 0}</p>
+              <p class="mt-1 text-[12px] text-graphite">{passEffectPct}% completion</p>
+            </div>
+            <div class="p-5">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">QB TD / INT</p>
+              <p class="mt-2 text-[24px] font-bold tabular-nums tracking-tight-3 text-ink">{selectedMatch.qbTD ?? 0} / {selectedMatch.qbINT ?? 0}</p>
+              <p class="mt-1 text-[12px] text-graphite">passing TD / interceptions</p>
+            </div>
+            <div class="p-5">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Pass yardů</p>
+              <p class="mt-2 text-[24px] font-bold tabular-nums tracking-tight-3 text-ink">{selectedMatch.passYds ?? 0}</p>
+              <p class="mt-1 text-[12px] text-graphite">přihrávkou</p>
+            </div>
+            <div class="p-5">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Rush yardů</p>
+              <p class="mt-2 text-[24px] font-bold tabular-nums tracking-tight-3 text-ink">{selectedMatch.rushYds ?? 0}</p>
+              <p class="mt-1 text-[12px] text-graphite">naběhané</p>
+            </div>
           </div>
         </div>
       )}
+
+      {/* ── QB table (season only) ── */}
+      {!isSingleMatch && (
+        <>
+          <div class="rounded-xl border border-stone bg-pearl">
+            <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+              <div>
+                <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Quarterback</p>
+                <p class="text-[12px] text-slate">{qbList.length} hráčů · řazeno podle TD pasů</p>
+              </div>
+              <span class="rounded-md bg-signal/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-signal">QB</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-[700px] text-left text-[13px]">
+                <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                  <tr>
+                    <th class="px-5 py-3 w-8">#</th>
+                    <th class="py-3">Hráč</th>
+                    <th class="px-3 py-3 text-center tabular-nums">ATT</th>
+                    <th class="px-3 py-3 text-center tabular-nums">COMP</th>
+                    <th class="px-3 py-3 text-center tabular-nums">%</th>
+                    <th class="px-3 py-3 text-center tabular-nums">TD</th>
+                    <th class="px-3 py-3 text-center tabular-nums">INT</th>
+                    <th class="px-3 py-3 text-center tabular-nums">YDS</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-stone">
+                  {qbList.length === 0 ? (
+                    <tr><td colspan="8" class="px-5 py-12 text-center text-[13px] text-slate">Zatím žádné QB staty.</td></tr>
+                  ) : qbList.map((p, i) => {
+                    const cmpPct = p.qb.att > 0 ? Math.round((p.qb.comp / p.qb.att) * 100) : 0;
+                    return (
+                      <tr class="transition-colors hover:bg-mist/60">
+                        <td class="px-5 py-3"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'bg-signal text-white' : 'bg-mist text-graphite'}`}>{i + 1}</span></td>
+                        <td class="py-3">
+                          <div class="flex items-center gap-3">
+                            {p.photoUrl ? (
+                              <img src={p.photoUrl} alt="" loading="lazy" class="h-8 w-8 flex-shrink-0 rounded-full object-cover" />
+                            ) : (
+                              <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink/5 text-[11px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2)}</span>
+                            )}
+                            <div>
+                              <p class="text-[14px] font-semibold text-ink">{p.name}</p>
+                              <p class="text-[11px] text-slate">#{p.jersey}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td class="px-3 py-3 text-center tabular-nums text-graphite">{p.qb.att}</td>
+                        <td class="px-3 py-3 text-center font-semibold tabular-nums text-ink">{p.qb.comp}</td>
+                        <td class="px-3 py-3 text-center tabular-nums text-signal">{cmpPct}%</td>
+                        <td class="px-3 py-3 text-center font-semibold tabular-nums text-ink">{p.qb.td}</td>
+                        <td class="px-3 py-3 text-center tabular-nums text-graphite">{p.qb.int}</td>
+                        <td class="px-3 py-3 text-center tabular-nums text-graphite">{p.qb.yds}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── WR table ── */}
+          <div class="mt-6 rounded-xl border border-stone bg-pearl">
+            <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+              <div>
+                <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Wide receiver</p>
+                <p class="text-[12px] text-slate">{wrList.length} hráčů · řazeno podle TD chytů</p>
+              </div>
+              <span class="rounded-md bg-sky/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1B5E83]">WR</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-[720px] text-left text-[13px]">
+                <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                  <tr>
+                    <th class="px-5 py-3 w-8">#</th>
+                    <th class="py-3">Hráč</th>
+                    <th class="px-3 py-3 text-center tabular-nums">TARG</th>
+                    <th class="px-3 py-3 text-center tabular-nums">REC</th>
+                    <th class="px-3 py-3 text-center tabular-nums">%</th>
+                    <th class="px-3 py-3 text-center tabular-nums">YDS</th>
+                    <th class="px-3 py-3 text-center tabular-nums">TD</th>
+                    <th class="px-3 py-3 text-center tabular-nums">PTS</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-stone">
+                  {wrList.length === 0 ? (
+                    <tr><td colspan="8" class="px-5 py-12 text-center text-[13px] text-slate">Zatím žádné WR staty.</td></tr>
+                  ) : wrList.map((p, i) => {
+                    const recPct = p.wr.targets > 0 ? Math.round((p.wr.rec / p.wr.targets) * 100) : 0;
+                    return (
+                      <tr class="transition-colors hover:bg-mist/60">
+                        <td class="px-5 py-3"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'bg-sky/30 text-[#1B5E83]' : 'bg-mist text-graphite'}`}>{i + 1}</span></td>
+                        <td class="py-3">
+                          <div class="flex items-center gap-3">
+                            {p.photoUrl ? (
+                              <img src={p.photoUrl} alt="" loading="lazy" class="h-8 w-8 flex-shrink-0 rounded-full object-cover" />
+                            ) : (
+                              <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink/5 text-[11px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2)}</span>
+                            )}
+                            <div>
+                              <p class="text-[14px] font-semibold text-ink">{p.name}</p>
+                              <p class="text-[11px] text-slate">#{p.jersey}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td class="px-3 py-3 text-center tabular-nums text-graphite">{p.wr.targets}</td>
+                        <td class="px-3 py-3 text-center font-semibold tabular-nums text-ink">{p.wr.rec}</td>
+                        <td class="px-3 py-3 text-center tabular-nums text-[#1B5E83]">{recPct}%</td>
+                        <td class="px-3 py-3 text-center tabular-nums text-graphite">{p.wr.yds}</td>
+                        <td class="px-3 py-3 text-center font-semibold tabular-nums text-ink">{p.wr.td}</td>
+                        <td class="px-3 py-3 text-center font-semibold tabular-nums text-signal">{p.wr.pts}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── DB table ── */}
+          <div class="mt-6 rounded-xl border border-stone bg-pearl">
+            <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+              <div>
+                <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Defender / Obrana</p>
+                <p class="text-[12px] text-slate">{dbList.length} hráčů · řazeno podle obranného přínosu</p>
+              </div>
+              <span class="rounded-md bg-verde/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1B6E62]">DB</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-[680px] text-left text-[13px]">
+                <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                  <tr>
+                    <th class="px-5 py-3 w-8">#</th>
+                    <th class="py-3">Hráč</th>
+                    <th class="px-3 py-3 text-center tabular-nums">FLAG PULL</th>
+                    <th class="px-3 py-3 text-center tabular-nums">SACK</th>
+                    <th class="px-3 py-3 text-center tabular-nums">INT</th>
+                    <th class="px-3 py-3 text-center tabular-nums">BRKUP</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-stone">
+                  {dbList.length === 0 ? (
+                    <tr><td colspan="6" class="px-5 py-12 text-center text-[13px] text-slate">Zatím žádné obranné staty.</td></tr>
+                  ) : dbList.map((p, i) => (
+                    <tr class="transition-colors hover:bg-mist/60">
+                      <td class="px-5 py-3"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'bg-verde/30 text-[#1B6E62]' : 'bg-mist text-graphite'}`}>{i + 1}</span></td>
+                      <td class="py-3">
+                        <div class="flex items-center gap-3">
+                          {p.photoUrl ? (
+                            <img src={p.photoUrl} alt="" loading="lazy" class="h-8 w-8 flex-shrink-0 rounded-full object-cover" />
+                          ) : (
+                            <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink/5 text-[11px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2)}</span>
+                          )}
+                          <div>
+                            <p class="text-[14px] font-semibold text-ink">{p.name}</p>
+                            <p class="text-[11px] text-slate">#{p.jersey}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-3 py-3 text-center font-semibold tabular-nums text-ink">{p.db.flagPull}</td>
+                      <td class="px-3 py-3 text-center font-semibold tabular-nums text-signal">{p.db.sack}</td>
+                      <td class="px-3 py-3 text-center font-semibold tabular-nums text-[#1B6E62]">{p.db.int}</td>
+                      <td class="px-3 py-3 text-center tabular-nums text-graphite">{p.db.brkup}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </>
+  )}
+
+  {/* ═════════════════════════ SHARED: Match log (bottom) ═════════════════════════ */}
+  {coach && matchLog.length > 0 && (
+    <div class="mt-6 overflow-hidden rounded-xl border border-stone bg-pearl">
+      <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Match log</p>
+        <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{coach.matchCount} zápasů · klik přepne na ten zápas</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[820px] text-left text-[13px]">
+          <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+            <tr>
+              <th class="px-5 py-3">Soupeř</th>
+              <th class="px-3 py-3 text-center tabular-nums">Skóre</th>
+              <th class="px-3 py-3 text-center tabular-nums">QB cmp/att</th>
+              <th class="px-3 py-3 text-center tabular-nums">TD</th>
+              <th class="px-3 py-3 text-center tabular-nums">INT</th>
+              <th class="px-3 py-3 text-center tabular-nums">Yds</th>
+              <th class="px-3 py-3 text-center tabular-nums">TD%</th>
+              <th class="px-3 py-3 text-center tabular-nums">Stop%</th>
+              <th class="px-3 py-3 text-center tabular-nums">Faul</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone">
+            {matchLog.map((m) => {
+              const isActive = String(m.idx) === scopeParam;
+              return (
+                <tr class={`cursor-pointer transition-colors hover:bg-mist/60 ${isActive ? 'bg-signal/5' : ''}`} onclick={`location.href='${buildHref({ match: String(m.idx) })}'`}>
+                  <td class="px-5 py-3">
+                    <p class="font-semibold text-ink">{m.opponent}{isActive && <span class="ml-2 text-[10px] font-semibold uppercase tracking-wider text-signal">aktivní</span>}</p>
+                    <p class="text-[11px] text-slate">{m.date}</p>
+                  </td>
+                  <td class="px-3 py-3 text-center">
+                    <span class={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[12px] font-bold tabular-nums ${m.result === 'W' ? 'bg-verde/15 text-[#1B6E62]' : m.result === 'L' ? 'bg-signal/15 text-signal' : 'bg-stone text-slate'}`}>{m.ourScore}–{m.oppScore}</span>
+                  </td>
+                  <td class="px-3 py-3 text-center tabular-nums text-graphite">{(m.qbComp ?? 0)}/{(m.qbAtt ?? 0)}</td>
+                  <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.qbTD ?? 0}</td>
+                  <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.qbINT ?? 0}</td>
+                  <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.totalYds ?? 0}</td>
+                  <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.tdPct != null ? Math.round(m.tdPct * (m.tdPct > 1 ? 1 : 100)) + '%' : '—'}</td>
+                  <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.stopPct != null ? Math.round(m.stopPct * (m.stopPct > 1 ? 1 : 100)) + '%' : '—'}</td>
+                  <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.penCount ?? 0}{m.penYds ? <span class="text-[10px] text-stone-2"> ({m.penYds}yd)</span> : ''}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )}
 </AppLayout>
