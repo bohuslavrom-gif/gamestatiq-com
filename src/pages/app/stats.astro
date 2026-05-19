@@ -82,6 +82,10 @@ const driveAccent: Record<string, string> = {
 const fauly = coach?.faulyBreakdown ?? [];
 const faulyMax = fauly.length > 0 ? Math.max(1, ...fauly.map((f) => f.count)) : 1;
 
+// Total fauly count + penalty yds — computed from matchLog because GAS doesn't ship `totals.fauly`.
+const faulyTotalCount = (coach?.matchLog ?? []).reduce((s, m) => s + (m.penCount ?? 0), 0);
+const faulyTotalYds   = (coach?.matchLog ?? []).reduce((s, m) => s + (m.penYds ?? 0), 0);
+
 // ── Match log ──────────────────────────────────────────────
 const matchLog = (coach?.matchLog ?? []).slice().reverse();
 
@@ -293,23 +297,23 @@ const chartPathOpp = chartPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toF
             <div class="p-8 text-center text-[13px] text-slate">Žádné fauly v sezóně.</div>
           ) : (
             <>
-              {coach?.totals.fauly && (
-                <div class="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-b border-stone bg-mist/40 px-5 py-3">
+              <div class="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-b border-stone bg-mist/40 px-5 py-3">
+                <div class="flex items-baseline gap-1.5">
+                  <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Celkem</span>
+                  <span class="text-[15px] font-bold tabular-nums text-ink">{faulyTotalCount}</span>
+                  <span class="text-[11px] text-slate">faulů</span>
+                </div>
+                {faulyTotalYds > 0 && (
                   <div class="flex items-baseline gap-1.5">
-                    <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Celkem</span>
-                    <span class="text-[15px] font-bold tabular-nums text-ink">{coach.totals.fauly.count}</span>
-                    <span class="text-[11px] text-slate">faulů</span>
-                  </div>
-                  <div class="flex items-baseline gap-1.5">
-                    <span class="text-[15px] font-bold tabular-nums text-ink">{coach.totals.fauly.yds}</span>
+                    <span class="text-[15px] font-bold tabular-nums text-ink">{faulyTotalYds}</span>
                     <span class="text-[11px] text-slate">trestných yardů</span>
                   </div>
-                  <div class="ml-auto flex flex-wrap items-center gap-x-5 gap-y-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
-                    <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-4 rounded-sm bg-signal"></span>Útok</span>
-                    <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-4 rounded-sm bg-ink"></span>Obrana</span>
-                  </div>
+                )}
+                <div class="ml-auto flex flex-wrap items-center gap-x-5 gap-y-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                  <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-4 rounded-sm bg-signal"></span>Útok</span>
+                  <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-4 rounded-sm bg-ink"></span>Obrana</span>
                 </div>
-              )}
+              </div>
               <div class="space-y-3 p-5">
                 {fauly.map((f) => {
                   const w = faulyMax > 0 ? (f.count / faulyMax) * 100 : 0;
