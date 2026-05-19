@@ -1,86 +1,267 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
+import { getSupabaseAdmin } from '../../lib/supabase';
 import { fetchPublicStats } from '../../lib/bobcats';
 
 export const prerender = false;
 
-const stats = await fetchPublicStats('Muži');
+const user = Astro.locals.user!;
+const admin = getSupabaseAdmin();
 
-type Row = {
-  number: number | string;
-  name: string;
-  position: 'QB' | 'WR' | 'DB';
-  primary: string;
-  photoUrl?: string;
-};
+// Find user's club + role
+const { data: membership } = await admin
+  .from('club_members')
+  .select('club_id, role, clubs(name)')
+  .eq('user_id', user.id)
+  .order('created_at', { ascending: true })
+  .limit(1)
+  .maybeSingle();
 
-const rows: Row[] = [];
-const seen = new Set<string>();
-const addRow = (r: Row) => {
-  if (seen.has(r.name)) return;
-  seen.add(r.name);
-  rows.push(r);
-};
+const clubId = membership?.club_id ?? null;
+const clubName = (membership as any)?.clubs?.name ?? '—';
+const userRole = membership?.role ?? 'viewer';
+const canEdit = ['admin', 'coach'].includes(userRole);
+const canDelete = userRole === 'admin';
 
-if (stats) {
-  for (const p of stats.qbStats) {
-    addRow({
-      number: p.jersey,
-      name: p.name,
-      position: 'QB',
-      primary: `${p.qb.td} TD · ${p.qb.comp}/${p.qb.att} cmp · ${p.qb.yds} yds`,
-      photoUrl: p.photoUrl,
-    });
-  }
-  for (const p of stats.wrStats) {
-    addRow({
-      number: p.jersey,
-      name: p.name,
-      position: 'WR',
-      primary: `${p.wr.td} TD · ${p.wr.rec}/${p.wr.targets} cmp · ${p.wr.pts} bodů`,
-      photoUrl: p.photoUrl,
-    });
-  }
-  for (const p of stats.defenseLeaders) {
-    addRow({
-      number: p.jersey,
-      name: p.name,
-      position: 'DB',
-      primary: `${p.db.flagPull} flag pull · ${p.db.int} INT · ${p.db.sack} sack · ${p.db.brkup} brkup`,
-      photoUrl: p.photoUrl,
-    });
-  }
-}
+// Fetch players from Supabase
+const { data: playersRaw } = clubId
+  ? await admin.from('players')
+      .select('*')
+      .eq('club_id', clubId)
+      .order('position', { ascending: true })
+      .order('jersey_number', { ascending: true, nullsLast: true })
+  : { data: [] as any[] };
 
-const posColor: Record<string, string> = {
+const players = playersRaw ?? [];
+
+// For Bobcats: also fetch GAS stats to show as historical/reference
+const gasStats = (clubName === 'Bobcats') ? await fetchPublicStats('Muži') : null;
+const showGasFallback = players.length === 0 && gasStats !== null;
+
+// URL params for state
+const url = new URL(Astro.request.url);
+const savedParam = url.searchParams.get('saved');
+const errorParam = url.searchParams.get('error');
+const editId = url.searchParams.get('edit');
+const editingPlayer = editId ? players.find((p: any) => p.id === editId) : null;
+
+const positions = [
+  { code: 'QB', label: 'Quarterback' },
+  { code: 'RB', label: 'Running back' },
+  { code: 'WR', label: 'Wide receiver' },
+  { code: 'OL', label: 'Offensive line' },
+  { code: 'DL', label: 'Defensive line' },
+  { code: 'LB', label: 'Linebacker' },
+  { code: 'DB', label: 'Defensive back' },
+  { code: 'ST', label: 'Special teams' },
+  { code: 'K',  label: 'Kicker' },
+  { code: 'P',  label: 'Punter' },
+  { code: 'OTHER', label: 'Jiná' },
+];
+const positionColor: Record<string, string> = {
   QB: 'bg-signal/15 text-signal',
   WR: 'bg-sky/15 text-[#1B5E83]',
+  RB: 'bg-spark/15 text-[#A0531B]',
+  OL: 'bg-stone text-graphite',
+  DL: 'bg-verde/15 text-[#1B6E62]',
+  LB: 'bg-plum/15 text-[#4F3878]',
   DB: 'bg-verde/15 text-[#1B6E62]',
+  ST: 'bg-stone text-graphite',
+  K:  'bg-spark/15 text-[#A0531B]',
+  P:  'bg-stone text-graphite',
+  OTHER: 'bg-stone text-graphite',
 };
+
+const statusLabel: Record<string, string> = {
+  active: 'Aktivní',
+  injured: 'Zranění',
+  suspended: 'Suspenze',
+  retired: 'Konec kariéry',
+};
+const statusBadge: Record<string, string> = {
+  active:    'bg-verde/15 text-[#1B6E62]',
+  injured:   'bg-spark/15 text-[#A0531B]',
+  suspended: 'bg-signal/15 text-signal',
+  retired:   'bg-stone text-slate',
+};
+
+const initials = (p: any) => {
+  const fn = (p.first_name ?? '').trim();
+  const ln = (p.last_name ?? '').trim();
+  return ((fn[0] ?? '') + (ln[0] ?? '')).toUpperCase() || '?';
+};
+
+// Count by position group
+const offCount = players.filter((p: any) => ['QB','RB','WR','OL'].includes(p.position)).length;
+const defCount = players.filter((p: any) => ['DL','LB','DB'].includes(p.position)).length;
+const stCount  = players.filter((p: any) => ['ST','K','P'].includes(p.position)).length;
 ---
 
 <AppLayout
   title="Soupiska · GameStatiq"
   active="players"
   pageTitle="Soupiska"
-  pageSub={stats ? `Bobcats Muži · ${rows.length} hráčů ve statistikách · sezóna 2026` : 'Načítám hráče…'}
+  pageSub={`${clubName} · ${players.length} hráčů v portálu`}
 >
-  {!stats && (
-    <div class="mb-6 rounded-lg border border-spark/30 bg-spark/5 px-4 py-3 text-[14px] text-[#A0531B]">
-      Nepodařilo se načíst live data ze Sheets. Zkuste obnovit stránku.
+  {savedParam && (
+    <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">
+      ✓ {savedParam === 'created' ? 'Hráč přidán.' :
+         savedParam === 'updated' ? 'Změny uloženy.' :
+         savedParam === 'removed' ? 'Hráč odebrán.' :
+         savedParam === 'photo' ? 'Fotka nahrána.' :
+         savedParam === 'photo-removed' ? 'Fotka odstraněna.' : 'Uloženo.'}
     </div>
   )}
+  {errorParam && (
+    <div class="mb-6 rounded-lg border border-signal/30 bg-signal/5 px-4 py-3 text-[14px] text-signal">{errorParam}</div>
+  )}
 
+  <!-- Filters / Add button -->
   <div class="mb-5 flex flex-wrap items-center gap-2">
-    <button class="rounded-full bg-ink px-3 py-1.5 text-[12px] font-medium text-white">Všichni ({rows.length})</button>
-    <button class="rounded-full border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Útok ({rows.filter(r => r.position === 'QB' || r.position === 'WR').length})</button>
-    <button class="rounded-full border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Obrana ({rows.filter(r => r.position === 'DB').length})</button>
-    <span class="ml-auto inline-flex items-center gap-2">
-      <button disabled class="cursor-not-allowed rounded-lg border border-stone bg-mist px-3 py-1.5 text-[12px] font-medium text-stone-2">+ Přidat hráče</button>
-      <span class="rounded-md bg-signal/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-signal">Liga tier ↗</span>
-    </span>
+    <button class="rounded-full bg-ink px-3 py-1.5 text-[12px] font-medium text-white">Všichni ({players.length})</button>
+    <button class="rounded-full border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Útok ({offCount})</button>
+    <button class="rounded-full border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Obrana ({defCount})</button>
+    <button class="rounded-full border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Special teams ({stCount})</button>
+
+    <div class="ml-auto">
+      {canEdit ? (
+        <details class="group relative">
+          <summary class="list-none cursor-pointer rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1A2B45] inline-flex items-center gap-1.5">
+            + Přidat hráče
+          </summary>
+          <!-- form rendered in main below -->
+        </details>
+      ) : (
+        <button disabled class="cursor-not-allowed rounded-lg border border-stone bg-mist px-3 py-1.5 text-[12px] font-medium text-stone-2">+ Přidat hráče (jen Admin/Trenér)</button>
+      )}
+    </div>
   </div>
 
+  {/* Add/Edit Form (inline section) */}
+  {canEdit && (
+    <section id="player-form" class="mb-6 rounded-xl border border-stone bg-pearl">
+      <div class="border-b border-stone px-5 py-4">
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">
+          {editingPlayer ? `Upravit: ${editingPlayer.first_name} ${editingPlayer.last_name}`.trim() : 'Přidat hráče do soupisky'}
+        </p>
+        <p class="text-[12px] text-slate">Foto, jméno, číslo dresu, pozice — vše do tabulky níže</p>
+      </div>
+      <form
+        method="POST"
+        action={editingPlayer ? '/api/club/player/update' : '/api/club/player/create'}
+        class="space-y-5 p-5 lg:p-6"
+      >
+        {editingPlayer && <input type="hidden" name="id" value={editingPlayer.id} />}
+        <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Jméno *</span>
+            <input
+              type="text"
+              name="first_name"
+              required
+              value={editingPlayer?.first_name ?? ''}
+              placeholder="Tomáš"
+              class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20"
+            />
+          </label>
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Příjmení</span>
+            <input
+              type="text"
+              name="last_name"
+              value={editingPlayer?.last_name ?? ''}
+              placeholder="Vacek"
+              class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20"
+            />
+          </label>
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Číslo dresu</span>
+            <input
+              type="number"
+              name="jersey_number"
+              min="0"
+              max="999"
+              value={editingPlayer?.jersey_number ?? ''}
+              placeholder="12"
+              class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] tabular-nums text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20"
+            />
+          </label>
+        </div>
+        <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Pozice</span>
+            <select name="position" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none">
+              {positions.map((p) => (
+                <option value={p.code} selected={(editingPlayer?.position ?? 'OL') === p.code}>
+                  {p.code} — {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Status</span>
+            <select name="status" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none">
+              <option value="active"    selected={(editingPlayer?.status ?? 'active') === 'active'}>Aktivní</option>
+              <option value="injured"   selected={editingPlayer?.status === 'injured'}>Zranění</option>
+              <option value="suspended" selected={editingPlayer?.status === 'suspended'}>Suspenze</option>
+              <option value="retired"   selected={editingPlayer?.status === 'retired'}>Konec kariéry</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Datum narození</span>
+            <input
+              type="date"
+              name="date_of_birth"
+              value={editingPlayer?.date_of_birth ?? ''}
+              class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20"
+            />
+          </label>
+        </div>
+        <label class="block">
+          <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Poznámka</span>
+          <textarea
+            name="notes"
+            rows="2"
+            placeholder="Volitelné — např. zranění, draft, role…"
+            class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20"
+          >{editingPlayer?.notes ?? ''}</textarea>
+        </label>
+        <div class="flex justify-end gap-2 border-t border-stone pt-5">
+          <a href="/app/players" class="rounded-lg border border-stone bg-pearl px-4 py-2 text-[13px] font-medium text-graphite hover:bg-mist">Zrušit</a>
+          <button type="submit" class="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1A2B45]">
+            {editingPlayer ? 'Uložit změny' : 'Přidat hráče'}
+          </button>
+        </div>
+      </form>
+
+      {editingPlayer && (
+        <div class="border-t border-stone bg-mist/40 p-5 lg:p-6">
+          <p class="text-[13px] font-semibold text-ink">Foto hráče</p>
+          <div class="mt-3 flex items-center gap-5">
+            {editingPlayer.photo_url ? (
+              <img src={editingPlayer.photo_url} alt="" class="h-20 w-20 rounded-full object-cover" />
+            ) : (
+              <span class="inline-flex h-20 w-20 items-center justify-center rounded-full bg-ink/5 text-[18px] font-bold text-ink">{initials(editingPlayer)}</span>
+            )}
+            <form method="POST" action="/api/club/player/photo/upload" enctype="multipart/form-data" class="flex items-center gap-2">
+              <input type="hidden" name="player_id" value={editingPlayer.id} />
+              <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required class="text-[12px]" />
+              <button type="submit" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Nahrát</button>
+            </form>
+            {editingPlayer.photo_url && (
+              <form method="POST" action="/api/club/player/photo/remove" onsubmit="return confirm('Odebrat fotku?');">
+                <input type="hidden" name="player_id" value={editingPlayer.id} />
+                <button type="submit" class="text-[12px] font-medium text-slate hover:text-signal">Odebrat fotku</button>
+              </form>
+            )}
+            <p class="ml-auto text-[11px] text-slate">JPG / PNG / WebP · max 5 MB</p>
+          </div>
+        </div>
+      )}
+    </section>
+  )}
+
+  {/* Player table */}
   <div class="overflow-x-auto rounded-xl border border-stone bg-pearl">
     <table class="w-full min-w-[720px] text-left text-[14px]">
       <thead class="border-b border-stone bg-mist text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">
@@ -88,36 +269,71 @@ const posColor: Record<string, string> = {
           <th class="px-5 py-3">#</th>
           <th class="py-3">Hráč</th>
           <th class="px-3 py-3">Pozice</th>
-          <th class="py-3">Hlavní stat (sezóna)</th>
-          <th class="px-5 py-3"></th>
+          <th class="px-3 py-3">Status</th>
+          <th class="py-3">Poznámka</th>
+          {canEdit && <th class="px-5 py-3 text-right">Akce</th>}
         </tr>
       </thead>
       <tbody class="divide-y divide-stone">
-        {rows.length === 0 ? (
-          <tr><td colspan="5" class="px-5 py-12 text-center text-[13px] text-slate">Zatím žádní hráči ve statistikách.</td></tr>
+        {players.length === 0 ? (
+          <tr><td colspan={canEdit ? 6 : 5} class="px-5 py-16 text-center">
+            <p class="text-[14px] font-semibold text-ink">Soupiska je prázdná</p>
+            <p class="mt-1 text-[13px] text-slate">
+              {canEdit ? 'Klikni "+ Přidat hráče" výše a začněte budovat soupisku.' : 'Admin nebo trenér musí přidat hráče.'}
+            </p>
+            {showGasFallback && gasStats && (
+              <p class="mt-4 text-[12px] text-slate">
+                Sezónní statistiky pro {clubName} jsou k vidění ve <a href="/app/stats" class="text-signal hover:underline">Statistikách</a> (data z Google Sheets).
+              </p>
+            )}
+          </td></tr>
         ) : (
-          rows.map((p) => (
+          players.map((p: any) => (
             <tr class="transition-colors hover:bg-mist/60">
               <td class="px-5 py-3.5">
-                <span class="font-mono text-[14px] font-bold tabular-nums text-graphite">#{p.number}</span>
+                <span class="font-mono text-[14px] font-bold tabular-nums text-graphite">
+                  {p.jersey_number != null ? `#${p.jersey_number}` : '—'}
+                </span>
               </td>
               <td class="py-3.5">
                 <div class="flex items-center gap-3">
-                  {p.photoUrl ? (
-                    <img src={p.photoUrl} alt="" loading="lazy" class="h-8 w-8 flex-shrink-0 rounded-full object-cover" />
+                  {p.photo_url ? (
+                    <img src={p.photo_url} alt="" loading="lazy" class="h-8 w-8 flex-shrink-0 rounded-full object-cover" />
                   ) : (
-                    <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink/5 text-[11px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0]).join('').slice(0, 2)}</span>
+                    <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink/5 text-[11px] font-semibold text-ink">{initials(p)}</span>
                   )}
-                  <p class="text-[14px] font-semibold tracking-tight-2 text-ink">{p.name}</p>
+                  <p class="text-[14px] font-semibold tracking-tight-2 text-ink">
+                    {(p.first_name + ' ' + (p.last_name ?? '')).trim()}
+                  </p>
                 </div>
               </td>
               <td class="px-3 py-3.5">
-                <span class={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${posColor[p.position]}`}>{p.position}</span>
+                <span class={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${positionColor[p.position] ?? 'bg-stone text-graphite'}`}>{p.position}</span>
               </td>
-              <td class="py-3.5 text-[13px] text-graphite">{p.primary}</td>
-              <td class="px-5 py-3.5 text-right">
-                <button class="text-[12px] font-semibold text-slate hover:text-ink">Detail →</button>
+              <td class="px-3 py-3.5">
+                <span class={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold ${statusBadge[p.status] ?? 'bg-stone text-slate'}`}>
+                  <span class={`h-1.5 w-1.5 rounded-full ${
+                    p.status === 'active' ? 'bg-verde' :
+                    p.status === 'injured' ? 'bg-spark' :
+                    p.status === 'suspended' ? 'bg-signal' : 'bg-slate'
+                  }`}></span>
+                  {statusLabel[p.status] ?? p.status}
+                </span>
               </td>
+              <td class="py-3.5 text-[12px] text-slate">
+                {p.notes ? <span class="line-clamp-1" title={p.notes}>{p.notes}</span> : '—'}
+              </td>
+              {canEdit && (
+                <td class="px-5 py-3.5 text-right">
+                  <a href={`/app/players?edit=${p.id}#player-form`} class="mr-3 text-[12px] font-semibold text-signal hover:underline">Upravit</a>
+                  {canDelete && (
+                    <form method="POST" action="/api/club/player/remove" class="inline" onsubmit={`return confirm('Smazat hráče ${p.first_name} ${p.last_name ?? ''}?');`}>
+                      <input type="hidden" name="id" value={p.id} />
+                      <button type="submit" class="text-[12px] font-semibold text-slate hover:text-signal">Smazat</button>
+                    </form>
+                  )}
+                </td>
+              )}
             </tr>
           ))
         )}
@@ -125,7 +341,16 @@ const posColor: Record<string, string> = {
     </table>
   </div>
 
-  <p class="mt-4 text-[12px] text-slate">
-    Data se synchronizují automaticky ze Scorer appky přes Google Sheets. Pro editaci profilu hráče upgradujte na tier <strong class="text-graphite">Liga</strong>.
-  </p>
+  {clubName === 'Bobcats' && gasStats && (
+    <p class="mt-4 rounded-lg bg-mist p-3 text-[12px] text-graphite">
+      <strong class="text-ink">Bobcats poznámka:</strong> Sezónní statistiky pořád tečou z Google Sheets (záložka <a href="/app/stats" class="text-signal hover:underline">Statistiky</a>). Hráči v portálu (tabulka výše) jsou nezávislí — slouží jako master roster pro budoucí migraci. Až přidáte všechny hráče sem, můžeme přepnout veřejnou stránku z Sheets na portál.
+    </p>
+  )}
 </AppLayout>
+
+<script is:inline>
+  // Scroll to form if edit param is present
+  if (new URLSearchParams(location.search).get('edit')) {
+    document.getElementById('player-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+</script>
