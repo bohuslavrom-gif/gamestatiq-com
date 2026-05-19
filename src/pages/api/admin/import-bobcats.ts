@@ -90,18 +90,23 @@ export const GET: APIRoute = async ({ locals, request }) => {
   for (const m of coach.matchLog) {
     try {
       const isoDate = toIsoDate(m.date);
+      const cleanOpp = String(m.opponent ?? '').trim();
       if (!isoDate) {
         summary.errors.push(`match ${m.date} vs ${m.opponent}: invalid date format`);
         continue;
       }
+      if (!cleanOpp) {
+        summary.errors.push(`match ${m.date}: empty opponent`);
+        continue;
+      }
 
-      // Skip if already imported
+      // Skip if already imported (trimmed opponent comparison)
       const { data: existing } = await admin
         .from('matches')
         .select('id')
         .eq('club_id', clubId)
         .eq('date', isoDate)
-        .eq('opponent', m.opponent)
+        .eq('opponent', cleanOpp)
         .maybeSingle();
 
       let matchId = existing?.id;
@@ -117,7 +122,7 @@ export const GET: APIRoute = async ({ locals, request }) => {
           .insert({
             club_id: clubId,
             date: isoDate,
-            opponent: m.opponent,
+            opponent: cleanOpp,
             our_score: m.ourScore ?? 0,
             opp_score: m.oppScore ?? 0,
             off_drives: m.offDrives ?? 0,
@@ -146,7 +151,7 @@ export const GET: APIRoute = async ({ locals, request }) => {
           .select('id')
           .single();
         if (insErr || !ins) {
-          summary.errors.push(`match ${m.date} vs ${m.opponent}: ${insErr?.message ?? 'no id'}`);
+          summary.errors.push(`match ${m.date} vs ${cleanOpp}: ${insErr?.message ?? 'no id'}`);
           continue;
         }
         matchId = ins.id;
@@ -195,7 +200,7 @@ export const GET: APIRoute = async ({ locals, request }) => {
           .from('match_player_stats')
           .upsert(rows, { onConflict: 'match_id,player_id' });
         if (psErr) {
-          summary.errors.push(`player stats ${m.date} vs ${m.opponent}: ${psErr.message}`);
+          summary.errors.push(`player stats ${m.date} vs ${cleanOpp}: ${psErr.message}`);
         } else {
           summary.player_stats_inserted += rows.length;
         }
