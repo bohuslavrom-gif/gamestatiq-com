@@ -16,6 +16,18 @@ type Summary = {
 const norm = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
+/** GAS returns Date as JS toString format ("Mon Apr 06 2026 00:00:00 GMT+0200..."). Convert to ISO YYYY-MM-DD. */
+function toIsoDate(input: string): string | null {
+  if (!input) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(input.trim())) return input.trim();
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return null;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export const GET: APIRoute = async ({ locals, request }) => {
   const summary: Summary = {
     ok: false,
@@ -77,12 +89,18 @@ export const GET: APIRoute = async ({ locals, request }) => {
   // Process each match
   for (const m of coach.matchLog) {
     try {
+      const isoDate = toIsoDate(m.date);
+      if (!isoDate) {
+        summary.errors.push(`match ${m.date} vs ${m.opponent}: invalid date format`);
+        continue;
+      }
+
       // Skip if already imported
       const { data: existing } = await admin
         .from('matches')
         .select('id')
         .eq('club_id', clubId)
-        .eq('date', m.date)
+        .eq('date', isoDate)
         .eq('opponent', m.opponent)
         .maybeSingle();
 
@@ -98,7 +116,7 @@ export const GET: APIRoute = async ({ locals, request }) => {
           .from('matches')
           .insert({
             club_id: clubId,
-            date: m.date,
+            date: isoDate,
             opponent: m.opponent,
             our_score: m.ourScore ?? 0,
             opp_score: m.oppScore ?? 0,
