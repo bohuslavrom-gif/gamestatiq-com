@@ -12,6 +12,7 @@ import { getSupabaseAdmin } from './supabase';
 import type {
   Match, MatchLogEntry, QbPlayer, WrPlayer, DbPlayer, PlayerMatchStats,
   CoachStats, DownBreakdown, PlaybookAction, FaulType, OffSnapshot, DefSnapshot,
+  DriveResults,
 } from './bobcats';
 
 // ── DB row shapes ────────────────────────────────────────────────
@@ -433,6 +434,43 @@ type FoulRow = {
   yards: number | null;
 };
 
+type DriveRow = {
+  match_id: string;
+  drive_no: number;
+  side: string;        // 'OFFENSE' | 'DEFENSE' | 'SPECIAL'
+  result: string;      // 'TD' | 'DOWNS' | 'INT' | 'SAFETY' | 'HALFTIME' | 'EOG' | 'TURNOVER' | 'PUNT' | 'OTHER'
+  play_count: number | null;
+  yds_gained: number | null;
+};
+
+function aggregateDriveResults(drives: DriveRow[]): { results: DriveResults; count: number } {
+  // Aggregate from the team's (Bobcats) point of view — that means OFFENSE drives only,
+  // since DriveResults shape mirrors bobcats.ts which only tracks our offensive drives.
+  let td = 0, downs = 0, intc = 0, safety = 0;
+  let halftime = 0, eog = 0, turnover = 0, other = 0;
+  let count = 0;
+
+  for (const d of drives) {
+    if (d.side !== 'OFFENSE') continue;
+    count += 1;
+    switch (d.result) {
+      case 'TD':       td       += 1; break;
+      case 'DOWNS':    downs    += 1; break;
+      case 'INT':      intc     += 1; break;
+      case 'SAFETY':   safety   += 1; break;
+      case 'HALFTIME': halftime += 1; break;
+      case 'EOG':      eog      += 1; break;
+      case 'TURNOVER': turnover += 1; break;
+      case 'PUNT':     other    += 1; break;   // PUNT bucketed into "other" for GAS-parity
+      default:         other    += 1;
+    }
+  }
+  return {
+    results: { td, downs, int: intc, safety, halftime, eog, turnover, other },
+    count,
+  };
+}
+
 function bucketYards(y: number): 'short' | 'medium' | 'long' {
   if (y >= 16) return 'long';
   if (y >= 8) return 'medium';
@@ -567,6 +605,8 @@ export type SupabaseCoachStats = CoachStats & {
   playMatchCount: number;
   /** Count of matches that contributed fouls. */
   foulMatchCount: number;
+  /** Count of matches that contributed drives. */
+  driveMatchCount: number;
 };
 
 export async function fetchSupabaseCoachStats(userId: string): Promise<SupabaseCoachStats | null> {
@@ -594,8 +634,8 @@ export async function fetchSupabaseCoachStats(userId: string): Promise<SupabaseC
 
   const matchIds = matchRows.map((m) => m.id);
 
-  // 2. plays + fouls in parallel
-  const [playsRes, foulsRes] = await Promise.all([
+  // 2. plays + fouls + drives in parallel
+  const [playsRes, foulsRes, drivesRes] = await Promise.all([
     admin
       .from('match_plays')
       .select('match_id, side, down, yards_gained, is_td, play_name')
@@ -604,26 +644,33 @@ export async function fetchSupabaseCoachStats(userId: string): Promise<SupabaseC
       .from('match_fouls')
       .select('match_id, fault_name, side, count, yards')
       .in('match_id', matchIds),
+    admin
+      .from('match_drives')
+      .select('match_id, drive_no, side, result, play_count, yds_gained')
+      .in('match_id', matchIds),
   ]);
-  const plays = (playsRes.data ?? []) as PlayRow[];
-  const fouls = (foulsRes.data ?? []) as FoulRow[];
+  const plays  = (playsRes.data  ?? []) as PlayRow[];
+  const fouls  = (foulsRes.data  ?? []) as FoulRow[];
+  const drives = (drivesRes.data ?? []) as DriveRow[];
 
   // 3. aggregate
-  const downDist = aggregateDownDist(plays);
-  const playbookAkce = aggregatePlaybook(plays);
+  const downDist       = aggregateDownDist(plays);
+  const playbookAkce   = aggregatePlaybook(plays);
   const faulyBreakdown = aggregateFouls(fouls);
   const { off, def, fauly } = aggregateTotals(matchRows);
+  const { results: driveResults, count: driveCount } = aggregateDriveResults(drives);
 
-  const playMatchIds = new Set(plays.map((p) => p.match_id));
-  const foulMatchIds = new Set(fouls.map((f) => f.match_id));
+  const playMatchIds  = new Set(plays.map((p)  => p.match_id));
+  const foulMatchIds  = new Set(fouls.map((f)  => f.match_id));
+  const driveMatchIds = new Set(drives.map((d) => d.match_id));
 
   // matchLog from same rows we already have
   const matchLog = matchRows.map((row, i) => rowToMatchLogEntry(row, i + 1));
 
   return {
     source: 'supabase',
-    driveCount: 0,           // not derivable from match_plays (no drive tracking)
-    driveResults: {},        // GAS-only — keep empty
+    driveCount,
+    driveResults,
     endPositions: [],
     faulyBreakdown,
     matchCount: matchRows.length,
@@ -634,8 +681,9 @@ export async function fetchSupabaseCoachStats(userId: string): Promise<SupabaseC
       downDist,
       playbookAkce,
     },
-    playMatchCount: playMatchIds.size,
-    foulMatchCount: foulMatchIds.size,
+    playMatchCount:  playMatchIds.size,
+    foulMatchCount:  foulMatchIds.size,
+    driveMatchCount: driveMatchIds.size,
   };
 }
 

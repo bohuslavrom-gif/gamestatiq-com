@@ -175,10 +175,20 @@ const downs = scopedDownDistRaw ? {
 const downsTotal = downs ? (downs[1].total + downs[2].total + downs[3].total + downs[4].total) : 0;
 const downsMax = downs ? Math.max(1, downs[1].total, downs[2].total, downs[3].total, downs[4].total) : 1;
 
-// ── Drives (always season) ─────────────────────────────────
-const dr = coach?.driveResults ?? {};
+// ── Drives (always season, resolved through source picker) ──
+const drivesGas = coach?.driveResults ?? {};
+const drivesSupabase = supabaseCoach?.driveResults ?? {};
+const drivesGasCount = (coach?.driveCount ?? 0);
+const drivesSupabaseCount = (supabaseCoach?.driveCount ?? 0);
+
+const drivesRes = resolveSource(
+  drivesSupabase, drivesSupabaseCount > 0,
+  drivesGas,      drivesGasCount > 0,
+);
+const dr = drivesRes.data ?? {};
+const driveTotal = drivesRes.src === 'supabase' ? drivesSupabaseCount : drivesGasCount;
 const drOther = (dr.halftime ?? 0) + (dr.eog ?? 0) + (dr.turnover ?? 0) + (dr.other ?? 0);
-const driveCells = coach ? [
+const driveCells = (coach || supabaseCoach) ? [
   { label: 'TD',     value: dr.td ?? 0,     accent: 'verde' },
   { label: 'Downs',  value: dr.downs ?? 0,  accent: 'graphite' },
   { label: 'INT',    value: dr.int ?? 0,    accent: 'signal' },
@@ -498,11 +508,16 @@ const tabs = [
         </div>
       </div>
 
-      {coach.driveCount > 0 && (
+      {driveTotal > 0 && (
         <div class="mt-6 rounded-xl border border-stone bg-pearl">
           <div class="flex items-center justify-between border-b border-stone px-5 py-4">
             <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Útočné drives — souhrn</p>
-            <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{coach.driveCount} drives · celá sezóna</span>
+            <div class="flex items-center gap-2">
+              {drivesRes.src && (
+                <span class={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${drivesRes.src === 'supabase' ? 'bg-verde/15 text-[#1B6E62]' : 'bg-mist text-slate'}`}>{sourceBadge(drivesRes.src)}</span>
+              )}
+              <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{driveTotal} drives · celá sezóna</span>
+            </div>
           </div>
           <div class="grid divide-x divide-stone sm:grid-cols-5">
             {driveCells.map((c) => (
