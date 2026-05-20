@@ -2,13 +2,15 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import { fetchPublicStats, fetchCoachStats, fetchPlayerMatchStats, type DownBreakdown, type OffSnapshot, type PlaybookAction } from '../../lib/bobcats';
 import { fetchPlayerEnrichmentByName, enrich } from '../../lib/players';
+import { fetchSupabaseStats, mergeMatchLogs, fetchSupabasePlayerMatchStats } from '../../lib/supabase-stats';
 
 export const prerender = false;
 
-const [stats, coach, enrichmentMap] = await Promise.all([
+const [stats, coach, enrichmentMap, supabaseStats] = await Promise.all([
   fetchPublicStats('Muži'),
   fetchCoachStats('Muži'),
   fetchPlayerEnrichmentByName(Astro.locals.user!.id),
+  fetchSupabaseStats(Astro.locals.user!.id),
 ]);
 
 // ── URL params ─────────────────────────────────────────────
@@ -16,17 +18,35 @@ const url = new URL(Astro.request.url);
 const view = url.searchParams.get('view') ?? 'team';
 const scopeParam = url.searchParams.get('match') ?? 'all';
 
+// ── Merged match log (GAS + Supabase) ──────────────────────
+// Supabase entries override GAS where keys match (date + opponent).
+// Re-indexed chronologically so URL ?match=<idx> works on the merged list.
+const mergedLog = mergeMatchLogs(coach?.matchLog ?? [], supabaseStats.matches);
+
+const gasKeys = new Set((coach?.matchLog ?? []).map(
+  (m) => `${m.date}|${m.opponent.trim().toLowerCase()}`
+));
+const supabaseOnlyMatches = supabaseStats.matches.filter(
+  (m) => !gasKeys.has(`${m.date}|${m.opponent.trim().toLowerCase()}`)
+);
+
 const selectedMatch = scopeParam !== 'all'
-  ? (coach?.matchLog ?? []).find((m) => String(m.idx) === scopeParam) ?? null
+  ? mergedLog.find((m) => String(m.idx) === scopeParam) ?? null
   : null;
 const isSingleMatch = !!selectedMatch;
 const scopeLabel = selectedMatch
   ? `${selectedMatch.opponent} · ${selectedMatch.date}`
   : 'celá sezóna';
 
-// Per-match player stats — only fetched when view=players AND a single match is selected
+// Per-match player stats — Supabase if entry has supabaseId, otherwise GAS.
 const matchPlayerStats = (view === 'players' && selectedMatch)
-  ? await fetchPlayerMatchStats('Muži', selectedMatch.date, selectedMatch.opponent)
+  ? ((selectedMatch as any).source === 'supabase' && (selectedMatch as any).supabaseId
+      ? await fetchSupabasePlayerMatchStats(
+          (selectedMatch as any).supabaseId,
+          selectedMatch.date,
+          selectedMatch.opponent,
+        )
+      : await fetchPlayerMatchStats('Muži', selectedMatch.date, selectedMatch.opponent))
   : null;
 
 // Helper to build URL preserving other params
@@ -127,7 +147,7 @@ const driveAccent: Record<string, string> = {
 const playbook = scopedPlaybook.slice().sort((a, b) => b.count - a.count);
 const playbookMaxCount = playbook.length > 0 ? Math.max(1, ...playbook.map((a) => a.count)) : 1;
 
-const matchLog = (coach?.matchLog ?? []).slice().reverse();
+const matchLog = mergedLog.slice().reverse();
 
 // ── Trend chart ────────────────────────────────────────────
 const trend = (stats?.recentMatches ?? []).slice().reverse();
@@ -193,6 +213,31 @@ const tabs = [
       Nepodařilo se načíst live data ze Sheets.
     </div>
   )}
+
+  {/* Data source transparency banner */}
+  <div class="mb-6 flex flex-col items-start justify-between gap-3 rounded-lg border border-stone bg-mist/60 p-4 text-[12px] sm:flex-row sm:items-center">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <span class="inline-flex items-center gap-1.5 rounded-md bg-pearl px-2 py-1 font-semibold text-graphite">
+        <span class="h-2 w-2 rounded-full bg-slate"></span>
+        GAS: {coach?.matchCount ?? 0} zápasů
+      </span>
+      <span class="inline-flex items-center gap-1.5 rounded-md bg-pearl px-2 py-1 font-semibold text-graphite">
+        <span class="h-2 w-2 rounded-full bg-verde"></span>
+        Supabase: {supabaseStats.matches.length} zápasů
+      </span>
+      {supabaseOnlyMatches.length > 0 && (
+        <span class="inline-flex items-center gap-1.5 rounded-md bg-verde/15 px-2 py-1 font-semibold text-[#1B6E62]">
+          + {supabaseOnlyMatches.length} {supabaseOnlyMatches.length === 1 ? 'nový jen v Supabase' : 'nových jen v Supabase'}
+        </span>
+      )}
+    </div>
+    <p class="text-slate">
+      Celkem v match logu: <strong class="text-ink tabular-nums">{mergedLog.length}</strong>
+      {supabaseStats.latestDate && (
+        <> · poslední Supabase zápis: <strong class="text-ink">{supabaseStats.latestDate}</strong></>
+      )}
+    </p>
+  </div>
 
   {/* Tab nav (real links) */}
   <div class="mb-6 flex flex-wrap gap-1 rounded-lg border border-stone bg-pearl p-1">
@@ -291,10 +336,10 @@ const tabs = [
           <input type="hidden" name="view" value={view} />
           <label class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Období</label>
           <select name="match" onchange="this.form.submit()" class="min-w-[220px] rounded-lg border border-stone bg-pearl px-3 py-2 text-[13px] font-medium text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20">
-            <option value="all" selected={scopeParam === 'all'}>Celá sezóna ({coach.matchCount} zápasů)</option>
-            {(coach.matchLog ?? []).slice().reverse().map((m) => (
+            <option value="all" selected={scopeParam === 'all'}>Celá sezóna ({mergedLog.length} zápasů)</option>
+            {mergedLog.slice().reverse().map((m: any) => (
               <option value={m.idx} selected={String(m.idx) === scopeParam}>
-                vs {m.opponent} · {m.date} ({m.ourScore}–{m.oppScore})
+                vs {m.opponent} · {m.date} ({m.ourScore}–{m.oppScore}){m.source === 'supabase' ? ' · NEW' : ''}
               </option>
             ))}
           </select>
@@ -770,12 +815,17 @@ const tabs = [
             </tr>
           </thead>
           <tbody class="divide-y divide-stone">
-            {matchLog.map((m) => {
+            {matchLog.map((m: any) => {
               const isActive = String(m.idx) === scopeParam;
+              const isSupabase = m.source === 'supabase';
               return (
                 <tr class={`cursor-pointer transition-colors hover:bg-mist/60 ${isActive ? 'bg-signal/5' : ''}`} onclick={`location.href='${buildHref({ match: String(m.idx) })}'`}>
                   <td class="px-5 py-3">
-                    <p class="font-semibold text-ink">{m.opponent}{isActive && <span class="ml-2 text-[10px] font-semibold uppercase tracking-wider text-signal">aktivní</span>}</p>
+                    <p class="font-semibold text-ink">
+                      {m.opponent}
+                      {isActive && <span class="ml-2 text-[10px] font-semibold uppercase tracking-wider text-signal">aktivní</span>}
+                      {isSupabase && <span class="ml-2 inline-flex items-center gap-1 rounded bg-verde/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#1B6E62]" title="Záznam ze Scorer PWA (Supabase)"><span class="h-1.5 w-1.5 rounded-full bg-verde"></span>Scorer</span>}
+                    </p>
                     <p class="text-[11px] text-slate">{m.date}</p>
                   </td>
                   <td class="px-3 py-3 text-center">
