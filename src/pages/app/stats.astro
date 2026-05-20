@@ -2,21 +2,24 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import { fetchPublicStats, fetchCoachStats, fetchPlayerMatchStats, type DownBreakdown, type OffSnapshot, type PlaybookAction } from '../../lib/bobcats';
 import { fetchPlayerEnrichmentByName, enrich } from '../../lib/players';
-import { fetchSupabaseStats, mergeMatchLogs, fetchSupabasePlayerMatchStats, matchKey } from '../../lib/supabase-stats';
+import { fetchSupabaseStats, mergeMatchLogs, fetchSupabasePlayerMatchStats, fetchSupabaseCoachStats, matchKey } from '../../lib/supabase-stats';
 
 export const prerender = false;
 
-const [stats, coach, enrichmentMap, supabaseStats] = await Promise.all([
+const [stats, coach, enrichmentMap, supabaseStats, supabaseCoach] = await Promise.all([
   fetchPublicStats('Muži'),
   fetchCoachStats('Muži'),
   fetchPlayerEnrichmentByName(Astro.locals.user!.id),
   fetchSupabaseStats(Astro.locals.user!.id),
+  fetchSupabaseCoachStats(Astro.locals.user!.id),
 ]);
 
 // ── URL params ─────────────────────────────────────────────
 const url = new URL(Astro.request.url);
 const view = url.searchParams.get('view') ?? 'team';
 const scopeParam = url.searchParams.get('match') ?? 'all';
+const sourceParamRaw = url.searchParams.get('source') ?? 'auto';
+const sourceParam = (['auto', 'gas', 'supabase'].includes(sourceParamRaw) ? sourceParamRaw : 'auto') as 'auto' | 'gas' | 'supabase';
 
 // ── Merged match log (GAS + Supabase) ──────────────────────
 // Supabase entries override GAS where keys match (date + opponent).
@@ -50,6 +53,7 @@ const matchPlayerStats = (view === 'players' && selectedMatch)
 // Helper to build URL preserving other params
 const buildHref = (overrides: Record<string, string>) => {
   const u = new URLSearchParams({ view, match: scopeParam });
+  if (sourceParam !== 'auto') u.set('source', sourceParam);
   for (const [k, v] of Object.entries(overrides)) {
     if (v === '') u.delete(k); else u.set(k, v);
   }
@@ -72,6 +76,45 @@ const off: OffSnapshot = selectedMatch
     }
   : (coach?.totals.off ?? {});
 
+// ── v6.2: Per-section data source picker (auto/gas/supabase) ──
+type SourceUsed = 'gas' | 'supabase' | null;
+const sourceForcedTo: 'gas' | 'supabase' | null =
+  sourceParam === 'gas' ? 'gas' :
+  sourceParam === 'supabase' ? 'supabase' : null;
+
+const downDistGas      = coach?.totals.downDist;
+const downDistSupabase = supabaseCoach?.totals.downDist;
+const downDistGasHas      = !!downDistGas && Object.values(downDistGas).some((d: any) => (typeof d === 'object' ? d.total : d) > 0);
+const downDistSupabaseHas = !!downDistSupabase && Object.values(downDistSupabase).some((d: any) => (typeof d === 'object' ? d.total : d) > 0);
+
+const playbookGas      = coach?.totals.playbookAkce ?? [];
+const playbookSupabase = supabaseCoach?.totals.playbookAkce ?? [];
+
+const faulyGas      = coach?.faulyBreakdown ?? [];
+const faulySupabase = supabaseCoach?.faulyBreakdown ?? [];
+
+function resolveSource<T>(supa: T, supaHas: boolean, gas: T, gasHas: boolean): { src: SourceUsed; data: T } {
+  if (sourceForcedTo === 'gas')      return { src: 'gas',      data: gas };
+  if (sourceForcedTo === 'supabase') return { src: 'supabase', data: supa };
+  // auto
+  if (supaHas) return { src: 'supabase', data: supa };
+  if (gasHas)  return { src: 'gas',      data: gas };
+  return { src: null, data: gas };  // neither has data → render empty using gas shape
+}
+
+// Single-match views (selectedMatch.*) always come from the entry's own source
+// (Supabase entry → already has Supabase per-match data baked in; GAS entry → GAS).
+// Multi-match (season) views use resolveSource.
+const downDistRes = isSingleMatch
+  ? { src: (selectedMatch as any)?.source ?? 'gas' as SourceUsed, data: selectedMatch?.downDist }
+  : resolveSource(downDistSupabase, downDistSupabaseHas, downDistGas, !!downDistGas);
+const playbookRes = isSingleMatch
+  ? { src: (selectedMatch as any)?.source ?? 'gas' as SourceUsed, data: selectedMatch?.playbookAkce ?? [] }
+  : resolveSource(playbookSupabase, playbookSupabase.length > 0, playbookGas, playbookGas.length > 0);
+const faulyRes = isSingleMatch
+  ? { src: (selectedMatch as any)?.source ?? 'gas' as SourceUsed, data: faulyGas }  // single-match faul breakdown only available from GAS in v6.1; v6.3 would query match_fouls by match_id
+  : resolveSource(faulySupabase, faulySupabase.length > 0, faulyGas, faulyGas.length > 0);
+
 const scopedFaulyCount = selectedMatch
   ? (selectedMatch.penCount ?? 0)
   : (coach?.matchLog ?? []).reduce((s, m) => s + (m.penCount ?? 0), 0);
@@ -79,12 +122,20 @@ const scopedFaulyYds = selectedMatch
   ? (selectedMatch.penYds ?? 0)
   : (coach?.matchLog ?? []).reduce((s, m) => s + (m.penYds ?? 0), 0);
 
-const scopedDownDistRaw = selectedMatch ? selectedMatch.downDist : coach?.totals.downDist;
-const scopedPlaybook: PlaybookAction[] = (selectedMatch ? selectedMatch.playbookAkce : coach?.totals.playbookAkce) ?? [];
+const scopedDownDistRaw = downDistRes.data;
+const scopedPlaybook: PlaybookAction[] = (playbookRes.data ?? []) as PlaybookAction[];
 
 const showFaulyBreakdown = !isSingleMatch;
-const fauly = coach?.faulyBreakdown ?? [];
+const fauly = faulyRes.data ?? [];
 const faulyMax = fauly.length > 0 ? Math.max(1, ...fauly.map((f) => f.count)) : 1;
+
+// Source labels for UI badges
+const SOURCE_LABEL: Record<string, string> = {
+  gas:      `GAS · ${coach?.matchCount ?? 0} z.`,
+  supabase: `Supabase · ${supabaseCoach?.matchCount ?? 0} z.`,
+};
+const sourceBadge = (src: SourceUsed) =>
+  src ? SOURCE_LABEL[src] : '—';
 
 // ── Sezónní týmové metriky ────────────────────────────────
 const winPct = stats && stats.record.matches > 0
@@ -213,28 +264,48 @@ const tabs = [
   )}
 
   {/* Data source transparency banner */}
-  <div class="mb-6 flex flex-col items-start justify-between gap-3 rounded-lg border border-stone bg-mist/60 p-4 text-[12px] sm:flex-row sm:items-center">
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
-      <span class="inline-flex items-center gap-1.5 rounded-md bg-pearl px-2 py-1 font-semibold text-graphite">
-        <span class="h-2 w-2 rounded-full bg-slate"></span>
-        GAS: {coach?.matchCount ?? 0} zápasů
-      </span>
-      <span class="inline-flex items-center gap-1.5 rounded-md bg-pearl px-2 py-1 font-semibold text-graphite">
-        <span class="h-2 w-2 rounded-full bg-verde"></span>
-        Supabase: {supabaseStats.matches.length} zápasů
-      </span>
-      {supabaseOnlyMatches.length > 0 && (
-        <span class="inline-flex items-center gap-1.5 rounded-md bg-verde/15 px-2 py-1 font-semibold text-[#1B6E62]">
-          + {supabaseOnlyMatches.length} {supabaseOnlyMatches.length === 1 ? 'nový jen v Supabase' : 'nových jen v Supabase'}
+  <div class="mb-6 rounded-lg border border-stone bg-mist/60 p-4 text-[12px]">
+    <div class="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span class="inline-flex items-center gap-1.5 rounded-md bg-pearl px-2 py-1 font-semibold text-graphite">
+          <span class="h-2 w-2 rounded-full bg-slate"></span>
+          GAS: {coach?.matchCount ?? 0} zápasů
         </span>
-      )}
+        <span class="inline-flex items-center gap-1.5 rounded-md bg-pearl px-2 py-1 font-semibold text-graphite">
+          <span class="h-2 w-2 rounded-full bg-verde"></span>
+          Supabase: {supabaseStats.matches.length} zápasů
+        </span>
+        {supabaseOnlyMatches.length > 0 && (
+          <span class="inline-flex items-center gap-1.5 rounded-md bg-verde/15 px-2 py-1 font-semibold text-[#1B6E62]">
+            + {supabaseOnlyMatches.length} {supabaseOnlyMatches.length === 1 ? 'nový jen v Supabase' : 'nových jen v Supabase'}
+          </span>
+        )}
+      </div>
+      <p class="text-slate">
+        Celkem v match logu: <strong class="text-ink tabular-nums">{mergedLog.length}</strong>
+        {supabaseStats.latestDate && (
+          <> · poslední Supabase zápis: <strong class="text-ink">{supabaseStats.latestDate}</strong></>
+        )}
+      </p>
     </div>
-    <p class="text-slate">
-      Celkem v match logu: <strong class="text-ink tabular-nums">{mergedLog.length}</strong>
-      {supabaseStats.latestDate && (
-        <> · poslední Supabase zápis: <strong class="text-ink">{supabaseStats.latestDate}</strong></>
-      )}
-    </p>
+    <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-stone/60 pt-3">
+      <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Zdroj coach sekcí:</span>
+      {(['auto', 'supabase', 'gas'] as const).map((opt) => {
+        const u = new URLSearchParams({ view, match: scopeParam });
+        if (opt !== 'auto') u.set('source', opt);
+        const isActive = sourceParam === opt;
+        return (
+          <a
+            href={'/app/stats?' + u.toString()}
+            class={`rounded-md px-2 py-1 text-[11px] font-semibold transition-colors ${
+              isActive ? 'bg-ink text-white' : 'bg-pearl text-graphite hover:bg-stone/40'
+            }`}
+          >
+            {opt === 'auto' ? 'Auto (preferuj Supabase)' : opt === 'supabase' ? 'Jen Supabase' : 'Jen GAS'}
+          </a>
+        );
+      })}
+    </div>
   </div>
 
   {/* Tab nav (real links) */}
@@ -448,7 +519,12 @@ const tabs = [
         <div class="rounded-xl border border-stone bg-pearl">
           <div class="flex items-center justify-between border-b border-stone px-5 py-4">
             <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Down distribuce</p>
-            <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{downsTotal > 0 ? `${downsTotal} útočných plays` : 'útočné plays'}</span>
+            <div class="flex items-center gap-2">
+              {downDistRes.src && (
+                <span class={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${downDistRes.src === 'supabase' ? 'bg-verde/15 text-[#1B6E62]' : 'bg-mist text-slate'}`}>{sourceBadge(downDistRes.src)}</span>
+              )}
+              <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{downsTotal > 0 ? `${downsTotal} útočných plays` : 'útočné plays'}</span>
+            </div>
           </div>
           {!downs || downsTotal === 0 ? (
             <div class="p-8 text-center text-[13px] text-slate">
@@ -502,7 +578,12 @@ const tabs = [
         <div class="rounded-xl border border-stone bg-pearl">
           <div class="flex items-center justify-between border-b border-stone px-5 py-4">
             <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Fauly</p>
-            <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{isSingleMatch ? 'v zápase' : 'strana faulu'}</span>
+            <div class="flex items-center gap-2">
+              {!isSingleMatch && faulyRes.src && (
+                <span class={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${faulyRes.src === 'supabase' ? 'bg-verde/15 text-[#1B6E62]' : 'bg-mist text-slate'}`}>{sourceBadge(faulyRes.src)}</span>
+              )}
+              <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{isSingleMatch ? 'v zápase' : 'strana faulu'}</span>
+            </div>
           </div>
           {scopedFaulyCount === 0 ? (
             <div class="p-8 text-center text-[13px] text-slate">Žádné fauly {isSingleMatch ? 'v tomto zápase' : 'v sezóně'}.</div>
@@ -565,7 +646,12 @@ const tabs = [
       <div class="mt-6 rounded-xl border border-stone bg-pearl">
         <div class="flex items-center justify-between border-b border-stone px-5 py-4">
           <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Playbook akce</p>
-          <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{playbook.length > 0 ? `${playbook.length} různých akcí` : 'úspěšnost per akce'}</span>
+          <div class="flex items-center gap-2">
+            {playbookRes.src && (
+              <span class={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${playbookRes.src === 'supabase' ? 'bg-verde/15 text-[#1B6E62]' : 'bg-mist text-slate'}`}>{sourceBadge(playbookRes.src)}</span>
+            )}
+            <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{playbook.length > 0 ? `${playbook.length} různých akcí` : 'úspěšnost per akce'}</span>
+          </div>
         </div>
         {playbook.length === 0 ? (
           <div class="p-8 text-center text-[13px] text-slate">

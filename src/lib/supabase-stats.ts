@@ -9,7 +9,10 @@
 // match_plays / match_fouls have meaningful data).
 
 import { getSupabaseAdmin } from './supabase';
-import type { Match, MatchLogEntry, QbPlayer, WrPlayer, DbPlayer, PlayerMatchStats } from './bobcats';
+import type {
+  Match, MatchLogEntry, QbPlayer, WrPlayer, DbPlayer, PlayerMatchStats,
+  CoachStats, DownBreakdown, PlaybookAction, FaulType, OffSnapshot, DefSnapshot,
+} from './bobcats';
 
 // ── DB row shapes ────────────────────────────────────────────────
 
@@ -406,6 +409,233 @@ export async function fetchSupabasePlayerMatchStats(
     date: matchDate,
     opponent,
     qbStats, wrStats, defenseLeaders,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// v6.2 — Coach stats aggregations (down dist, playbook, fauly, totals)
+// ─────────────────────────────────────────────────────────────────
+
+type PlayRow = {
+  match_id: string;
+  side: string | null;
+  down: number | null;
+  yards_gained: number | null;
+  is_td: boolean | null;
+  play_name: string | null;
+};
+
+type FoulRow = {
+  match_id: string;
+  fault_name: string;
+  side: string | null;
+  count: number | null;
+  yards: number | null;
+};
+
+function bucketYards(y: number): 'short' | 'medium' | 'long' {
+  if (y >= 16) return 'long';
+  if (y >= 8) return 'medium';
+  return 'short';
+}
+
+function aggregateDownDist(plays: PlayRow[]): Record<string, DownBreakdown> {
+  const out: Record<string, { total: number; short: number; medium: number; long: number; sumYds: number; td: number }> = {
+    '1': { total: 0, short: 0, medium: 0, long: 0, sumYds: 0, td: 0 },
+    '2': { total: 0, short: 0, medium: 0, long: 0, sumYds: 0, td: 0 },
+    '3': { total: 0, short: 0, medium: 0, long: 0, sumYds: 0, td: 0 },
+    '4': { total: 0, short: 0, medium: 0, long: 0, sumYds: 0, td: 0 },
+  };
+  for (const p of plays) {
+    if (p.side && p.side !== 'OFFENSE') continue;
+    if (p.down == null || p.down < 1 || p.down > 4) continue;
+    const key = String(p.down);
+    const yds = p.yards_gained ?? 0;
+    out[key].total += 1;
+    out[key][bucketYards(yds)] += 1;
+    out[key].sumYds += yds;
+    if (p.is_td) out[key].td += 1;
+  }
+  return out;
+}
+
+function aggregatePlaybook(plays: PlayRow[]): PlaybookAction[] {
+  const map = new Map<string, { name: string; count: number; totalYds: number; td: number }>();
+  for (const p of plays) {
+    if (!p.play_name) continue;
+    if (p.side && p.side !== 'OFFENSE') continue;
+    const name = p.play_name.trim();
+    if (!name) continue;
+    let b = map.get(name);
+    if (!b) { b = { name, count: 0, totalYds: 0, td: 0 }; map.set(name, b); }
+    b.count += 1;
+    b.totalYds += p.yards_gained ?? 0;
+    if (p.is_td) b.td += 1;
+  }
+  return Array.from(map.values()).map((b) => ({
+    name: b.name,
+    count: b.count,
+    totalYds: b.totalYds,
+    avgYds: b.count > 0 ? Math.round((b.totalYds / b.count) * 10) / 10 : 0,
+    td: b.td,
+  })).sort((a, b) => b.count - a.count);
+}
+
+function aggregateFouls(rows: FoulRow[]): FaulType[] {
+  // Group by (fault_name, side); sum count + yards across all matches.
+  const map = new Map<string, { name: string; side: string; count: number; yds: number }>();
+  for (const r of rows) {
+    const name = r.fault_name?.trim() || 'Unknown';
+    const sideRaw = (r.side ?? '').toUpperCase();
+    const side = sideRaw === 'OFFENSE' ? 'Útok'
+              : sideRaw === 'DEFENSE' ? 'Obrana'
+              : sideRaw === 'SPECIAL' ? 'Special'
+              : sideRaw === 'OTHER'   ? '—'
+              : (r.side || '—');
+    const key = name + '|' + side;
+    let b = map.get(key);
+    if (!b) { b = { name, side, count: 0, yds: 0 }; map.set(key, b); }
+    b.count += r.count ?? 0;
+    b.yds   += r.yards ?? 0;
+  }
+  return Array.from(map.values())
+    .map((b) => ({ name: b.name, side: b.side, count: b.count, yds: b.yds }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function aggregateTotals(matches: MatchRow[]): { off: OffSnapshot; def: DefSnapshot; fauly: { count: number; yds: number } } {
+  const N = matches.length;
+  const sum = (k: keyof MatchRow): number => matches.reduce((s, m) => s + ((m[k] as number | null) ?? 0), 0);
+
+  const offTd = sum('off_td');
+  const offDrives = sum('off_drives');
+  const qbAtt = sum('qb_att');
+  const qbComp = sum('qb_comp');
+  const xp1Att = sum('xp1_att');
+  const xp1Ok = sum('xp1_ok');
+  const xp2Att = sum('xp2_att');
+  const xp2Ok = sum('xp2_ok');
+
+  const off: OffSnapshot = {
+    points: sum('our_score'),
+    pointsAvg: N > 0 ? sum('our_score') / N : 0,
+    rushYds: sum('rush_yds'),
+    passYds: sum('pass_yds'),
+    totalYds: sum('total_yds'),
+    drives: offDrives,
+    td: offTd,
+    driveEffPct: offDrives > 0 ? offTd / offDrives : 0,
+    qbAtt, qbComp,
+    qbYds: sum('qb_yds'),
+    qbTD:  sum('qb_td'),
+    qbINT: sum('qb_int'),
+    passPct: qbAtt > 0 ? qbComp / qbAtt : 0,
+    xp1Att, xp1Ok,
+    xp1Pct: xp1Att > 0 ? xp1Ok / xp1Att : 0,
+    xp2Att, xp2Ok,
+    xp2Pct: xp2Att > 0 ? xp2Ok / xp2Att : 0,
+  };
+
+  const defDrives = sum('def_drives');
+  const defStops  = sum('def_stops');
+  const def: DefSnapshot = {
+    pointsAgainst: sum('opp_score'),
+    pointsAvg: N > 0 ? sum('opp_score') / N : 0,
+    drives: defDrives,
+    stops: defStops,
+    stopPct: defDrives > 0 ? defStops / defDrives : 0,
+    rushYds: sum('opp_rush_yds'),
+    passYds: sum('opp_pass_yds'),
+    totalYds: sum('opp_total_yds'),
+  };
+
+  const fauly = { count: sum('pen_count'), yds: sum('pen_yds') };
+
+  return { off, def, fauly };
+}
+
+/**
+ * Full Supabase-side CoachStats aggregate. Drive results stay empty
+ * (no drive tracking in match_plays schema yet). matchLog is shared
+ * with fetchSupabaseStats — call both in parallel only if you need
+ * matchLog twice.
+ */
+export type SupabaseCoachStats = CoachStats & {
+  /** Marker so UI can show data source. */
+  source: 'supabase';
+  /** Count of matches that contributed plays — useful for "empty data" detection. */
+  playMatchCount: number;
+  /** Count of matches that contributed fouls. */
+  foulMatchCount: number;
+};
+
+export async function fetchSupabaseCoachStats(userId: string): Promise<SupabaseCoachStats | null> {
+  if (!userId) return null;
+  const admin = getSupabaseAdmin();
+
+  const { data: membership } = await admin
+    .from('club_members')
+    .select('club_id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!membership) return null;
+  const clubId = (membership as { club_id: string }).club_id;
+
+  // 1. matches for totals + matchLog
+  const { data: matchRowsRaw } = await admin
+    .from('matches')
+    .select('*')
+    .eq('club_id', clubId)
+    .order('date', { ascending: true });
+  const matchRows = (matchRowsRaw ?? []) as MatchRow[];
+  if (matchRows.length === 0) return null;
+
+  const matchIds = matchRows.map((m) => m.id);
+
+  // 2. plays + fouls in parallel
+  const [playsRes, foulsRes] = await Promise.all([
+    admin
+      .from('match_plays')
+      .select('match_id, side, down, yards_gained, is_td, play_name')
+      .in('match_id', matchIds),
+    admin
+      .from('match_fouls')
+      .select('match_id, fault_name, side, count, yards')
+      .in('match_id', matchIds),
+  ]);
+  const plays = (playsRes.data ?? []) as PlayRow[];
+  const fouls = (foulsRes.data ?? []) as FoulRow[];
+
+  // 3. aggregate
+  const downDist = aggregateDownDist(plays);
+  const playbookAkce = aggregatePlaybook(plays);
+  const faulyBreakdown = aggregateFouls(fouls);
+  const { off, def, fauly } = aggregateTotals(matchRows);
+
+  const playMatchIds = new Set(plays.map((p) => p.match_id));
+  const foulMatchIds = new Set(fouls.map((f) => f.match_id));
+
+  // matchLog from same rows we already have
+  const matchLog = matchRows.map((row, i) => rowToMatchLogEntry(row, i + 1));
+
+  return {
+    source: 'supabase',
+    driveCount: 0,           // not derivable from match_plays (no drive tracking)
+    driveResults: {},        // GAS-only — keep empty
+    endPositions: [],
+    faulyBreakdown,
+    matchCount: matchRows.length,
+    matchLog,
+    totals: {
+      matches: matchRows.length,
+      off, def, fauly,
+      downDist,
+      playbookAkce,
+    },
+    playMatchCount: playMatchIds.size,
+    foulMatchCount: foulMatchIds.size,
   };
 }
 
