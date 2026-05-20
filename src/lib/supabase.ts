@@ -102,3 +102,61 @@ export type Profile = {
   created_at: string;
   updated_at: string;
 };
+
+// ── Multi-team schema (Iter 1) ─────────────────────────────────
+
+export type TeamCategory = 'men' | 'women' | 'u18' | 'u15' | 'u12' | 'mixed' | string;
+
+export type Team = {
+  id: string;
+  club_id: string;
+  name: string;
+  category: TeamCategory | null;
+  sport: string;
+  season: string;
+  is_archived: boolean;
+  primary_color: string;
+  secondary_color: string;
+  logo_url: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LeagueTier = 'liga' | 'federace';
+
+export type League = {
+  id: string;
+  name: string;
+  slug: string;
+  sport: string;
+  description: string | null;
+  logo_url: string | null;
+  primary_color: string;
+  secondary_color: string;
+  owner_user_id: string | null;
+  subscription_tier: LeagueTier;
+  subscription_status: SubscriptionStatus;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LeagueTeam = {
+  league_id: string;
+  team_id: string;
+  invited_by: string | null;
+  invited_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+};
+
+export type LeagueMember = {
+  id: string;
+  league_id: string;
+  user_id: string;
+  role: 'admin' | 'staff' | 'viewer';
+  created_at: string;
+};
