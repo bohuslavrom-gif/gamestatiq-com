@@ -2,7 +2,7 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import { fetchPublicStats, fetchCoachStats, fetchPlayerMatchStats, type DownBreakdown, type OffSnapshot, type PlaybookAction } from '../../lib/bobcats';
 import { fetchPlayerEnrichmentByName, enrich } from '../../lib/players';
-import { fetchSupabaseStats, mergeMatchLogs, fetchSupabasePlayerMatchStats } from '../../lib/supabase-stats';
+import { fetchSupabaseStats, mergeMatchLogs, fetchSupabasePlayerMatchStats, matchKey } from '../../lib/supabase-stats';
 
 export const prerender = false;
 
@@ -23,11 +23,9 @@ const scopeParam = url.searchParams.get('match') ?? 'all';
 // Re-indexed chronologically so URL ?match=<idx> works on the merged list.
 const mergedLog = mergeMatchLogs(coach?.matchLog ?? [], supabaseStats.matches);
 
-const gasKeys = new Set((coach?.matchLog ?? []).map(
-  (m) => `${m.date}|${m.opponent.trim().toLowerCase()}`
-));
+const gasKeys = new Set((coach?.matchLog ?? []).map(matchKey));
 const supabaseOnlyMatches = supabaseStats.matches.filter(
-  (m) => !gasKeys.has(`${m.date}|${m.opponent.trim().toLowerCase()}`)
+  (m) => !gasKeys.has(matchKey(m))
 );
 
 const selectedMatch = scopeParam !== 'all'

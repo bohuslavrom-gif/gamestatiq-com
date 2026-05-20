@@ -299,6 +299,53 @@ export async function fetchSupabaseStats(userId: string): Promise<SupabaseStatsR
 }
 
 /**
+ * Parse any common date string GAS or Supabase might emit into a stable
+ * YYYYMMDD numeric key. Handles:
+ *   - ISO: "2026-04-13" or "2026-04-13T..."
+ *   - cs-CZ: "13. 4. 2026" or "13.4.2026"
+ *   - JS toString: "Mon Apr 13 2026 00:00:00 GMT+0200 (...)"
+ * Returns 0 if unparseable (which will only match other unparseables).
+ */
+function dateKey(s: string): number {
+  if (!s) return 0;
+  // ISO YYYY-MM-DD
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return parseInt(m[1] + m[2] + m[3], 10);
+  // cs-CZ "D. M. YYYY" or "D.M.YYYY"
+  m = s.match(/(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{2,4})/);
+  if (m) {
+    const yyyy = m[3].length === 2 ? '20' + m[3] : m[3];
+    return parseInt(yyyy + m[2].padStart(2, '0') + m[1].padStart(2, '0'), 10);
+  }
+  // Fallback: JS Date.parse (handles "Mon Apr 13 2026 ..." and most variants)
+  const t = Date.parse(s);
+  if (!isNaN(t)) {
+    const d = new Date(t);
+    return parseInt(
+      String(d.getUTCFullYear()) +
+      String(d.getUTCMonth() + 1).padStart(2, '0') +
+      String(d.getUTCDate()).padStart(2, '0'),
+      10
+    );
+  }
+  return 0;
+}
+
+/** Composite key (date + opponent), normalized for cross-source matching. */
+export function matchKey(m: { date: string; opponent: string }): string {
+  return `${dateKey(m.date)}|${oppKey(m.opponent)}`;
+}
+
+/** Normalize opponent string: strip diacritics, whitespace, lowercase. */
+function oppKey(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+}
+
+/**
  * Merge GAS match log with Supabase matches, deduplicating by (date, opponent).
  * Supabase entries win when both sources have the same match. Returns the
  * merged log sorted by idx (chronological).
@@ -310,7 +357,7 @@ export function mergeMatchLogs(
   const merged = new Map<string, MatchLogEntry & { source?: 'supabase' | 'gas'; supabaseId?: string }>();
 
   const keyOf = (m: { date: string; opponent: string }) =>
-    `${m.date}|${m.opponent.trim().toLowerCase()}`;
+    `${dateKey(m.date)}|${oppKey(m.opponent)}`;
 
   // Start with GAS entries
   for (const m of gasLog) {
@@ -323,16 +370,7 @@ export function mergeMatchLogs(
 
   // Convert back, re-index chronologically
   const arr = Array.from(merged.values());
-  arr.sort((a, b) => {
-    // Parse "DD. M. YYYY" → comparable
-    const parse = (s: string) => {
-      const cm = s.match(/(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{2,4})/);
-      if (!cm) return 0;
-      const yyyy = cm[3].length === 2 ? '20' + cm[3] : cm[3];
-      return parseInt(yyyy + cm[2].padStart(2, '0') + cm[1].padStart(2, '0'), 10);
-    };
-    return parse(a.date) - parse(b.date);
-  });
+  arr.sort((a, b) => dateKey(a.date) - dateKey(b.date));
   arr.forEach((m, i) => { m.idx = i + 1; });
   return arr;
 }
