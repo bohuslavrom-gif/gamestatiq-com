@@ -2,7 +2,9 @@
 import { getSupabaseAdmin, type Club } from '../lib/supabase';
 
 interface Props {
-  active?: 'dashboard' | 'stats' | 'players' | 'billing' | 'settings';
+  // Klub nav keys: dashboard | stats | players | billing | settings
+  // Liga nav keys: dashboard | teams | standings | leaders | billing | settings
+  active?: 'dashboard' | 'stats' | 'players' | 'teams' | 'standings' | 'leaders' | 'billing' | 'settings';
 }
 const { active = 'dashboard' } = Astro.props;
 
@@ -41,7 +43,13 @@ if (user) {
   }
 }
 
-const navItems = [
+// ── Iter 5b: detect context (klub vs liga) by current URL path ──
+const _pathname = Astro.url.pathname;
+const isLeagueContext = _pathname.startsWith('/app/league');
+const league = Astro.locals.league ?? null;
+const leagueRole = Astro.locals.leagueRole ?? null;
+
+const clubNavItems = [
   { key: 'dashboard', label: 'Dashboard',  href: '/app',          icon: 'M3 12l9-9 9 9 M5 10v10h14V10' },
   { key: 'stats',     label: 'Statistiky', href: '/app/stats',    icon: 'M3 3v18h18 M7 13h3v6 M13 9h3v10 M19 5h3v14' },
   { key: 'players',   label: 'Soupiska',   href: '/app/players',  icon: 'M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1' },
@@ -49,7 +57,18 @@ const navItems = [
   { key: 'settings',  label: 'Nastavení',  href: '/app/settings', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z' },
 ];
 
-// ── Multi-team Iter 2: derived UI props for team switcher ──
+const leagueNavItems = [
+  { key: 'dashboard',    label: 'Liga dashboard', href: '/app/league',             icon: 'M3 12l9-9 9 9 M5 10v10h14V10' },
+  { key: 'teams',        label: 'Týmy ligy',      href: '/app/league/teams',       icon: 'M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1' },
+  { key: 'standings',    label: 'Standings',      href: '/app/league/standings',   icon: 'M3 3v18h18 M7 13h3v6 M13 9h3v10 M19 5h3v14' },
+  { key: 'leaders',      label: 'Leaderboards',   href: '/app/league/leaders',     icon: 'M12 2v6 M12 22v-6 M4 12H2 M22 12h-2 M5.6 5.6 4.2 4.2 M19.8 19.8l-1.4-1.4 M5.6 18.4 4.2 19.8 M19.8 4.2l-1.4 1.4' },
+  { key: 'billing',      label: 'Předplatné',     href: '/app/league/billing',     icon: 'M3 7h18 M3 12h18 M3 17h18' },
+  { key: 'settings',     label: 'Nastavení',      href: '/app/league/settings',    icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z' },
+];
+
+const navItems = isLeagueContext ? leagueNavItems : clubNavItems;
+
+// ── Multi-team Iter 2: derived UI props for team switcher (klub context only) ──
 const teams = Astro.locals.teams ?? [];
 const currentTeam = Astro.locals.team ?? null;
 const isMultiTeam = teams.length > 1;
@@ -61,6 +80,10 @@ const teamSeason = currentTeam?.season ?? '2026';
 const teamDisplayName = currentTeam?.name ?? club?.name ?? 'Vyberte klub';
 const teamSportLabel  = currentTeam?.sport ?? club?.sport ?? '—';
 const teamLogo        = currentTeam?.logo_url ?? club?.logoUrl ?? null;
+
+// Liga sidebar header derived props
+const leagueAbbr = league?.name?.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || 'LGA';
+const leagueRoleLabel = leagueRole === 'admin' ? 'Admin' : leagueRole === 'staff' ? 'Staff' : leagueRole === 'viewer' ? 'Viewer' : '—';
 ---
 
 <aside class="app-sidebar fixed inset-y-0 left-0 z-30 w-64 flex-shrink-0 -translate-x-full transform border-r border-stone bg-pearl transition-transform duration-200 lg:translate-x-0">
@@ -73,7 +96,21 @@ const teamLogo        = currentTeam?.logo_url ?? club?.logoUrl ?? null;
     </div>
 
     <div class="border-b border-stone px-3 py-4">
-      {!isMultiTeam && (
+      {isLeagueContext && league && (
+        <div class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left">
+          {league.logo_url ? (
+            <img src={league.logo_url} alt="" class="h-9 w-9 rounded-lg bg-mist object-contain" />
+          ) : (
+            <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-plum text-[11px] font-bold tracking-[0.04em] text-white">{leagueAbbr}</span>
+          )}
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-[14px] font-semibold tracking-tight-2 text-ink">{league.name}</p>
+            <p class="truncate text-[11px] text-slate">Liga · {leagueRoleLabel}</p>
+          </div>
+        </div>
+      )}
+
+      {!isLeagueContext && !isMultiTeam && (
         <div class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left">
           {teamLogo ? (
             <img src={teamLogo} alt="" class="h-9 w-9 rounded-lg bg-mist object-contain" />
@@ -87,7 +124,7 @@ const teamLogo        = currentTeam?.logo_url ?? club?.logoUrl ?? null;
         </div>
       )}
 
-      {isMultiTeam && (
+      {!isLeagueContext && isMultiTeam && (
         <details class="group">
           <summary class="flex w-full cursor-pointer items-center gap-3 list-none rounded-lg px-2 py-2 text-left transition-colors hover:bg-mist [&::-webkit-details-marker]:hidden">
             {teamLogo ? (
@@ -136,7 +173,8 @@ const teamLogo        = currentTeam?.logo_url ?? club?.logoUrl ?? null;
       <ul class="space-y-0.5">
         {navItems.map((item) => {
           // Preserve ?team=<id> in nav links so team selection persists across routes
-          const currentTeamId = Astro.locals.team?.id ?? null;
+          // (Only relevant in klub context — league nav items don't carry team param.)
+          const currentTeamId = isLeagueContext ? null : (Astro.locals.team?.id ?? null);
           const href = currentTeamId ? `${item.href}?team=${currentTeamId}` : item.href;
           return (
             <li>
@@ -159,34 +197,51 @@ const teamLogo        = currentTeam?.logo_url ?? club?.logoUrl ?? null;
         })}
       </ul>
 
-      <a
-        href="https://scorer.gamestatiq.com"
-        target="_blank"
-        rel="noopener"
-        class="mt-6 flex items-center gap-3 rounded-lg border border-ink/10 bg-ink p-4 text-white transition-colors hover:bg-[#1A2B45]"
-      >
-        <span class="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-signal text-white">
-          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="2" y="6" width="20" height="12" rx="2"/>
-            <path d="M8 10v4 M16 10v4 M12 9v6 M2 12h4 M18 12h4"/>
-          </svg>
-        </span>
-        <div class="min-w-0 flex-1">
-          <p class="text-[13px] font-semibold tracking-tight-2">Otevřít Scorer</p>
-          <p class="text-[11px] text-white/60">Zapisování zápasu →</p>
-        </div>
-      </a>
-
-      <div class="mt-3 rounded-lg border border-signal/20 bg-signal/5 p-4">
-        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-signal">Upgrade na Klub</p>
-        <p class="mt-2 text-[12px] leading-relaxed text-graphite">
-          Více týmů (Muži, Ženy, U18…), přepínání mezi nimi, sdílená správa hráčů.
-        </p>
-        <a href="/app/billing" class="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-signal hover:underline">
-          Zobrazit balíčky
-          <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      {!isLeagueContext && (
+        <a
+          href="https://scorer.gamestatiq.com"
+          target="_blank"
+          rel="noopener"
+          class="mt-6 flex items-center gap-3 rounded-lg border border-ink/10 bg-ink p-4 text-white transition-colors hover:bg-[#1A2B45]"
+        >
+          <span class="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-signal text-white">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="6" width="20" height="12" rx="2"/>
+              <path d="M8 10v4 M16 10v4 M12 9v6 M2 12h4 M18 12h4"/>
+            </svg>
+          </span>
+          <div class="min-w-0 flex-1">
+            <p class="text-[13px] font-semibold tracking-tight-2">Otevřít Scorer</p>
+            <p class="text-[11px] text-white/60">Zapisování zápasu →</p>
+          </div>
         </a>
-      </div>
+      )}
+
+      {!isLeagueContext && (
+        <div class="mt-3 rounded-lg border border-signal/20 bg-signal/5 p-4">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-signal">Upgrade na Klub</p>
+          <p class="mt-2 text-[12px] leading-relaxed text-graphite">
+            Více týmů (Muži, Ženy, U18…), přepínání mezi nimi, sdílená správa hráčů.
+          </p>
+          <a href="/app/billing" class="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-signal hover:underline">
+            Zobrazit balíčky
+            <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </a>
+        </div>
+      )}
+
+      {isLeagueContext && (
+        <div class="mt-3 rounded-lg border border-plum/20 bg-plum/5 p-4">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#4F3878]">Liga tier · trial</p>
+          <p class="mt-2 text-[12px] leading-relaxed text-graphite">
+            Master view, cross-club leaderboards, custom branding pro fanoušky a partnery.
+          </p>
+          <a href="/app/league/billing" class="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#4F3878] hover:underline">
+            Spravovat plán
+            <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </a>
+        </div>
+      )}
     </nav>
 
     <div class="border-t border-stone p-3">
