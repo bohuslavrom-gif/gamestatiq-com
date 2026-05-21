@@ -54,7 +54,8 @@ const roleLabel: Record<string, string> = {
 };
 
 const tier = club.subscription_tier;
-const customDomainAllowed = tier === 'liga' || tier === 'federace';
+// Custom domain available on Klub tier+ (post tier-rename: klub = multi-team, liga = federace)
+const customDomainAllowed = tier === 'klub' || tier === 'liga';
 
 const initials = (name: string, email: string) => {
   const n = name.trim();

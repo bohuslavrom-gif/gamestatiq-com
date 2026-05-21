@@ -63,14 +63,15 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   if (secondary && isHex(secondary)) updates.secondary_color = secondary;
 
   if (customDom) {
-    if (club.subscription_tier === 'liga' || club.subscription_tier === 'federace') {
+    // Klub+ tier allows custom domain (post tier-rename: klub = multi-team, liga = federace)
+    if (club.subscription_tier === 'klub' || club.subscription_tier === 'liga') {
       const d = customDom.toLowerCase();
       if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)) {
         return redirect(`/app/settings?error=${encodeURIComponent('Neplatný formát domény.')}`, 303);
       }
       updates.custom_domain = d;
     }
-    // for klub/trial silently ignored
+    // for tym/trial silently ignored
   } else {
     updates.custom_domain = null;
   }

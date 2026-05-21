@@ -69,7 +69,7 @@ function asAstroCookieOptions(o: CookieOptionsWithName | undefined) {
   };
 }
 
-export type Tier = 'trial' | 'klub' | 'liga' | 'federace';
+export type Tier = 'trial' | 'tym' | 'klub' | 'liga';
 export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'incomplete';
 
 export type Club = {
@@ -122,7 +122,7 @@ export type Team = {
   updated_at: string;
 };
 
-export type LeagueTier = 'liga' | 'federace';
+export type LeagueTier = 'klub' | 'liga';
 
 export type League = {
   id: string;

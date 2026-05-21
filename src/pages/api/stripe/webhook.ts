@@ -5,13 +5,16 @@ import type Stripe from 'stripe';
 
 export const prerender = false;
 
-type TierMap = Record<string, 'klub' | 'liga' | 'federace'>;
+type TierMap = Record<string, 'tym' | 'klub' | 'liga'>;
 
-function priceIdToTier(priceId: string): 'klub' | 'liga' | 'federace' | null {
+function priceIdToTier(priceId: string): 'tym' | 'klub' | 'liga' | null {
   const map: TierMap = {};
-  if (import.meta.env.STRIPE_PRICE_KLUB)     map[import.meta.env.STRIPE_PRICE_KLUB]     = 'klub';
-  if (import.meta.env.STRIPE_PRICE_LIGA)     map[import.meta.env.STRIPE_PRICE_LIGA]     = 'liga';
-  if (import.meta.env.STRIPE_PRICE_FEDERACE) map[import.meta.env.STRIPE_PRICE_FEDERACE] = 'federace';
+  // Tým tier — read STRIPE_PRICE_TYM (new) OR STRIPE_PRICE_KLUB (legacy, same price)
+  const tymPrice = import.meta.env.STRIPE_PRICE_TYM ?? import.meta.env.STRIPE_PRICE_KLUB;
+  if (tymPrice) map[tymPrice] = 'tym';
+  // Klub / Liga tiers — new (not yet configured)
+  if (import.meta.env.STRIPE_PRICE_KLUB_V2) map[import.meta.env.STRIPE_PRICE_KLUB_V2] = 'klub';
+  if (import.meta.env.STRIPE_PRICE_LIGA)    map[import.meta.env.STRIPE_PRICE_LIGA]    = 'liga';
   return map[priceId] ?? null;
 }
 
@@ -42,7 +45,7 @@ export const POST: APIRoute = async ({ request }) => {
         if (clubId && session.subscription) {
           const sub = await stripe.subscriptions.retrieve(session.subscription as string);
           const priceId = sub.items.data[0]?.price?.id ?? '';
-          const tier = priceIdToTier(priceId) ?? 'klub';
+          const tier = priceIdToTier(priceId) ?? 'tym';
           await admin.from('clubs').update({
             stripe_subscription_id: sub.id,
             subscription_tier: tier,
@@ -58,7 +61,7 @@ export const POST: APIRoute = async ({ request }) => {
         const sub = event.data.object as Stripe.Subscription;
         const clubId = sub.metadata?.club_id;
         const priceId = sub.items.data[0]?.price?.id ?? '';
-        const tier = priceIdToTier(priceId) ?? 'klub';
+        const tier = priceIdToTier(priceId) ?? 'tym';
         if (clubId) {
           await admin.from('clubs').update({
             stripe_subscription_id: sub.id,

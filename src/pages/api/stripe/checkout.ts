@@ -1,22 +1,25 @@
 import type { APIRoute } from 'astro';
-import { stripe, STRIPE_PRICE_KLUB } from '../../../lib/stripe';
+import { stripe, TIER_TO_PRICE } from '../../../lib/stripe';
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import { publicOrigin } from '../../../lib/url';
 
 export const prerender = false;
+
+const SELF_SERVE_TIERS = new Set(['tym', 'klub', 'liga']);
 
 export const POST: APIRoute = async ({ request, locals, redirect }) => {
   const user = locals.user;
   if (!user) return redirect('/login?next=/app/billing', 303);
 
   const form = await request.formData();
-  const tier = String(form.get('tier') ?? 'klub');
+  const tier = String(form.get('tier') ?? 'tym');
 
-  if (tier !== 'klub') {
-    return redirect(`/app/billing?error=${encodeURIComponent('Tento tier vyžaduje kontakt sales týmu.')}`, 303);
+  if (!SELF_SERVE_TIERS.has(tier)) {
+    return redirect(`/app/billing?error=${encodeURIComponent('Neplatný plán.')}`, 303);
   }
-  if (!STRIPE_PRICE_KLUB) {
-    return redirect(`/app/billing?error=${encodeURIComponent('Stripe price ID není nastaveno.')}`, 303);
+  const priceId = TIER_TO_PRICE[tier];
+  if (!priceId) {
+    return redirect(`/app/billing?error=${encodeURIComponent('Tento plán zatím nemá Stripe price — kontaktujte sales.')}`, 303);
   }
 
   const admin = getSupabaseAdmin();
@@ -48,14 +51,14 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     customer: customerId,
-    line_items: [{ price: STRIPE_PRICE_KLUB, quantity: 1 }],
+    line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${origin}/app/billing?checkout=success`,
     cancel_url:  `${origin}/app/billing?checkout=cancel`,
     allow_promotion_codes: true,
     billing_address_collection: 'required',
-    metadata: { club_id: club.id, user_id: user.id, tier: 'klub' },
+    metadata: { club_id: club.id, user_id: user.id, tier },
     subscription_data: {
-      metadata: { club_id: club.id, tier: 'klub' },
+      metadata: { club_id: club.id, tier },
       trial_period_days: 30,
     },
   });

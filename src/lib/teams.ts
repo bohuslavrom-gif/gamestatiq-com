@@ -103,18 +103,17 @@ export function withTeamParam(href: string, teamId: string | null): string {
 }
 
 // ── Tier limits ──────────────────────────────────────────────────
-// Maps current DB subscription_tier values to max-teams-per-club.
-// Tier semantika (pre-rename in Iter ?):
-//   'trial'    → during trial: 3 teams (gives Klub-tier feel to evaluate)
-//   'klub'     → semantics is "Tým" tier (single team)
-//   'liga'     → semantics is "Klub" tier (multi-team within 1 club)
-//   'federace' → semantics is "Liga" tier (cross-club / federation)
-// After rename (Iter ?), values become tym/klub/liga and this map needs update.
+// DB enum values (post tier-rename migration) match UI labels 1:1:
+//   'trial' → Trial (3 teams during trial)
+//   'tym'   → Tým  (1 team)
+//   'klub'  → Klub (unlimited teams within 1 club)
+//   'liga'  → Liga (cross-club / federation tier on clubs is a legacy edge;
+//                   leagues table uses 'klub'|'liga' for league subscription itself)
 export const TEAM_LIMIT_BY_TIER: Record<string, number> = {
-  trial:    3,
-  klub:     1,
-  liga:     Infinity,
-  federace: Infinity,
+  trial: 3,
+  tym:   1,
+  klub:  Infinity,
+  liga:  Infinity,
 };
 
 export function teamLimitForTier(tier: string | null | undefined): number {
@@ -124,8 +123,8 @@ export function teamLimitForTier(tier: string | null | undefined): number {
 
 export type TierLabel = { code: string; label: string; teamLimit: number | 'unlimited' };
 export const TIER_LABELS: Record<string, TierLabel> = {
-  trial:    { code: 'trial',    label: 'Trial',    teamLimit: 3 },
-  klub:     { code: 'klub',     label: 'Tým',      teamLimit: 1 },
-  liga:     { code: 'liga',     label: 'Klub',     teamLimit: 'unlimited' },
-  federace: { code: 'federace', label: 'Liga',     teamLimit: 'unlimited' },
+  trial: { code: 'trial', label: 'Trial', teamLimit: 3 },
+  tym:   { code: 'tym',   label: 'Tým',   teamLimit: 1 },
+  klub:  { code: 'klub',  label: 'Klub',  teamLimit: 'unlimited' },
+  liga:  { code: 'liga',  label: 'Liga',  teamLimit: 'unlimited' },
 };

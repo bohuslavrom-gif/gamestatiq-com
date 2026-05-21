@@ -19,7 +19,7 @@ const url = new URL(Astro.request.url);
 const checkout = url.searchParams.get('checkout');
 const error = url.searchParams.get('error');
 
-const tierLabel: Record<string, string> = { trial: 'Trial', klub: 'Klub', liga: 'Liga', federace: 'Federace' };
+const tierLabel: Record<string, string> = { trial: 'Trial', tym: 'Tým', klub: 'Klub', liga: 'Liga' };
 const statusLabel: Record<string, string> = {
   trialing: 'Trial běží', active: 'Aktivní', past_due: 'Nezaplaceno', canceled: 'Zrušeno', incomplete: 'Neúplné',
 };
@@ -35,16 +35,16 @@ const currentTier = club?.subscription_tier ?? 'trial';
 const isTrial = currentTier === 'trial';
 
 const tiers = [
-  { id: 'klub', name: 'Klub', price: '690 Kč', period: '/ měs',
+  { id: 'tym', name: 'Tým', price: '690 Kč', period: '/ měs',
     desc: 'Jeden tým, app, public widget, coach analytika.',
     features: ['Live tracking', 'Public widget', 'Coach analytika', 'E-mail support'] },
-  { id: 'liga', name: 'Liga', price: 'od 2 490 Kč', period: '/ měs',
-    desc: 'Pro svazy a ligy. Master view + custom branding.',
-    features: ['Vše z Klubu', 'Master league standings', 'Cross-club leaderboardy', 'Custom domain', 'Vlastní branding', 'Dedikovaný AM'],
+  { id: 'klub', name: 'Klub', price: 'od 1 490 Kč', period: '/ měs',
+    desc: 'Více týmů v klubu (Muži, Ženy, U18…). Přepínání mezi týmy v appce i portále.',
+    features: ['Vše z Tým', 'Neomezený počet týmů', 'Sdílená správa hráčů', 'Per-team analytika'],
     sales: true },
-  { id: 'federace', name: 'Federace', price: 'Enterprise', period: '',
-    desc: 'White-label + API + integrace s existujícími systémy.',
-    features: ['Vše z Liga', 'White-label', 'API + webhooky', 'SLA + 24/7 support', 'On-premise option'],
+  { id: 'liga', name: 'Liga', price: 'od 2 490 Kč', period: '/ měs',
+    desc: 'Pro svazy a federace. Master view napříč kluby + cross-club leaderboardy.',
+    features: ['Vše z Klubu', 'Master league standings', 'Cross-club leaderboardy', 'Custom domain', 'Vlastní branding', 'Dedikovaný AM'],
     sales: true },
 ];
 
@@ -77,7 +77,7 @@ const formatDate = (s?: string | null) => s ? new Date(s).toLocaleDateString('cs
         </div>
         <div class="mt-2 flex items-baseline gap-2">
           <h2 class="text-[28px] font-bold tracking-tight-2 text-ink">{tierLabel[currentTier]}</h2>
-          {currentTier === 'klub' && (
+          {currentTier === 'tym' && (
             <>
               <span class="text-[18px] font-semibold text-graphite">·</span>
               <span class="text-[18px] font-semibold tabular-nums tracking-tight-2 text-ink">690 Kč / měs</span>
@@ -99,9 +99,9 @@ const formatDate = (s?: string | null) => s ? new Date(s).toLocaleDateString('cs
           )}
           {isTrial && (
             <form method="POST" action="/api/stripe/checkout">
-              <input type="hidden" name="tier" value="klub" />
+              <input type="hidden" name="tier" value="tym" />
               <button type="submit" class="rounded-lg bg-signal px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#C8313D]">
-                Aktivovat Klub — 690 Kč / měs
+                Aktivovat Tým — 690 Kč / měs
               </button>
             </form>
           )}

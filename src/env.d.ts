@@ -7,7 +7,13 @@ interface ImportMetaEnv {
   readonly SUPABASE_SERVICE_ROLE_KEY: string;
   readonly STRIPE_PUBLISHABLE_KEY: string;
   readonly STRIPE_SECRET_KEY: string;
-  readonly STRIPE_PRICE_KLUB: string;
+  // Stripe price IDs (all optional — code falls back gracefully).
+  // STRIPE_PRICE_KLUB is the legacy var (still works); STRIPE_PRICE_TYM is the
+  // preferred new name once renamed in Vercel env settings.
+  readonly STRIPE_PRICE_TYM?: string;
+  readonly STRIPE_PRICE_KLUB?: string;
+  readonly STRIPE_PRICE_KLUB_V2?: string;
+  readonly STRIPE_PRICE_LIGA?: string;
   readonly STRIPE_WEBHOOK_SECRET: string;
 }
 
