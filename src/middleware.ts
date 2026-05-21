@@ -15,6 +15,13 @@ function isProtected(pathname: string) {
   return pathname === '/app' || pathname.startsWith('/app/');
 }
 
+/** Routes that need ctx.locals.team resolved (broader than auth-protected). */
+function needsTeamContext(pathname: string) {
+  return isProtected(pathname)
+    || pathname.startsWith('/api/club/')
+    || pathname.startsWith('/api/admin/');
+}
+
 export const onRequest = defineMiddleware(async (ctx, next) => {
   const supabase = getSupabase(ctx.cookies, ctx.request.headers);
 
@@ -38,11 +45,23 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     return ctx.redirect('/app', 302);
   }
 
-  // ── Multi-team Iter 2: resolve current team for /app/* requests ──
-  if (user && isProtected(url.pathname)) {
+  // ── Multi-team Iter 2 (+ Iter 3 fix): resolve current team for /app/* AND /api/club/* ──
+  // /api/club/* needs team context so player/team create endpoints know which team to
+  // attach the new row to. Without this, POST handlers fell back to the default
+  // (oldest) team, which broke "add player to Ženy team" UX (Bug 2).
+  if (user && needsTeamContext(url.pathname)) {
     const teams = await listTeamsForUser(user.id);
-    const requestedTeamId = url.searchParams.get('team');
-    const cookieTeamId    = getTeamCookie(ctx.cookies);
+    // For form POSTs, the team id is most reliably in the Referer's query string
+    // (browser doesn't carry the page's ?team=<id> to the POST action). Cookie covers
+    // the case where the user navigated through the sidebar (we set cookie there).
+    const requestedTeamId =
+      url.searchParams.get('team')
+      || (() => {
+          const ref = ctx.request.headers.get('referer');
+          if (!ref) return null;
+          try { return new URL(ref).searchParams.get('team'); } catch { return null; }
+        })();
+    const cookieTeamId = getTeamCookie(ctx.cookies);
     const team = pickCurrentTeam(teams, requestedTeamId, cookieTeamId);
 
     ctx.locals.teams = teams;
