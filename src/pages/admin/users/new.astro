@@ -1,0 +1,64 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+
+const url = new URL(Astro.request.url);
+const error = url.searchParams.get('error');
+---
+
+<AdminLayout title="Nový uživatel · Admin" active="users" pageTitle="Nový uživatel (manuálně)" pageSub="Vytvořit účet s e-mailem a heslem (bez self-signup flow)">
+
+  <div class="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
+    <a href="/admin/users" class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">← Všichni uživatelé</a>
+  </div>
+
+  {error && <div class="mb-6 rounded-lg border border-signal/30 bg-signal/5 px-4 py-3 text-[14px] text-signal">{error}</div>}
+
+  <div class="rounded-xl border border-plum/30 bg-gradient-to-br from-plum/5 to-signal/5 p-6 lg:p-8">
+    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#4F3878]">Super admin · Manuální vytvoření</p>
+    <h2 class="mt-2 text-[22px] font-bold tracking-tight-2 text-ink">Nový uživatelský účet</h2>
+    <p class="mt-1 text-[13px] text-graphite">
+      Vytvoří uživatele s e-mailem a heslem. Použij pro premium customer onboarding,
+      kdy chceš účet připravit dopředu a poslat klientovi přihlašovací údaje.
+      Po vytvoření můžeš přidat do klubu/ligy přes detail uživatele.
+    </p>
+
+    <form method="POST" action="/api/super/user/create" class="mt-6 space-y-4">
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block">
+          <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Jméno</span>
+          <input type="text" name="first_name" placeholder="Jan" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-plum focus:outline-none focus:ring-2 focus:ring-plum/20" />
+        </label>
+        <label class="block">
+          <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Příjmení</span>
+          <input type="text" name="last_name" placeholder="Novák" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-plum focus:outline-none focus:ring-2 focus:ring-plum/20" />
+        </label>
+      </div>
+
+      <label class="block">
+        <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">E-mail *</span>
+        <input type="email" name="email" required autocomplete="off" placeholder="jan@example.com" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-plum focus:outline-none focus:ring-2 focus:ring-plum/20" />
+      </label>
+
+      <label class="block">
+        <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Heslo * (min 8 znaků)</span>
+        <input type="text" name="password" required minlength="8" autocomplete="off" placeholder="initial password" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] font-mono text-ink focus:border-plum focus:outline-none focus:ring-2 focus:ring-plum/20" />
+        <p class="mt-1 text-[11px] text-slate">Zobrazené plaintext aby ses ujistil. Pošli ho klientovi přes bezpečný kanál a doporuč mu okamžitou změnu.</p>
+      </label>
+
+      <label class="flex items-start gap-3 rounded-lg border border-stone bg-pearl p-4">
+        <input type="checkbox" name="email_confirm" value="1" checked class="mt-0.5 h-4 w-4 rounded border-stone text-plum focus:ring-plum/20" />
+        <div>
+          <span class="text-[13px] font-semibold text-ink">Označit e-mail jako ověřený</span>
+          <p class="text-[12px] text-slate">Uživatel se může okamžitě přihlásit. Bez zaškrtnutí musí kliknout na ověřovací e-mail (který Supabase pošle).</p>
+        </div>
+      </label>
+
+      <div class="flex flex-wrap items-center gap-3 pt-2">
+        <button type="submit" class="rounded-lg bg-plum px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#3F2B68]">Vytvořit uživatele</button>
+        <a href="/admin/users" class="text-[13px] font-medium text-graphite hover:text-ink">Zrušit</a>
+      </div>
+    </form>
+  </div>
+</AdminLayout>

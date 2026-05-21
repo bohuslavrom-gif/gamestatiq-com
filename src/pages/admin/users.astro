@@ -44,6 +44,10 @@ const initials = (fn: string, ln: string, email: string) => {
 
 <AdminLayout title="Uživatelé · Admin" active="users" pageTitle="Uživatelé" pageSub={`${profiles.length} ${profiles.length === 1 ? 'profil' : profiles.length < 5 ? 'profily' : 'profilů'} (max 100 zobrazeno)`}>
 
+  <div class="mb-4 flex flex-wrap justify-end gap-2">
+    <a href="/admin/users/new" class="rounded-lg bg-plum px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#3F2B68]">+ Nový uživatel</a>
+  </div>
+
   {profiles.length === 0 ? (
     <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
       <p class="text-[15px] font-semibold text-ink">Žádné profily</p>
@@ -59,6 +63,7 @@ const initials = (fn: string, ln: string, email: string) => {
               <th class="px-3 py-3">Klubové členství</th>
               <th class="px-3 py-3">Liga členství</th>
               <th class="px-3 py-3">Registrace</th>
+              <th class="px-5 py-3"></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-stone">
@@ -98,6 +103,9 @@ const initials = (fn: string, ln: string, email: string) => {
                     )}
                   </td>
                   <td class="px-3 py-3 text-[11px] text-slate">{new Date(p.created_at).toLocaleDateString('cs-CZ')}</td>
+                  <td class="px-5 py-3 text-right">
+                    <a href={`/admin/users/${p.id}`} class="text-[12px] font-semibold text-plum hover:underline">Detail →</a>
+                  </td>
                 </tr>
               );
             })}
