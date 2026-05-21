@@ -44,6 +44,11 @@ const statusLabel: Record<string, string> = {
 ---
 
 <AdminLayout title="Kluby · Admin" active="clubs" pageTitle="Kluby" pageSub={`${clubs.length} klub${clubs.length === 1 ? '' : clubs.length < 5 ? 'y' : 'ů'} celkem`}>
+
+  <div class="mb-4 flex flex-wrap justify-end gap-2">
+    <a href="/admin/clubs/new" class="rounded-lg bg-plum px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#3F2B68]">+ Nový klub (manuálně)</a>
+  </div>
+
   {clubs.length === 0 ? (
     <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
       <p class="text-[15px] font-semibold text-ink">Žádné kluby</p>

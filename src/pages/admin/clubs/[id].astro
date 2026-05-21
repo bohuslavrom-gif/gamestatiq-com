@@ -62,6 +62,36 @@ const tierLabel: Record<string, string> = { trial: 'Trial', tym: 'Tým', klub: '
         </dl>
       </div>
 
+      <!-- Add team (super admin force-create) -->
+      <div class="rounded-xl border border-plum/30 bg-gradient-to-br from-plum/5 to-signal/5 p-5">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#4F3878]">Přidat tým (super admin)</p>
+        <p class="mt-1 text-[12px] text-graphite">Vytvoří nový tým v tomto klubu — bypassuje tier limit.</p>
+        <form method="POST" action="/api/super/team/create" class="mt-4 grid gap-3 sm:grid-cols-[1fr_180px_140px_100px_auto]">
+          <input type="hidden" name="club_id" value={club.id} />
+          <input type="text" name="name" required placeholder="Název týmu (např. Ženy)" class="rounded-md border border-stone bg-pearl px-3 py-2 text-[13px]" />
+          <select name="sport" class="rounded-md border border-stone bg-pearl px-2 py-2 text-[13px]">
+            <option value="flag-football" selected={club.sport === 'flag-football'}>Flag football</option>
+            <option value="american_football" selected={club.sport === 'american_football'}>American football</option>
+            <option value="football">Football</option>
+            <option value="basketball">Basketball</option>
+            <option value="volleyball">Volejbal</option>
+            <option value="hockey">Hokej</option>
+            <option value="other">Jiný</option>
+          </select>
+          <select name="category" class="rounded-md border border-stone bg-pearl px-2 py-2 text-[13px]">
+            <option value="">— kategorie —</option>
+            <option value="men">Muži</option>
+            <option value="women">Ženy</option>
+            <option value="u18">U18</option>
+            <option value="u15">U15</option>
+            <option value="u12">U12</option>
+            <option value="mixed">Mixed</option>
+          </select>
+          <input type="text" name="season" value="2026" placeholder="2026" class="rounded-md border border-stone bg-pearl px-2 py-2 text-[13px]" />
+          <button type="submit" class="rounded-md bg-plum px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#3F2B68]">+ Vytvořit</button>
+        </form>
+      </div>
+
       <!-- Teams -->
       <div class="rounded-xl border border-stone bg-pearl">
         <div class="flex items-center justify-between border-b border-stone px-5 py-4">
