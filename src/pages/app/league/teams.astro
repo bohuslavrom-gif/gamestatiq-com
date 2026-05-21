@@ -1,0 +1,165 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro';
+import { getSupabaseAdmin } from '../../../lib/supabase';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const league = Astro.locals.league ?? null;
+const role = Astro.locals.leagueRole ?? null;
+if (!league) return Astro.redirect('/app');
+if (role !== 'admin') return Astro.redirect('/app/league');
+
+const admin = getSupabaseAdmin();
+
+// All league_teams (approved + pending) with team + club info
+const { data: rowsRaw } = await admin
+  .from('league_teams')
+  .select('team_id, invited_at, approved_at, invited_by, approved_by, teams(id, name, sport, is_archived, club_id, clubs(name, logo_url))')
+  .eq('league_id', league.id)
+  .order('invited_at', { ascending: false });
+const rows = (rowsRaw ?? []) as any[];
+
+const approved = rows.filter((r) => r.approved_at);
+const pending  = rows.filter((r) => !r.approved_at);
+
+// All teams across all clubs (for invite picker) — exclude already-invited and archived
+const invitedIds = new Set(rows.map((r) => r.team_id));
+const { data: allTeamsRaw } = await admin
+  .from('teams')
+  .select('id, name, sport, is_archived, club_id, clubs(name)')
+  .eq('is_archived', false)
+  .eq('sport', league.sport)        // sport-match filter — leagues are single-sport
+  .order('created_at', { ascending: true });
+const availableTeams = ((allTeamsRaw ?? []) as any[])
+  .filter((t) => !invitedIds.has(t.id));
+
+// URL params
+const url = new URL(Astro.request.url);
+const saved = url.searchParams.get('saved');
+const error = url.searchParams.get('error');
+const teamParam = url.searchParams.get('team');
+
+const SAVED_MSG: Record<string, string> = {
+  invited:  teamParam ? `✓ Tým "${teamParam}" pozván do ligy. Čeká na schválení klubového admina.` : '✓ Tým pozván.',
+  removed:  '✓ Tým odebrán z ligy.',
+};
+---
+
+<AppLayout
+  title={`Týmy · ${league.name} · GameStatiq`}
+  active="dashboard"
+  pageTitle="Týmy ligy"
+  pageSub={`${league.name} · ${approved.length} schválených · ${pending.length} čekajících`}
+>
+  {saved && SAVED_MSG[saved] && (
+    <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">{SAVED_MSG[saved]}</div>
+  )}
+  {error && (
+    <div class="mb-6 rounded-lg border border-signal/30 bg-signal/5 px-4 py-3 text-[14px] text-signal">{error}</div>
+  )}
+
+  <div class="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
+    <a href="/app/league" class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">← Liga dashboard</a>
+  </div>
+
+  <!-- Invite form -->
+  <div class="rounded-xl border border-stone bg-pearl p-6">
+    <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Pozvat tým do ligy</p>
+    <p class="mt-1 text-[12px] text-slate">
+      Pozvánka se odešle adminovi klubu, který musí účast schválit. Liga je sport-specific
+      ({league.sport}) — vidíte jen týmy odpovídajícího sportu.
+    </p>
+    {availableTeams.length === 0 ? (
+      <p class="mt-5 text-[13px] text-slate">
+        Žádné dostupné týmy. Buď už jsou všechny v lize, nebo zatím v platformě neexistují kluby
+        se sportem <strong>{league.sport}</strong>.
+      </p>
+    ) : (
+      <form method="POST" action="/api/league/team/invite" class="mt-5 flex flex-wrap items-end gap-3">
+        <label class="block flex-1 min-w-[260px]">
+          <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Tým</span>
+          <select name="team_id" required class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20">
+            <option value="">— vyberte tým —</option>
+            {availableTeams.map((t: any) => (
+              <option value={t.id}>{(t.clubs?.name ?? '?')} · {t.name}</option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" class="rounded-lg bg-signal px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#C8313D]">
+          Poslat pozvánku
+        </button>
+      </form>
+    )}
+  </div>
+
+  <!-- Approved teams -->
+  <div class="mt-6 rounded-xl border border-stone bg-pearl">
+    <div class="border-b border-stone px-5 py-4">
+      <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Účastnící týmy</p>
+      <p class="text-[12px] text-slate">{approved.length} schválených</p>
+    </div>
+    {approved.length === 0 ? (
+      <div class="p-8 text-center text-[13px] text-slate">Zatím žádný schválený tým.</div>
+    ) : (
+      <ul class="divide-y divide-stone">
+        {approved.map((row: any) => {
+          const t = row.teams;
+          const club = t?.clubs;
+          const abbr = (t?.name ?? '').replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || '?';
+          return (
+            <li class="flex flex-wrap items-center gap-4 px-5 py-4">
+              {club?.logo_url ? (
+                <img src={club.logo_url} alt="" class="h-10 w-10 rounded-lg bg-mist object-contain" />
+              ) : (
+                <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-ink text-[12px] font-bold text-white">{abbr}</span>
+              )}
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[14px] font-semibold text-ink">{t?.name ?? '—'}</p>
+                <p class="truncate text-[12px] text-slate">{club?.name ?? '—'} · schváleno {new Date(row.approved_at).toLocaleDateString('cs-CZ')}</p>
+              </div>
+              <form method="POST" action="/api/league/team/remove" class="inline">
+                <input type="hidden" name="league_id" value={league.id} />
+                <input type="hidden" name="team_id" value={row.team_id} />
+                <input type="hidden" name="source" value="league" />
+                <button type="submit" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist" onclick="return confirm('Odebrat tým z ligy? Statistiky zůstávají v týmu, jen přestane být součástí ligových přehledů.')">Odebrat</button>
+              </form>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+  </div>
+
+  <!-- Pending invitations -->
+  {pending.length > 0 && (
+    <div class="mt-6 rounded-xl border border-spark/40 bg-spark/5">
+      <div class="border-b border-spark/30 px-5 py-4">
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Čekající pozvánky</p>
+        <p class="text-[12px] text-slate">{pending.length} – čeká na schválení klubového admina</p>
+      </div>
+      <ul class="divide-y divide-spark/20">
+        {pending.map((row: any) => {
+          const t = row.teams;
+          const club = t?.clubs;
+          const abbr = (t?.name ?? '').replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || '?';
+          return (
+            <li class="flex flex-wrap items-center gap-4 px-5 py-4">
+              <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-spark/20 text-[12px] font-bold text-[#A0531B]">{abbr}</span>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[14px] font-semibold text-ink">{t?.name ?? '—'}</p>
+                <p class="truncate text-[12px] text-slate">{club?.name ?? '—'} · pozváno {new Date(row.invited_at).toLocaleDateString('cs-CZ')}</p>
+              </div>
+              <form method="POST" action="/api/league/team/remove" class="inline">
+                <input type="hidden" name="league_id" value={league.id} />
+                <input type="hidden" name="team_id" value={row.team_id} />
+                <input type="hidden" name="source" value="league" />
+                <button type="submit" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Zrušit pozvánku</button>
+              </form>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  )}
+</AppLayout>
