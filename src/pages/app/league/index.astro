@@ -1,0 +1,163 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro';
+import { getSupabaseAdmin } from '../../../lib/supabase';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const league = Astro.locals.league ?? null;
+const role = Astro.locals.leagueRole ?? null;
+
+// If user isn't a league member at all, redirect to /app (klub dashboard)
+if (!league) return Astro.redirect('/app');
+
+const admin = getSupabaseAdmin();
+
+// Counts: league_teams (participating), pending invites, members
+const [{ count: teamCount }, { count: pendingCount }, { count: memberCount }] = await Promise.all([
+  admin.from('league_teams').select('league_id', { count: 'exact', head: true })
+    .eq('league_id', league.id).not('approved_at', 'is', null),
+  admin.from('league_teams').select('league_id', { count: 'exact', head: true })
+    .eq('league_id', league.id).is('approved_at', null),
+  admin.from('league_members').select('league_id', { count: 'exact', head: true })
+    .eq('league_id', league.id),
+]);
+
+// Approved participating teams + clubs (for showing names)
+const { data: participatingRaw } = await admin
+  .from('league_teams')
+  .select('team_id, approved_at, teams(id, name, sport, club_id, clubs(name, logo_url))')
+  .eq('league_id', league.id)
+  .not('approved_at', 'is', null)
+  .order('approved_at', { ascending: false })
+  .limit(8);
+const participating = (participatingRaw ?? []) as any[];
+
+const url = new URL(Astro.request.url);
+const welcome = url.searchParams.get('welcome') === '1';
+
+const trialDays = league.trial_ends_at
+  ? Math.max(0, Math.ceil((new Date(league.trial_ends_at).getTime() - Date.now()) / (24 * 3600 * 1000)))
+  : null;
+
+const tierLabel: Record<string, string> = { klub: 'Klub', liga: 'Liga' };
+const statusLabel: Record<string, string> = {
+  trialing: 'Trial běží', active: 'Aktivní', past_due: 'Nezaplaceno', canceled: 'Zrušeno', incomplete: 'Neúplné',
+};
+---
+
+<AppLayout
+  title={`${league.name} · Liga · GameStatiq`}
+  active="dashboard"
+  pageTitle={league.name}
+  pageSub={`Liga · ${league.sport} · ${teamCount ?? 0} týmů · ${memberCount ?? 0} členů`}
+>
+  {welcome && (
+    <div class="mb-6 rounded-xl border border-verde/30 bg-verde/5 p-5">
+      <p class="text-[15px] font-bold text-ink">Vítejte v GameStatiq Liga 🎉</p>
+      <p class="mt-1 text-[13px] text-graphite">
+        Vaše liga <strong class="text-ink">{league.name}</strong> je připravená. Trial běží
+        {trialDays !== null && <> ještě <strong class="text-ink">{trialDays} dní</strong></>} —
+        nepotřebujete platební kartu, abyste mohli pozvat první týmy.
+      </p>
+    </div>
+  )}
+
+  <!-- Header card -->
+  <div class="rounded-xl border border-stone bg-gradient-to-br from-plum/5 to-signal/5 p-6 lg:p-8">
+    <div class="flex flex-wrap items-start justify-between gap-6">
+      <div>
+        <div class="flex items-center gap-2">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#4F3878]">Vaše liga</p>
+          <span class="inline-flex items-center rounded-md bg-mist px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-graphite">
+            {statusLabel[league.subscription_status] ?? league.subscription_status}
+          </span>
+        </div>
+        <h2 class="mt-2 text-[28px] font-bold tracking-tight-2 text-ink">{league.name}</h2>
+        <p class="mt-1 text-[14px] text-graphite">{league.description ?? `Plán: ${tierLabel[league.subscription_tier] ?? 'Liga'} · sport: ${league.sport}`}</p>
+        {role === 'admin' && (
+          <div class="mt-5 flex flex-wrap gap-2">
+            <a href="/app/league/teams" class="rounded-lg bg-signal px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#C8313D]">+ Pozvat tým</a>
+            <a href="/app/league/settings" class="rounded-lg border border-stone bg-pearl px-4 py-2.5 text-[13px] font-medium text-graphite hover:bg-mist">Nastavení ligy</a>
+          </div>
+        )}
+      </div>
+      <div class="grid grid-cols-3 gap-4 rounded-lg bg-pearl p-4 text-center lg:gap-6 lg:p-5">
+        <div>
+          <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Týmy</p>
+          <p class="mt-1 text-[24px] font-bold tabular-nums text-ink">{teamCount ?? 0}</p>
+        </div>
+        <div>
+          <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Čekající</p>
+          <p class="mt-1 text-[24px] font-bold tabular-nums text-spark">{pendingCount ?? 0}</p>
+        </div>
+        <div>
+          <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Členové</p>
+          <p class="mt-1 text-[24px] font-bold tabular-nums text-ink">{memberCount ?? 0}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Participating teams -->
+  <div class="mt-6 rounded-xl border border-stone bg-pearl">
+    <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+      <div>
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Účastnící týmy</p>
+        <p class="text-[12px] text-slate">Týmy schválené v této lize · {teamCount ?? 0} celkem</p>
+      </div>
+      {role === 'admin' && (
+        <a href="/app/league/teams" class="text-[12px] font-semibold text-signal hover:underline">Spravovat →</a>
+      )}
+    </div>
+    {participating.length === 0 ? (
+      <div class="p-8 text-center text-[13px] text-slate">
+        Zatím žádné týmy. {role === 'admin' && <a href="/app/league/teams" class="font-semibold text-signal hover:underline">Pozvat první tým →</a>}
+      </div>
+    ) : (
+      <ul class="divide-y divide-stone">
+        {participating.map((row: any) => {
+          const t = row.teams;
+          const club = t?.clubs;
+          const abbr = (t?.name ?? '').replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || '?';
+          return (
+            <li class="flex items-center gap-4 px-5 py-4">
+              {club?.logo_url ? (
+                <img src={club.logo_url} alt="" class="h-10 w-10 rounded-lg bg-mist object-contain" />
+              ) : (
+                <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-ink text-[12px] font-bold text-white">{abbr}</span>
+              )}
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[14px] font-semibold text-ink">{t?.name ?? '—'}</p>
+                <p class="truncate text-[12px] text-slate">{club?.name ?? '—'} · {t?.sport ?? '—'}</p>
+              </div>
+              <span class="text-[11px] text-stone-2">schváleno {new Date(row.approved_at).toLocaleDateString('cs-CZ')}</span>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+  </div>
+
+  <!-- Roadmap hint -->
+  <div class="mt-6 grid gap-4 sm:grid-cols-3">
+    <div class="rounded-xl border border-stone bg-pearl p-5">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Master view</p>
+      <p class="mt-2 text-[14px] font-semibold text-ink">Standings napříč týmy</p>
+      <p class="mt-1 text-[12px] text-graphite">Jakmile přidáte týmy, uvidíte sjednocenou tabulku zápasů a skóre.</p>
+      <a href="/app/league/standings" class="mt-3 inline-flex text-[12px] font-semibold text-signal hover:underline">Otevřít →</a>
+    </div>
+    <div class="rounded-xl border border-stone bg-pearl p-5">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Cross-club leaderboards</p>
+      <p class="mt-2 text-[14px] font-semibold text-ink">Top hráči ligy</p>
+      <p class="mt-1 text-[12px] text-graphite">QB / WR / DB žebříčky agregované přes všechny účastnící kluby.</p>
+      <a href="/app/league/leaders" class="mt-3 inline-flex text-[12px] font-semibold text-signal hover:underline">Otevřít →</a>
+    </div>
+    <div class="rounded-xl border border-stone bg-pearl p-5">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Public stránka</p>
+      <p class="mt-2 text-[14px] font-semibold text-ink">gamestatiq.com/liga/{league.slug}</p>
+      <p class="mt-1 text-[12px] text-graphite">Veřejný pohled pro fanoušky a partnery.</p>
+      <a href={`/liga/${league.slug}`} target="_blank" rel="noopener" class="mt-3 inline-flex text-[12px] font-semibold text-signal hover:underline">Zobrazit →</a>
+    </div>
+  </div>
+</AppLayout>

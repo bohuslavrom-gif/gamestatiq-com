@@ -80,5 +80,12 @@ const isInvite = !!inviteToken;
         Už máte účet? <a href={isInvite ? `/login?next=${encodeURIComponent('/invite/' + inviteToken)}` : '/login'} class="font-semibold text-signal hover:underline">Přihlásit se</a>
       </p>
     </div>
+
+    {!isInvite && (
+      <p class="mt-6 text-center text-[12px] text-slate">
+        Spravujete federaci nebo svaz?
+        <a href="/liga-signup" class="font-semibold text-ink hover:text-signal hover:underline">Registrace pro ligy →</a>
+      </p>
+    )}
   </div>
 </AuthLayout>

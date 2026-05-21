@@ -29,5 +29,8 @@ declare namespace App {
     teams?: import('./lib/supabase').Team[];
     /** Currently selected team for this request. Resolved from ?team=<id>, cookie, or first team. */
     team?: import('./lib/supabase').Team | null;
+    /** Iter 5: League context for league admin/staff users. */
+    league?: import('./lib/supabase').League | null;
+    leagueRole?: 'admin' | 'staff' | 'viewer';
   }
 }

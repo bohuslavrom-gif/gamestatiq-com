@@ -1,18 +1,24 @@
 import { defineMiddleware } from 'astro:middleware';
-import { getSupabase } from './lib/supabase';
+import { getSupabase, getSupabaseAdmin } from './lib/supabase';
 import { listTeamsForUser, pickCurrentTeam, setTeamCookie, getTeamCookie } from './lib/teams';
 
 const PUBLIC_PATHS = [
   '/login',
   '/signup',
+  '/liga-signup',
   '/api/auth/login',
   '/api/auth/signup',
+  '/api/auth/signup-liga',
   '/api/auth/logout',
   '/api/stripe/webhook',
 ];
 
 function isProtected(pathname: string) {
   return pathname === '/app' || pathname.startsWith('/app/');
+}
+
+function isLeaguePage(pathname: string) {
+  return pathname === '/app/league' || pathname.startsWith('/app/league/');
 }
 
 /** Routes that need ctx.locals.team resolved (broader than auth-protected). */
@@ -41,8 +47,44 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   }
 
   // Logged-in users bounced away from auth pages
-  if (user && (url.pathname === '/login' || url.pathname === '/signup')) {
+  if (user && (url.pathname === '/login' || url.pathname === '/signup' || url.pathname === '/liga-signup')) {
     return ctx.redirect('/app', 302);
+  }
+
+  // ── Iter 5a: resolve league context for league members ──
+  // Attach league + membership role to locals for /app/league/* pages.
+  if (user && isProtected(url.pathname)) {
+    try {
+      const admin = getSupabaseAdmin();
+      const { data: lm } = await admin
+        .from('league_members')
+        .select('league_id, role, leagues(*)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (lm) {
+        ctx.locals.league = (lm as any).leagues ?? null;
+        ctx.locals.leagueRole = (lm as { role: string }).role;
+      }
+    } catch (e) {
+      // Defensive — don't block request if league lookup fails
+      console.warn('[middleware] league lookup failed', e);
+    }
+
+    // If user is league-only (no club membership) and visits /app root,
+    // redirect to /app/league as their natural landing page.
+    if (ctx.locals.league && url.pathname === '/app') {
+      const { data: cm } = await getSupabaseAdmin()
+        .from('club_members')
+        .select('club_id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .maybeSingle();
+      if (!cm) {
+        return ctx.redirect('/app/league', 302);
+      }
+    }
   }
 
   // ── Multi-team Iter 2 (+ Iter 3 fix): resolve current team for /app/* AND /api/club/* ──
