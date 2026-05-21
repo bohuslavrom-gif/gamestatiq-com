@@ -1,0 +1,101 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro';
+import { fetchLeagueStandings } from '../../../lib/league-stats';
+
+export const prerender = false;
+
+const league = Astro.locals.league ?? null;
+if (!league) return Astro.redirect('/app');
+
+const standings = await fetchLeagueStandings(league.id);
+const totalMatches = standings.reduce((s, r) => s + r.played, 0);
+const lastResultColor: Record<string, string> = {
+  W: 'bg-verde/15 text-[#1B6E62]',
+  L: 'bg-signal/15 text-signal',
+  T: 'bg-stone text-slate',
+};
+---
+
+<AppLayout
+  title={`Standings · ${league.name}`}
+  active="standings"
+  pageTitle="Standings"
+  pageSub={`${league.name} · ${standings.length} týmů · ${totalMatches} odehraných zápasů`}
+>
+  <div class="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
+    <a href="/app/league" class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">← Liga dashboard</a>
+  </div>
+
+  {standings.length === 0 ? (
+    <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
+      <p class="text-[15px] font-semibold text-ink">Zatím žádné týmy ve standings</p>
+      <p class="mt-1 text-[13px] text-slate">Pozvěte týmy v <a href="/app/league/teams" class="font-semibold text-signal hover:underline">Týmy ligy</a>. Po schválení a odehraných zápasech se objeví v tabulce.</p>
+    </div>
+  ) : (
+    <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[760px] text-left text-[13px]">
+          <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+            <tr>
+              <th class="px-5 py-3 w-12 text-center">#</th>
+              <th class="py-3">Tým</th>
+              <th class="px-3 py-3 text-center tabular-nums">Odehráno</th>
+              <th class="px-3 py-3 text-center tabular-nums">V</th>
+              <th class="px-3 py-3 text-center tabular-nums">P</th>
+              <th class="px-3 py-3 text-center tabular-nums">R</th>
+              <th class="px-3 py-3 text-center tabular-nums">Skóre</th>
+              <th class="px-3 py-3 text-center tabular-nums">Rozdíl</th>
+              <th class="px-3 py-3 text-center tabular-nums">Win %</th>
+              <th class="px-3 py-3 text-center tabular-nums">Poslední</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone">
+            {standings.map((row, i) => {
+              const abbr = row.teamName.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || '?';
+              const placeColor = i === 0 ? 'bg-signal text-white' : i < 3 ? 'bg-verde/15 text-[#1B6E62]' : 'bg-mist text-graphite';
+              return (
+                <tr class="transition-colors hover:bg-mist/60">
+                  <td class="px-5 py-3 text-center">
+                    <span class={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold tabular-nums ${placeColor}`}>{i + 1}</span>
+                  </td>
+                  <td class="py-3">
+                    <div class="flex items-center gap-3">
+                      {row.clubLogoUrl ? (
+                        <img src={row.clubLogoUrl} alt="" class="h-9 w-9 rounded-lg bg-mist object-contain" loading="lazy" />
+                      ) : (
+                        <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[11px] font-bold text-white" style={`background-color:${row.primaryColor}`}>{abbr}</span>
+                      )}
+                      <div>
+                        <p class="text-[14px] font-semibold text-ink">{row.teamName}</p>
+                        <p class="text-[11px] text-slate">{row.clubName}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="px-3 py-3 text-center tabular-nums text-graphite">{row.played}</td>
+                  <td class="px-3 py-3 text-center font-semibold tabular-nums text-[#1B6E62]">{row.wins}</td>
+                  <td class="px-3 py-3 text-center tabular-nums text-signal">{row.losses}</td>
+                  <td class="px-3 py-3 text-center tabular-nums text-graphite">{row.ties}</td>
+                  <td class="px-3 py-3 text-center tabular-nums text-graphite">{row.ptsFor}–{row.ptsAgainst}</td>
+                  <td class={`px-3 py-3 text-center font-semibold tabular-nums ${row.ptsDiff > 0 ? 'text-verde' : row.ptsDiff < 0 ? 'text-signal' : 'text-graphite'}`}>
+                    {row.ptsDiff > 0 ? '+' : ''}{row.ptsDiff}
+                  </td>
+                  <td class="px-3 py-3 text-center font-semibold tabular-nums text-signal">{row.winPct}%</td>
+                  <td class="px-3 py-3 text-center">
+                    {row.lastResult ? (
+                      <span class={`inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[11px] font-bold ${lastResultColor[row.lastResult]}`}>{row.lastResult}</span>
+                    ) : (
+                      <span class="text-[11px] text-stone-2">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div class="border-t border-stone bg-mist/40 px-5 py-3 text-[11px] text-slate">
+        Řazeno podle Win % → rozdíl skóre → bodů skórovaných.
+      </div>
+    </div>
+  )}
+</AppLayout>
