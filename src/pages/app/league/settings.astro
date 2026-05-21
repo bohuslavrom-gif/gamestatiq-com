@@ -1,0 +1,205 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro';
+import { getSupabaseAdmin } from '../../../lib/supabase';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const league = Astro.locals.league ?? null;
+const role = Astro.locals.leagueRole ?? null;
+if (!league) return Astro.redirect('/app');
+
+const admin = getSupabaseAdmin();
+
+// Fetch all league members with profile info
+const { data: membersRaw } = await admin
+  .from('league_members')
+  .select('id, role, user_id, created_at')
+  .eq('league_id', league.id)
+  .order('created_at', { ascending: true });
+const members = (membersRaw ?? []) as { id: string; role: string; user_id: string; created_at: string }[];
+
+const userIds = members.map((m) => m.user_id);
+const { data: profilesRaw } = userIds.length
+  ? await admin.from('profiles').select('id, email, first_name, last_name').in('id', userIds)
+  : { data: [] as any[] };
+const profileById = new Map<string, any>((profilesRaw ?? []).map((p: any) => [p.id, p]));
+
+// URL params
+const url = new URL(Astro.request.url);
+const saved = url.searchParams.get('saved');
+const error = url.searchParams.get('error');
+
+const isAdmin = role === 'admin';
+const roleLabel: Record<string, string> = { admin: 'Admin', staff: 'Staff', viewer: 'Viewer' };
+const initials = (firstName: string, lastName: string, email: string) => {
+  const fn = firstName?.[0] ?? '';
+  const ln = lastName?.[0] ?? '';
+  if (fn || ln) return (fn + ln).toUpperCase();
+  return (email[0] ?? '?').toUpperCase();
+};
+
+const publicUrl = `gamestatiq.com/liga/${league.slug}`;
+---
+
+<AppLayout
+  title={`Nastavení · ${league.name}`}
+  active="settings"
+  pageTitle="Nastavení ligy"
+  pageSub={`${league.name} · ${members.length} členů`}
+>
+  {saved && (
+    <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">
+      ✓ Změny uloženy.
+    </div>
+  )}
+  {error && (
+    <div class="mb-6 rounded-lg border border-signal/30 bg-signal/5 px-4 py-3 text-[14px] text-signal">{error}</div>
+  )}
+
+  <div class="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
+    <a href="/app/league" class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">← Liga dashboard</a>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-[1fr_280px]">
+    <div class="space-y-6">
+
+      <!-- Liga info -->
+      <div class="rounded-xl border border-stone bg-pearl p-6">
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Informace o lize</p>
+        <p class="mt-1 text-[12px] text-slate">Veřejné informace zobrazené na public stránce <code class="rounded bg-mist px-1 py-0.5 text-[11px] text-graphite">{publicUrl}</code></p>
+
+        {isAdmin ? (
+          <form method="POST" action="/api/league/update" class="mt-5 space-y-4">
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="block">
+                <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Název ligy *</span>
+                <input type="text" name="name" required maxlength="80" value={league.name} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+              </label>
+              <label class="block">
+                <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Sport</span>
+                <select name="sport" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20">
+                  <option value="flag-football"     selected={league.sport === 'flag-football'}>Flag football</option>
+                  <option value="american_football" selected={league.sport === 'american_football'}>American football</option>
+                  <option value="football"          selected={league.sport === 'football'}>Football (soccer)</option>
+                  <option value="basketball"        selected={league.sport === 'basketball'}>Basketball</option>
+                  <option value="volleyball"        selected={league.sport === 'volleyball'}>Volejbal</option>
+                  <option value="hockey"            selected={league.sport === 'hockey'}>Hokej</option>
+                  <option value="other"             selected={league.sport === 'other'}>Jiný</option>
+                </select>
+              </label>
+            </div>
+            <label class="block">
+              <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Slug · public URL</span>
+              <div class="mt-1.5 flex items-center gap-2">
+                <span class="rounded-md bg-mist px-3 py-2.5 text-[13px] font-mono text-slate">/liga/</span>
+                <input type="text" name="slug" value={league.slug} placeholder="moje-liga" class="block flex-1 rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] font-mono text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+              </div>
+              <p class="mt-1 text-[11px] text-slate">Slug musí být unikátní. Pomlčky, písmena, čísla. Změna naruší existující odkazy.</p>
+            </label>
+            <label class="block">
+              <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Popis (volitelný)</span>
+              <textarea name="description" rows="3" maxlength="500" placeholder="Krátký popis pro fanoušky a partnery…" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20">{league.description ?? ''}</textarea>
+            </label>
+            <div class="grid gap-4 sm:grid-cols-3">
+              <label class="block">
+                <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Primární barva</span>
+                <input type="color" name="primary" value={league.primary_color} class="mt-1.5 block h-10 w-full cursor-pointer rounded-lg border border-stone bg-pearl" />
+              </label>
+              <label class="block">
+                <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Sekundární barva</span>
+                <input type="color" name="secondary" value={league.secondary_color} class="mt-1.5 block h-10 w-full cursor-pointer rounded-lg border border-stone bg-pearl" />
+              </label>
+              <label class="block">
+                <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Logo URL</span>
+                <input type="url" name="logo_url" placeholder="https://…" value={league.logo_url ?? ''} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[13px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+              </label>
+            </div>
+            <div class="flex flex-wrap items-center gap-3 pt-2">
+              <button type="submit" class="rounded-lg bg-signal px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#C8313D]">Uložit změny</button>
+              <a href="/app/league" class="text-[13px] font-medium text-graphite hover:text-ink">Zrušit</a>
+            </div>
+          </form>
+        ) : (
+          <dl class="mt-5 space-y-3 text-[13px]">
+            <div class="flex"><dt class="w-32 text-slate">Název</dt><dd class="text-ink">{league.name}</dd></div>
+            <div class="flex"><dt class="w-32 text-slate">Sport</dt><dd class="text-ink">{league.sport}</dd></div>
+            <div class="flex"><dt class="w-32 text-slate">Public URL</dt><dd class="font-mono text-ink">{publicUrl}</dd></div>
+            <div class="flex"><dt class="w-32 text-slate">Popis</dt><dd class="text-graphite">{league.description ?? '—'}</dd></div>
+          </dl>
+        )}
+      </div>
+
+      <!-- Members -->
+      <div class="rounded-xl border border-stone bg-pearl">
+        <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+          <div>
+            <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Členové ligy</p>
+            <p class="text-[12px] text-slate">{members.length} {members.length === 1 ? 'člen' : members.length < 5 ? 'členové' : 'členů'}</p>
+          </div>
+          {isAdmin && (
+            <button type="button" disabled class="cursor-not-allowed rounded-md border border-stone bg-mist px-3 py-1.5 text-[12px] font-medium text-stone-2" title="Pozvání dalších členů přijde v další iteraci">+ Pozvat člena (brzy)</button>
+          )}
+        </div>
+        <ul class="divide-y divide-stone">
+          {members.map((m) => {
+            const p = profileById.get(m.user_id);
+            const fn = p?.first_name ?? '';
+            const ln = p?.last_name ?? '';
+            const fullName = [fn, ln].filter(Boolean).join(' ') || (p?.email ?? '—');
+            const isSelf = m.user_id === user.id;
+            return (
+              <li class="flex items-center gap-4 px-5 py-4">
+                <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink/5 text-[12px] font-semibold text-ink">{initials(fn, ln, p?.email ?? '?')}</span>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-[14px] font-semibold text-ink">
+                    {fullName}
+                    {isSelf && <span class="ml-2 text-[10px] font-semibold uppercase tracking-wider text-slate">vy</span>}
+                  </p>
+                  <p class="truncate text-[12px] text-slate">{p?.email ?? '—'}</p>
+                </div>
+                <span class={`rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${
+                  m.role === 'admin' ? 'bg-signal/15 text-signal' :
+                  m.role === 'staff' ? 'bg-sky/15 text-[#1B5E83]' :
+                                       'bg-mist text-slate'
+                }`}>{roleLabel[m.role] ?? m.role}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Side panel -->
+    <aside class="space-y-4">
+      <div class="rounded-xl border border-plum/20 bg-plum/5 p-5">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#4F3878]">Public stránka</p>
+        <p class="mt-2 text-[13px] text-graphite">
+          Fanoušci a partneři uvidí standings + leaderboards na public adrese.
+        </p>
+        <a href={`/liga/${league.slug}`} target="_blank" rel="noopener" class="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#4F3878] hover:underline">
+          Otevřít {publicUrl}
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7 M7 7h10v10"/></svg>
+        </a>
+      </div>
+
+      <div class="rounded-xl border border-stone bg-pearl p-5">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Plán</p>
+        <p class="mt-2 text-[15px] font-bold text-ink">Liga · Trial</p>
+        <p class="mt-1 text-[12px] text-graphite">
+          {league.trial_ends_at
+            ? `Trial běží do ${new Date(league.trial_ends_at).toLocaleDateString('cs-CZ')}.`
+            : 'Trial neaktivní.'}
+        </p>
+        <a href="/app/league/billing" class="mt-3 inline-flex text-[12px] font-semibold text-signal hover:underline">Spravovat plán →</a>
+      </div>
+
+      <div class="rounded-xl border border-stone bg-pearl p-5">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">ID ligy</p>
+        <p class="mt-2 truncate font-mono text-[12px] text-graphite" title={league.id}>{league.id}</p>
+        <p class="mt-2 text-[11px] text-slate">Pro support tickety nebo migrace.</p>
+      </div>
+    </aside>
+  </div>
+</AppLayout>

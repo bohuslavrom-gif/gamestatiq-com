@@ -1,0 +1,135 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro';
+
+export const prerender = false;
+
+const league = Astro.locals.league ?? null;
+const role = Astro.locals.leagueRole ?? null;
+if (!league) return Astro.redirect('/app');
+
+const isAdmin = role === 'admin';
+
+const statusLabel: Record<string, string> = {
+  trialing:   'Trial běží',
+  active:     'Aktivní',
+  past_due:   'Nezaplaceno',
+  canceled:   'Zrušeno',
+  incomplete: 'Neúplné',
+};
+const statusColor: Record<string, string> = {
+  trialing:   'bg-sky/15 text-[#1B5E83]',
+  active:     'bg-verde/15 text-[#1B6E62]',
+  past_due:   'bg-spark/15 text-[#A0531B]',
+  canceled:   'bg-stone text-slate',
+  incomplete: 'bg-spark/15 text-[#A0531B]',
+};
+
+const trialEndsAt = league.trial_ends_at ? new Date(league.trial_ends_at) : null;
+const periodEndsAt = league.current_period_end ? new Date(league.current_period_end) : null;
+const formatDate = (d: Date | null) => d ? d.toLocaleDateString('cs-CZ') : '—';
+
+const tierLabel: Record<string, string> = { klub: 'Klub', liga: 'Liga' };
+const tierName = tierLabel[league.subscription_tier] ?? league.subscription_tier;
+const tierPrice = league.subscription_tier === 'liga' ? 'od 2 490 Kč / měs' : 'od 1 490 Kč / měs';
+---
+
+<AppLayout
+  title={`Předplatné · ${league.name}`}
+  active="billing"
+  pageTitle="Předplatné ligy"
+  pageSub={`${league.name} · plán: ${tierName}`}
+>
+  <div class="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
+    <a href="/app/league" class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">← Liga dashboard</a>
+  </div>
+
+  <!-- Current plan banner -->
+  <div class="rounded-xl border border-plum/30 bg-gradient-to-br from-plum/5 to-signal/5 p-6 lg:p-8">
+    <div class="flex flex-wrap items-start justify-between gap-6">
+      <div>
+        <div class="flex items-center gap-2">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#4F3878]">Aktuální plán</p>
+          <span class={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${statusColor[league.subscription_status] ?? ''}`}>
+            {statusLabel[league.subscription_status] ?? league.subscription_status}
+          </span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <h2 class="text-[28px] font-bold tracking-tight-2 text-ink">{tierName}</h2>
+          <span class="text-[16px] font-semibold text-graphite">·</span>
+          <span class="text-[16px] font-semibold tabular-nums tracking-tight-2 text-ink">{tierPrice}</span>
+        </div>
+        <p class="mt-3 max-w-md text-[14px] text-graphite">
+          {league.subscription_status === 'trialing'
+            ? `Trial běží do ${formatDate(trialEndsAt)}. Pro pokračování přidejte platební metodu před koncem trialu.`
+            : league.subscription_status === 'active'
+              ? `Další platba ${formatDate(periodEndsAt)}.`
+              : 'Předplatné momentálně neaktivní.'}
+        </p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 rounded-lg bg-pearl p-4 lg:gap-6 lg:p-5">
+        <div>
+          <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">
+            {league.subscription_status === 'trialing' ? 'Trial končí' : 'Příští platba'}
+          </p>
+          <p class="mt-1 text-[15px] font-bold tabular-nums text-ink">
+            {league.subscription_status === 'trialing' ? formatDate(trialEndsAt) : formatDate(periodEndsAt)}
+          </p>
+        </div>
+        <div>
+          <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Stav</p>
+          <p class="mt-1 text-[15px] font-bold text-ink">{statusLabel[league.subscription_status] ?? league.subscription_status}</p>
+        </div>
+        <div>
+          <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Customer ID</p>
+          <p class="mt-1 truncate font-mono text-[13px] text-ink">{league.stripe_customer_id ?? '—'}</p>
+        </div>
+        <div>
+          <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Liga ID</p>
+          <p class="mt-1 truncate font-mono text-[13px] text-ink">{league.id.slice(0, 8)}…</p>
+        </div>
+      </div>
+    </div>
+
+    {isAdmin && (
+      <div class="mt-6 flex flex-wrap gap-2">
+        {league.stripe_customer_id ? (
+          <button type="button" disabled class="cursor-not-allowed rounded-lg border border-stone bg-mist px-4 py-2.5 text-[13px] font-medium text-stone-2" title="Stripe portal pro ligy bude aktivní po prvním paymentu">
+            Spravovat v Stripe Portal (brzy)
+          </button>
+        ) : (
+          <button type="button" disabled class="cursor-not-allowed rounded-lg bg-stone-2 px-4 py-2.5 text-[13px] font-semibold text-white" title="Stripe Liga price ID bude konfigurován při launch — během trialu nic neplatíte">
+            Aktivovat plán (po skončení trialu)
+          </button>
+        )}
+        <a href="mailto:hello@gamestatiq.com?subject=Liga%20billing" class="rounded-lg border border-stone bg-pearl px-4 py-2.5 text-[13px] font-medium text-graphite hover:bg-mist">Kontakt sales</a>
+      </div>
+    )}
+  </div>
+
+  <!-- What's included -->
+  <div class="mt-8 rounded-xl border border-stone bg-pearl">
+    <div class="border-b border-stone px-5 py-4">
+      <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Co je v plánu Liga</p>
+    </div>
+    <ul class="grid gap-3 p-5 sm:grid-cols-2">
+      {[
+        'Neomezený počet týmů napříč kluby',
+        'Master view standings + leaderboards',
+        'Cross-club QB/WR/DB žebříčky',
+        'Public stránka /liga/<slug>',
+        'Custom branding (logo + barvy)',
+        'Dedikovaný account manager',
+      ].map((f) => (
+        <li class="flex items-start gap-2 text-[13px] text-graphite">
+          <svg class="mt-[3px] h-3.5 w-3.5 flex-shrink-0 text-verde" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+          {f}
+        </li>
+      ))}
+    </ul>
+  </div>
+
+  <p class="mt-5 text-[12px] text-slate">
+    Fakturujeme jako <strong class="text-graphite">GameStatiq s.r.o.</strong> Pro změny fakturačních údajů kontaktujte <a href="mailto:hello@gamestatiq.com" class="text-signal hover:underline">hello@gamestatiq.com</a>.
+  </p>
+</AppLayout>
