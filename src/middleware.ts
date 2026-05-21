@@ -51,9 +51,12 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     return ctx.redirect('/app', 302);
   }
 
-  // ── Iter 5a: resolve league context for league members ──
-  // Attach league + membership role to locals for /app/league/* pages.
-  if (user && isProtected(url.pathname)) {
+  // ── Iter 5a + 5b: resolve league context for league members ──
+  // Attach league + membership role to locals for /app/league/* pages AND
+  // /api/league/* endpoints (so league admin POST handlers know which league
+  // the request belongs to).
+  const needsLeagueCtx = isProtected(url.pathname) || url.pathname.startsWith('/api/league/');
+  if (user && needsLeagueCtx) {
     try {
       const admin = getSupabaseAdmin();
       const { data: lm } = await admin
