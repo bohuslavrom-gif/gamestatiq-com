@@ -59,8 +59,26 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
     return redirect(`/app/players?error=${encodeURIComponent('Bez oprávnění (Admin/Trenér).')}`, 303);
   }
 
+  // Iter 2: associate player with the currently active team (resolved by middleware).
+  // Fallback to the club's default (oldest) team if locals.team isn't set for any reason.
+  let teamId = locals.team?.id ?? null;
+  if (!teamId) {
+    const { data: defaultTeam } = await admin
+      .from('teams')
+      .select('id')
+      .eq('club_id', membership.club_id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    teamId = (defaultTeam as { id: string } | null)?.id ?? null;
+  }
+  if (!teamId) {
+    return redirect(`/app/players?error=${encodeURIComponent('Klub nemá žádný tým — vytvořte tým nejdřív v Nastavení.')}`, 303);
+  }
+
   const { error } = await admin.from('players').insert({
     club_id: membership.club_id,
+    team_id: teamId,
     first_name: firstName,
     last_name: lastName,
     jersey_number: jersey,
@@ -72,10 +90,12 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
 
   if (error) {
     const msg = error.code === '23505'
-      ? 'Číslo dresu už používá jiný hráč v tomto klubu.'
+      ? 'Číslo dresu už používá jiný hráč v tomto týmu.'
       : 'Hráč se nepodařil uložit: ' + error.message;
     return redirect(`/app/players?error=${encodeURIComponent(msg)}`, 303);
   }
 
-  return redirect('/app/players?saved=created', 303);
+  // Preserve team selection in redirect
+  const redirUrl = teamId ? `/app/players?saved=created&team=${teamId}` : '/app/players?saved=created';
+  return redirect(redirUrl, 303);
 };

@@ -26,27 +26,19 @@ export type PlayerEnrichment = {
 };
 
 /**
- * For a given user, find their club and return a map keyed by normalized
- * "first last" name to enrichment data (photo, jersey, position).
- * Falls back to empty map if user has no club or no Supabase players.
+ * For a given team, return a map keyed by normalized "first last" name to
+ * enrichment data (photo, jersey, position). Players are scoped to the team_id
+ * (multi-team Iter 2). Falls back to empty map if teamId is null or no players.
  */
-export async function fetchPlayerEnrichmentByName(userId: string): Promise<Map<string, PlayerEnrichment>> {
-  const admin = getSupabaseAdmin();
+export async function fetchPlayerEnrichmentByName(teamId: string | null): Promise<Map<string, PlayerEnrichment>> {
   const map = new Map<string, PlayerEnrichment>();
+  if (!teamId) return map;
 
-  const { data: membership } = await admin
-    .from('club_members')
-    .select('club_id')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (!membership) return map;
-
+  const admin = getSupabaseAdmin();
   const { data: players } = await admin
     .from('players')
     .select('first_name, last_name, jersey_number, position, photo_url')
-    .eq('club_id', membership.club_id);
+    .eq('team_id', teamId);
   if (!players) return map;
 
   for (const p of players as SupabasePlayer[]) {

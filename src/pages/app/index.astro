@@ -5,9 +5,16 @@ import { fetchPlayerEnrichmentByName, enrich } from '../../lib/players';
 
 export const prerender = false;
 
+const currentTeam = Astro.locals.team ?? null;
+const currentTeamId = currentTeam?.id ?? null;
+
+const gasTeamName: 'Muži' | 'Ženy' | null =
+  currentTeam?.name === 'Muži' ? 'Muži' :
+  currentTeam?.name === 'Ženy' ? 'Ženy' : null;
+
 const [stats, enrichmentMap] = await Promise.all([
-  fetchPublicStats('Muži'),
-  fetchPlayerEnrichmentByName(Astro.locals.user!.id),
+  gasTeamName ? fetchPublicStats(gasTeamName) : Promise.resolve(null),
+  fetchPlayerEnrichmentByName(currentTeamId),
 ]);
 
 function photoOf(name: string, fallback?: string): string | undefined {

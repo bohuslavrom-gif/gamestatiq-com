@@ -60,40 +60,112 @@ const navItems = [
     </div>
 
     <div class="border-b border-stone px-3 py-4">
-      <button type="button" class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-mist" aria-label="Přepnout klub">
-        {club?.logoUrl ? (
-          <img src={club.logoUrl} alt="" class="h-9 w-9 rounded-lg bg-mist object-contain" />
-        ) : (
-          <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-[11px] font-bold tracking-[0.04em] text-white">{club?.abbr ?? '?'}</span>
-        )}
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-[14px] font-semibold tracking-tight-2 text-ink">{club?.name ?? 'Vyberte klub'}</p>
-          <p class="truncate text-[11px] text-slate">{club?.sport ? 'sezóna 2026' : '—'}</p>
-        </div>
-        <svg class="h-4 w-4 flex-shrink-0 text-slate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
+      {(() => {
+        const teams = Astro.locals.teams ?? [];
+        const currentTeam = Astro.locals.team ?? null;
+        const teamAbbr = currentTeam?.name?.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase()
+                       || club?.abbr || '?';
+        const teamSeason = currentTeam?.season ?? '2026';
+
+        // Single team — render as static badge (no dropdown affordance)
+        if (teams.length <= 1) {
+          return (
+            <div class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left">
+              {currentTeam?.logo_url ? (
+                <img src={currentTeam.logo_url} alt="" class="h-9 w-9 rounded-lg bg-mist object-contain" />
+              ) : club?.logoUrl ? (
+                <img src={club.logoUrl} alt="" class="h-9 w-9 rounded-lg bg-mist object-contain" />
+              ) : (
+                <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-[11px] font-bold tracking-[0.04em] text-white">{teamAbbr}</span>
+              )}
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[14px] font-semibold tracking-tight-2 text-ink">
+                  {currentTeam?.name ?? club?.name ?? 'Vyberte klub'}
+                </p>
+                <p class="truncate text-[11px] text-slate">
+                  {currentTeam?.sport ?? club?.sport ?? '—'} · sezóna {teamSeason}
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        // Multi-team — render as <details> dropdown so we don't need JS
+        return (
+          <details class="group">
+            <summary class="flex w-full cursor-pointer items-center gap-3 list-none rounded-lg px-2 py-2 text-left transition-colors hover:bg-mist [&::-webkit-details-marker]:hidden">
+              {currentTeam?.logo_url ? (
+                <img src={currentTeam.logo_url} alt="" class="h-9 w-9 rounded-lg bg-mist object-contain" />
+              ) : (
+                <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-[11px] font-bold tracking-[0.04em] text-white">{teamAbbr}</span>
+              )}
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[14px] font-semibold tracking-tight-2 text-ink">{currentTeam?.name ?? 'Vyberte tým'}</p>
+                <p class="truncate text-[11px] text-slate">
+                  {currentTeam?.sport ?? '—'} · {teams.length} týmů
+                </p>
+              </div>
+              <svg class="h-4 w-4 flex-shrink-0 text-slate transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </summary>
+            <div class="mt-2 space-y-0.5 rounded-lg border border-stone bg-pearl p-1">
+              {teams.map((t) => {
+                const isActive = t.id === currentTeam?.id;
+                const abbr = t.name.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || '?';
+                return (
+                  <a
+                    href={`/app?team=${t.id}`}
+                    class={`flex items-center gap-3 rounded-md px-2 py-2 transition-colors ${
+                      isActive ? 'bg-signal/10' : 'hover:bg-mist'
+                    }`}
+                  >
+                    {t.logo_url ? (
+                      <img src={t.logo_url} alt="" class="h-7 w-7 rounded-md bg-mist object-contain" />
+                    ) : (
+                      <span class="inline-flex h-7 w-7 items-center justify-center rounded-md bg-ink/80 text-[10px] font-bold tracking-[0.04em] text-white">{abbr}</span>
+                    )}
+                    <div class="min-w-0 flex-1">
+                      <p class={`truncate text-[13px] font-semibold ${isActive ? 'text-signal' : 'text-ink'}`}>
+                        {t.name}{t.is_archived && <span class="ml-1 text-[10px] uppercase tracking-wider text-stone-2">archiv</span>}
+                      </p>
+                      <p class="truncate text-[11px] text-slate">{t.sport} · {t.season ?? '2026'}</p>
+                    </div>
+                    {isActive && (
+                      <svg class="h-3.5 w-3.5 flex-shrink-0 text-signal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+                    )}
+                  </a>
+                );
+              })}
+            </div>
+          </details>
+        );
+      })()}
     </div>
 
     <nav class="flex-1 overflow-y-auto px-3 py-4">
       <ul class="space-y-0.5">
-        {navItems.map((item) => (
-          <li>
-            <a
-              href={item.href}
-              aria-current={active === item.key ? 'page' : undefined}
-              class={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-medium transition-colors ${
-                active === item.key
-                  ? 'bg-signal/10 text-signal'
-                  : 'text-graphite hover:bg-mist hover:text-ink'
-              }`}
-            >
-              <svg class="h-4 w-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                <path d={item.icon} />
-              </svg>
-              {item.label}
-            </a>
-          </li>
-        ))}
+        {navItems.map((item) => {
+          // Preserve ?team=<id> in nav links so team selection persists across routes
+          const currentTeamId = Astro.locals.team?.id ?? null;
+          const href = currentTeamId ? `${item.href}?team=${currentTeamId}` : item.href;
+          return (
+            <li>
+              <a
+                href={href}
+                aria-current={active === item.key ? 'page' : undefined}
+                class={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-medium transition-colors ${
+                  active === item.key
+                    ? 'bg-signal/10 text-signal'
+                    : 'text-graphite hover:bg-mist hover:text-ink'
+                }`}
+              >
+                <svg class="h-4 w-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <path d={item.icon} />
+                </svg>
+                {item.label}
+              </a>
+            </li>
+          );
+        })}
       </ul>
 
       <a

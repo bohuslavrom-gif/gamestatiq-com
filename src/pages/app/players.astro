@@ -23,19 +23,26 @@ const userRole = membership?.role ?? 'viewer';
 const canEdit = ['admin', 'coach'].includes(userRole);
 const canDelete = userRole === 'admin';
 
-// Fetch players from Supabase
-const { data: playersRaw } = clubId
+// Current team resolved by middleware
+const currentTeam = Astro.locals.team ?? null;
+const currentTeamId = currentTeam?.id ?? null;
+
+// Fetch players from Supabase — scoped to current team_id (Iter 2)
+const { data: playersRaw } = currentTeamId
   ? await admin.from('players')
       .select('*')
-      .eq('club_id', clubId)
+      .eq('team_id', currentTeamId)
       .order('position', { ascending: true })
       .order('jersey_number', { ascending: true, nullsLast: true })
   : { data: [] as any[] };
 
 const players = playersRaw ?? [];
 
-// For Bobcats: also fetch GAS stats to show as historical/reference
-const gasStats = (clubName === 'Bobcats') ? await fetchPublicStats('Muži') : null;
+// For Bobcats Muži team: also fetch GAS stats as historical fallback if roster empty
+const gasTeamName: 'Muži' | 'Ženy' | null =
+  currentTeam?.name === 'Muži' ? 'Muži' :
+  currentTeam?.name === 'Ženy' ? 'Ženy' : null;
+const gasStats = (clubName === 'Bobcats' && gasTeamName) ? await fetchPublicStats(gasTeamName) : null;
 const showGasFallback = players.length === 0 && gasStats !== null;
 
 // URL params for state
@@ -59,12 +66,13 @@ const filteredPlayers = players.filter((p: any) => {
   return true;
 });
 
-// Helper to preserve other params (edit/add) when changing filter
+// Helper to preserve other params (edit/add/team) when changing filter
 const filterHref = (f: string) => {
   const u = new URLSearchParams();
   if (f !== 'all') u.set('filter', f);
   if (editId) u.set('edit', editId);
   if (addMode) u.set('add', '1');
+  if (currentTeamId) u.set('team', currentTeamId);
   const qs = u.toString();
   return '/app/players' + (qs ? '?' + qs : '');
 };

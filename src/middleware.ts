@@ -1,5 +1,6 @@
 import { defineMiddleware } from 'astro:middleware';
 import { getSupabase } from './lib/supabase';
+import { listTeamsForUser, pickCurrentTeam, setTeamCookie, getTeamCookie } from './lib/teams';
 
 const PUBLIC_PATHS = [
   '/login',
@@ -35,6 +36,22 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   // Logged-in users bounced away from auth pages
   if (user && (url.pathname === '/login' || url.pathname === '/signup')) {
     return ctx.redirect('/app', 302);
+  }
+
+  // ── Multi-team Iter 2: resolve current team for /app/* requests ──
+  if (user && isProtected(url.pathname)) {
+    const teams = await listTeamsForUser(user.id);
+    const requestedTeamId = url.searchParams.get('team');
+    const cookieTeamId    = getTeamCookie(ctx.cookies);
+    const team = pickCurrentTeam(teams, requestedTeamId, cookieTeamId);
+
+    ctx.locals.teams = teams;
+    ctx.locals.team  = team;
+
+    // Persist explicit selection across requests
+    if (requestedTeamId && team && team.id === requestedTeamId && cookieTeamId !== team.id) {
+      setTeamCookie(ctx.cookies, team.id);
+    }
   }
 
   return next();

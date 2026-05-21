@@ -6,12 +6,23 @@ import { fetchSupabaseStats, mergeMatchLogs, fetchSupabasePlayerMatchStats, fetc
 
 export const prerender = false;
 
+// Current team resolved by middleware (Iter 2). null = user has no teams (shouldn't happen post-backfill)
+const currentTeam = Astro.locals.team ?? null;
+const currentTeamId = currentTeam?.id ?? null;
+
+// GAS bridge is still season+team-name keyed ("Muži"/"Ženy"). If the current
+// portal team has a name GAS doesn't know, we skip the GAS fetch and rely on
+// Supabase only.
+const gasTeamName: 'Muži' | 'Ženy' | null =
+  currentTeam?.name === 'Muži' ? 'Muži' :
+  currentTeam?.name === 'Ženy' ? 'Ženy' : null;
+
 const [stats, coach, enrichmentMap, supabaseStats, supabaseCoach] = await Promise.all([
-  fetchPublicStats('Muži'),
-  fetchCoachStats('Muži'),
-  fetchPlayerEnrichmentByName(Astro.locals.user!.id),
-  fetchSupabaseStats(Astro.locals.user!.id),
-  fetchSupabaseCoachStats(Astro.locals.user!.id),
+  gasTeamName ? fetchPublicStats(gasTeamName) : Promise.resolve(null),
+  gasTeamName ? fetchCoachStats(gasTeamName)  : Promise.resolve(null),
+  fetchPlayerEnrichmentByName(currentTeamId),
+  fetchSupabaseStats(currentTeamId),
+  fetchSupabaseCoachStats(currentTeamId),
 ]);
 
 // ── URL params ─────────────────────────────────────────────
@@ -54,6 +65,7 @@ const matchPlayerStats = (view === 'players' && selectedMatch)
 const buildHref = (overrides: Record<string, string>) => {
   const u = new URLSearchParams({ view, match: scopeParam });
   if (sourceParam !== 'auto') u.set('source', sourceParam);
+  if (currentTeamId) u.set('team', currentTeamId);
   for (const [k, v] of Object.entries(overrides)) {
     if (v === '') u.delete(k); else u.set(k, v);
   }

@@ -238,30 +238,27 @@ function aggregatePlayerStats(rows: PlayerStatsRow[]): {
  * primary club (resolved via club_members → club_id).
  * Returns nulls/empty arrays gracefully if user has no club or no matches.
  */
-export async function fetchSupabaseStats(userId: string): Promise<SupabaseStatsResult> {
+export async function fetchSupabaseStats(teamId: string | null): Promise<SupabaseStatsResult> {
   const empty: SupabaseStatsResult = {
     clubId: null, matches: [], qbStats: [], wrStats: [], defenseLeaders: [], latestDate: null,
   };
 
-  if (!userId) return empty;
+  if (!teamId) return empty;
   const admin = getSupabaseAdmin();
 
-  // 1. Resolve club_id via club_members (primary club = oldest membership)
-  const { data: membership } = await admin
-    .from('club_members')
+  // 1. Resolve club_id via teams (just for the result metadata)
+  const { data: teamRow } = await admin
+    .from('teams')
     .select('club_id')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true })
-    .limit(1)
+    .eq('id', teamId)
     .maybeSingle();
-  if (!membership) return empty;
-  const clubId = (membership as { club_id: string }).club_id;
+  const clubId = (teamRow as { club_id: string } | null)?.club_id ?? null;
 
-  // 2. Fetch matches for that club, oldest first (so idx matches GAS convention)
+  // 2. Fetch matches for that team, oldest first (so idx matches GAS convention)
   const { data: matchRowsRaw, error: matchErr } = await admin
     .from('matches')
     .select('*')
-    .eq('club_id', clubId)
+    .eq('team_id', teamId)
     .order('date', { ascending: true });
   if (matchErr || !matchRowsRaw) {
     // eslint-disable-next-line no-console
@@ -609,25 +606,15 @@ export type SupabaseCoachStats = CoachStats & {
   driveMatchCount: number;
 };
 
-export async function fetchSupabaseCoachStats(userId: string): Promise<SupabaseCoachStats | null> {
-  if (!userId) return null;
+export async function fetchSupabaseCoachStats(teamId: string | null): Promise<SupabaseCoachStats | null> {
+  if (!teamId) return null;
   const admin = getSupabaseAdmin();
 
-  const { data: membership } = await admin
-    .from('club_members')
-    .select('club_id')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (!membership) return null;
-  const clubId = (membership as { club_id: string }).club_id;
-
-  // 1. matches for totals + matchLog
+  // 1. matches for totals + matchLog — filtered by team_id
   const { data: matchRowsRaw } = await admin
     .from('matches')
     .select('*')
-    .eq('club_id', clubId)
+    .eq('team_id', teamId)
     .order('date', { ascending: true });
   const matchRows = (matchRowsRaw ?? []) as MatchRow[];
   if (matchRows.length === 0) return null;

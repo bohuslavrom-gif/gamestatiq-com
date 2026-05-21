@@ -19,5 +19,9 @@ declare namespace App {
   interface Locals {
     user: import('@supabase/supabase-js').User | null;
     supabase: ReturnType<typeof import('./lib/supabase').getSupabase>;
+    /** All teams the user has access to (across their club memberships). Set on /app/* routes. */
+    teams?: import('./lib/supabase').Team[];
+    /** Currently selected team for this request. Resolved from ?team=<id>, cookie, or first team. */
+    team?: import('./lib/supabase').Team | null;
   }
 }
