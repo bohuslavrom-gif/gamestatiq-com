@@ -2,11 +2,23 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import { fetchPublicStats } from '../../lib/bobcats';
 import { fetchPlayerEnrichmentByName, enrich } from '../../lib/players';
+import { getSupabaseAdmin } from '../../lib/supabase';
 
 export const prerender = false;
 
 const currentTeam = Astro.locals.team ?? null;
 const currentTeamId = currentTeam?.id ?? null;
+
+// Resolve club name (for header) — defensive
+let clubName = '—';
+if (currentTeam?.club_id) {
+  const { data: c } = await getSupabaseAdmin()
+    .from('clubs')
+    .select('name')
+    .eq('id', currentTeam.club_id)
+    .maybeSingle();
+  clubName = (c as { name: string } | null)?.name ?? '—';
+}
 
 const gasTeamName: 'Muži' | 'Ženy' | null =
   currentTeam?.name === 'Muži' ? 'Muži' :
@@ -58,8 +70,8 @@ const topWr = stats?.wrStats[0];
 <AppLayout
   title="Dashboard · GameStatiq"
   active="dashboard"
-  pageTitle={stats ? `Bobcats · ${stats.team}` : 'Dashboard'}
-  pageSub={stats ? `Sezóna 2026 · ${matches} odehraných zápasů` : 'Načítám klubová data…'}
+  pageTitle={currentTeam ? `${clubName} · ${currentTeam.name}` : 'Dashboard'}
+  pageSub={currentTeam ? `Sezóna ${currentTeam.season ?? '2026'} · ${matches} ${matches === 1 ? 'odehraný zápas' : matches < 5 ? 'odehrané zápasy' : 'odehraných zápasů'}` : 'Načítám klubová data…'}
 >
   {!stats && (
     <div class="mb-6 rounded-lg border border-spark/30 bg-spark/5 px-4 py-3 text-[14px] text-[#A0531B]">
@@ -84,12 +96,14 @@ const topWr = stats?.wrStats[0];
       </span>
       <div>
         <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Live data</p>
-        <p class="text-[17px] font-bold tracking-tight-2 text-ink">Google Sheets · Bobcats stats</p>
+        <p class="text-[17px] font-bold tracking-tight-2 text-ink">Google Sheets · {clubName} {currentTeam?.name ?? ''} stats</p>
         <p class="text-[12px] text-graphite">Synchronizováno automaticky po každém odehraném zápase</p>
       </div>
     </div>
     <div class="flex gap-2">
-      <a href="https://bohuslavrom-gif.github.io/bobcats-stats/public.html?team=Muži" target="_blank" rel="noopener" class="rounded-lg border border-stone bg-mist px-4 py-2 text-[13px] font-medium text-graphite hover:border-stone-2 hover:bg-stone/30">Veřejná stránka</a>
+      {clubName === 'Bobcats' && gasTeamName && (
+        <a href={`https://bohuslavrom-gif.github.io/bobcats-stats/public.html?team=${encodeURIComponent(gasTeamName)}`} target="_blank" rel="noopener" class="rounded-lg border border-stone bg-mist px-4 py-2 text-[13px] font-medium text-graphite hover:border-stone-2 hover:bg-stone/30">Veřejná stránka</a>
+      )}
       <a href="/app/billing" class="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1A2B45]">Upgrade na Liga</a>
     </div>
   </div>

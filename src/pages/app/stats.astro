@@ -277,7 +277,13 @@ const tabs = [
   title="Statistiky · GameStatiq"
   active="stats"
   pageTitle="Statistiky klubu"
-  pageSub={stats ? `Bobcats Muži · sezóna 2026 · ${stats.record.matches} odehraných zápasů` : 'Načítám…'}
+  pageSub={(() => {
+    const teamLabel = currentTeam?.name ?? 'Tým';
+    const season    = currentTeam?.season ?? '2026';
+    const matchesCount = mergedLog.length;
+    const matchesWord  = matchesCount === 1 ? 'odehraný zápas' : matchesCount < 5 ? 'odehrané zápasy' : 'odehraných zápasů';
+    return `${teamLabel} · sezóna ${season} · ${matchesCount} ${matchesWord}`;
+  })()}
 >
   {!stats && (
     <div class="mb-6 rounded-lg border border-spark/30 bg-spark/5 px-4 py-3 text-[14px] text-[#A0531B]">
@@ -358,7 +364,9 @@ const tabs = [
         <p class="text-[12px] text-graphite">Tohle vidí fanoušci, sponzoři a federace.</p>
       </div>
     </div>
-    <a href="https://bohuslavrom-gif.github.io/bobcats-stats/public.html?team=Muži" target="_blank" rel="noopener" class="rounded-lg bg-pearl px-4 py-2 text-[13px] font-medium text-ink hover:bg-mist">Otevřít →</a>
+    {gasTeamName && (
+      <a href={`https://bohuslavrom-gif.github.io/bobcats-stats/public.html?team=${encodeURIComponent(gasTeamName)}`} target="_blank" rel="noopener" class="rounded-lg bg-pearl px-4 py-2 text-[13px] font-medium text-ink hover:bg-mist">Otevřít →</a>
+    )}
   </div>
 
   {/* ═════════════════════════ TEAM VIEW ═════════════════════════ */}
@@ -389,7 +397,7 @@ const tabs = [
           <div class="flex items-end justify-between">
             <div>
               <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Skóre po zápasech</p>
-              <p class="text-[12px] text-slate">Bobcats vs. soupeř · {chartPoints.length} zápasů</p>
+              <p class="text-[12px] text-slate">{currentTeam?.name ?? 'Tým'} vs. soupeř · {chartPoints.length} zápasů</p>
             </div>
             <span class="rounded-md bg-signal/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-signal">rozdíl {ptDiff > 0 ? '+' : ''}{ptDiff}</span>
           </div>
@@ -404,7 +412,7 @@ const tabs = [
             </svg>
           </div>
           <div class="mt-3 flex flex-wrap items-center gap-6 text-[12px]">
-            <span class="inline-flex items-center gap-2"><span class="h-2 w-3 rounded-full bg-signal"></span>Bobcats</span>
+            <span class="inline-flex items-center gap-2"><span class="h-2 w-3 rounded-full bg-signal"></span>{currentTeam?.name ?? 'Tým'}</span>
             <span class="inline-flex items-center gap-2"><span class="h-0.5 w-3 bg-slate"></span>Soupeř</span>
           </div>
         </div>
