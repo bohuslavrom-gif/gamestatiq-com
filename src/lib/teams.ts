@@ -101,3 +101,31 @@ export function withTeamParam(href: string, teamId: string | null): string {
   if (!params.has('team')) params.set('team', teamId);
   return params.toString() ? `${path}?${params.toString()}` : path;
 }
+
+// ── Tier limits ──────────────────────────────────────────────────
+// Maps current DB subscription_tier values to max-teams-per-club.
+// Tier semantika (pre-rename in Iter ?):
+//   'trial'    → during trial: 3 teams (gives Klub-tier feel to evaluate)
+//   'klub'     → semantics is "Tým" tier (single team)
+//   'liga'     → semantics is "Klub" tier (multi-team within 1 club)
+//   'federace' → semantics is "Liga" tier (cross-club / federation)
+// After rename (Iter ?), values become tym/klub/liga and this map needs update.
+export const TEAM_LIMIT_BY_TIER: Record<string, number> = {
+  trial:    3,
+  klub:     1,
+  liga:     Infinity,
+  federace: Infinity,
+};
+
+export function teamLimitForTier(tier: string | null | undefined): number {
+  if (!tier) return 1;
+  return TEAM_LIMIT_BY_TIER[tier] ?? 1;
+}
+
+export type TierLabel = { code: string; label: string; teamLimit: number | 'unlimited' };
+export const TIER_LABELS: Record<string, TierLabel> = {
+  trial:    { code: 'trial',    label: 'Trial',    teamLimit: 3 },
+  klub:     { code: 'klub',     label: 'Tým',      teamLimit: 1 },
+  liga:     { code: 'liga',     label: 'Klub',     teamLimit: 'unlimited' },
+  federace: { code: 'federace', label: 'Liga',     teamLimit: 'unlimited' },
+};

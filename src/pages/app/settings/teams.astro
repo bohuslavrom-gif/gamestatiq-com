@@ -1,0 +1,245 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro';
+import { getSupabaseAdmin, type Team } from '../../../lib/supabase';
+import { teamLimitForTier, TIER_LABELS } from '../../../lib/teams';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const admin = getSupabaseAdmin();
+
+// Resolve user's club + role + tier
+const { data: membership } = await admin
+  .from('club_members')
+  .select('club_id, role, clubs(name, subscription_tier)')
+  .eq('user_id', user.id)
+  .order('created_at', { ascending: true })
+  .limit(1)
+  .maybeSingle();
+
+if (!membership) return Astro.redirect('/app');
+const clubId   = membership.club_id;
+const clubName = (membership as any).clubs?.name ?? '—';
+const tier     = (membership as any).clubs?.subscription_tier ?? 'trial';
+const userRole = membership.role;
+const isAdmin  = userRole === 'admin';
+const teamLimit = teamLimitForTier(tier);
+const tierLabel = TIER_LABELS[tier] ?? TIER_LABELS.trial;
+
+// Fetch all teams for this club
+const { data: teamsRaw } = await admin
+  .from('teams')
+  .select('*')
+  .eq('club_id', clubId)
+  .order('is_archived', { ascending: true })
+  .order('created_at', { ascending: true });
+const teams = (teamsRaw ?? []) as Team[];
+const activeTeams   = teams.filter((t) => !t.is_archived);
+const archivedTeams = teams.filter((t) =>  t.is_archived);
+
+// Counts of players + matches per team (single query each)
+const teamIds = teams.map((t) => t.id);
+const counts = new Map<string, { players: number; matches: number }>();
+if (teamIds.length) {
+  const [{ data: pCounts }, { data: mCounts }] = await Promise.all([
+    admin.from('players').select('team_id', { count: 'exact' }).in('team_id', teamIds),
+    admin.from('matches').select('team_id', { count: 'exact' }).in('team_id', teamIds),
+  ]);
+  const tallyP = new Map<string, number>();
+  const tallyM = new Map<string, number>();
+  for (const r of (pCounts ?? []) as { team_id: string }[]) tallyP.set(r.team_id, (tallyP.get(r.team_id) ?? 0) + 1);
+  for (const r of (mCounts ?? []) as { team_id: string }[]) tallyM.set(r.team_id, (tallyM.get(r.team_id) ?? 0) + 1);
+  for (const t of teams) counts.set(t.id, { players: tallyP.get(t.id) ?? 0, matches: tallyM.get(t.id) ?? 0 });
+}
+
+// URL params
+const url = new URL(Astro.request.url);
+const saved   = url.searchParams.get('saved');
+const error   = url.searchParams.get('error');
+const editId  = url.searchParams.get('edit');
+const addMode = url.searchParams.get('add') === '1';
+const editingTeam = editId ? teams.find((t) => t.id === editId) : null;
+
+const canCreate = isAdmin && activeTeams.length < teamLimit;
+const limitReached = activeTeams.length >= teamLimit;
+
+const CATEGORIES = [
+  { code: '',      label: '— (neurčeno)' },
+  { code: 'men',   label: 'Muži' },
+  { code: 'women', label: 'Ženy' },
+  { code: 'u18',   label: 'U18' },
+  { code: 'u15',   label: 'U15' },
+  { code: 'u12',   label: 'U12' },
+  { code: 'mixed', label: 'Smíšený' },
+];
+
+const SPORTS = [
+  { code: 'flag-football',     label: 'Flag football' },
+  { code: 'american_football', label: 'American football' },
+  { code: 'basketball',        label: 'Basketball' },
+  { code: 'football',          label: 'Football (soccer)' },
+  { code: 'volleyball',        label: 'Volejbal' },
+  { code: 'hockey',            label: 'Hokej' },
+  { code: 'other',             label: 'Jiný' },
+];
+
+const SAVED_MSG: Record<string, string> = {
+  created:    '✓ Tým vytvořen.',
+  updated:    '✓ Změny uloženy.',
+  archived:   '✓ Tým archivován.',
+  unarchived: '✓ Tým obnoven z archivu.',
+};
+---
+
+<AppLayout title="Týmy · Nastavení" active="settings" pageTitle="Týmy" pageSub={`${clubName} · ${activeTeams.length} aktivních${archivedTeams.length ? ` + ${archivedTeams.length} v archivu` : ''}`}>
+
+  {saved && SAVED_MSG[saved] && (
+    <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">{SAVED_MSG[saved]}</div>
+  )}
+  {error && (
+    <div class="mb-6 rounded-lg border border-signal/30 bg-signal/5 px-4 py-3 text-[14px] text-signal">{error}</div>
+  )}
+
+  <!-- Sub-nav back to main settings -->
+  <div class="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
+    <a href="/app/settings" class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">← Nastavení klubu</a>
+    <span class="text-slate">·</span>
+    <span class="text-graphite">Plán: <strong class="text-ink">{tierLabel.label}</strong></span>
+    <span class="text-slate">·</span>
+    <span class="text-graphite">Limit týmů: <strong class="text-ink">{teamLimit === Infinity ? 'neomezeno' : teamLimit}</strong></span>
+  </div>
+
+  <!-- Tier upgrade hint when limit reached -->
+  {limitReached && teamLimit !== Infinity && (
+    <div class="mb-6 rounded-xl border border-signal/30 bg-gradient-to-br from-signal/5 to-signal/10 p-5">
+      <p class="text-[14px] font-semibold text-ink">Dosáhli jste limitu vašeho plánu ({teamLimit} {teamLimit === 1 ? 'tým' : 'týmy'}).</p>
+      <p class="mt-1 text-[13px] text-graphite">Pro neomezený počet týmů upgradujte na <strong>Klub</strong> nebo vyšší.</p>
+      <a href="/app/billing" class="mt-3 inline-flex rounded-lg bg-signal px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#C8313D]">Zobrazit balíčky →</a>
+    </div>
+  )}
+
+  <!-- Create / Edit form (collapsible via ?add=1 or ?edit=<id>) -->
+  {isAdmin && (addMode || editingTeam) && (
+    <div class="mb-6 rounded-xl border border-stone bg-pearl p-6">
+      <p class="text-[15px] font-semibold tracking-tight-2 text-ink">{editingTeam ? 'Upravit tým' : 'Vytvořit nový tým'}</p>
+      <form method="POST" action={editingTeam ? '/api/club/team/update' : '/api/club/team/create'} class="mt-5 space-y-4">
+        {editingTeam && <input type="hidden" name="id" value={editingTeam.id} />}
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Název *</span>
+            <input type="text" name="name" required maxlength="60" placeholder="Muži · A-tým" value={editingTeam?.name ?? ''} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+          </label>
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Kategorie</span>
+            <select name="category" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20">
+              {CATEGORIES.map((c) => (
+                <option value={c.code} selected={c.code === (editingTeam?.category ?? '')}>{c.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Sport</span>
+            <select name="sport" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20">
+              {SPORTS.map((s) => (
+                <option value={s.code} selected={s.code === (editingTeam?.sport ?? 'flag-football')}>{s.label}</option>
+              ))}
+            </select>
+          </label>
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Sezóna</span>
+            <input type="text" name="season" placeholder="2026" value={editingTeam?.season ?? '2026'} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+          </label>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Primární barva</span>
+            <input type="color" name="primary" value={editingTeam?.primary_color ?? '#0F1B2D'} class="mt-1.5 block h-10 w-full cursor-pointer rounded-lg border border-stone bg-pearl" />
+          </label>
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Sekundární barva</span>
+            <input type="color" name="secondary" value={editingTeam?.secondary_color ?? '#E63946'} class="mt-1.5 block h-10 w-full cursor-pointer rounded-lg border border-stone bg-pearl" />
+          </label>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 pt-2">
+          <button type="submit" class="rounded-lg bg-signal px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#C8313D]">{editingTeam ? 'Uložit změny' : 'Vytvořit tým'}</button>
+          <a href="/app/settings/teams" class="rounded-lg border border-stone bg-pearl px-4 py-2.5 text-[13px] font-medium text-graphite hover:bg-mist">Zrušit</a>
+        </div>
+      </form>
+    </div>
+  )}
+
+  <!-- Active teams list -->
+  <div class="rounded-xl border border-stone bg-pearl">
+    <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+      <div>
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Aktivní týmy</p>
+        <p class="text-[12px] text-slate">{activeTeams.length} {activeTeams.length === 1 ? 'tým' : activeTeams.length < 5 ? 'týmy' : 'týmů'}</p>
+      </div>
+      {canCreate && !addMode && !editingTeam && (
+        <a href="/app/settings/teams?add=1" class="rounded-lg bg-signal px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#C8313D]">+ Nový tým</a>
+      )}
+    </div>
+    <ul class="divide-y divide-stone">
+      {activeTeams.length === 0 ? (
+        <li class="p-8 text-center text-[13px] text-slate">Žádné aktivní týmy.</li>
+      ) : activeTeams.map((t) => {
+        const c = counts.get(t.id) ?? { players: 0, matches: 0 };
+        const abbr = t.name.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || '?';
+        return (
+          <li class="flex flex-wrap items-center gap-4 px-5 py-4">
+            <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-[12px] font-bold tracking-[0.04em] text-white" style={`background-color:${t.primary_color}`}>{abbr}</span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-[14px] font-semibold text-ink">{t.name}{t.category && <span class="ml-2 inline-flex items-center rounded bg-mist px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate">{t.category}</span>}</p>
+              <p class="truncate text-[12px] text-slate">{t.sport} · sezóna {t.season} · {c.players} hráčů · {c.matches} zápasů</p>
+            </div>
+            {isAdmin && (
+              <div class="flex items-center gap-2">
+                <a href={`/app/settings/teams?edit=${t.id}`} class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Upravit</a>
+                <form method="POST" action="/api/club/team/archive" class="inline">
+                  <input type="hidden" name="id" value={t.id} />
+                  <input type="hidden" name="action" value="archive" />
+                  <button type="submit" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist" onclick="return confirm('Archivovat tým? Hráči a zápasy zůstanou ale tým nebude vidět v aktivních.')">Archivovat</button>
+                </form>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  </div>
+
+  <!-- Archived teams -->
+  {archivedTeams.length > 0 && (
+    <details class="mt-6">
+      <summary class="cursor-pointer text-[13px] font-medium text-graphite hover:text-ink">Archiv ({archivedTeams.length})</summary>
+      <ul class="mt-3 divide-y divide-stone rounded-xl border border-stone bg-pearl">
+        {archivedTeams.map((t) => {
+          const c = counts.get(t.id) ?? { players: 0, matches: 0 };
+          const abbr = t.name.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || '?';
+          return (
+            <li class="flex flex-wrap items-center gap-4 px-5 py-4 opacity-60">
+              <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-stone text-[12px] font-bold tracking-[0.04em] text-slate">{abbr}</span>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[14px] font-semibold text-ink">{t.name}<span class="ml-2 inline-flex items-center rounded bg-stone px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate">archiv</span></p>
+                <p class="truncate text-[12px] text-slate">{t.sport} · {c.players} hráčů · {c.matches} zápasů</p>
+              </div>
+              {isAdmin && (
+                <form method="POST" action="/api/club/team/archive" class="inline">
+                  <input type="hidden" name="id" value={t.id} />
+                  <input type="hidden" name="action" value="unarchive" />
+                  <button type="submit" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Obnovit</button>
+                </form>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  )}
+
+  {!isAdmin && (
+    <p class="mt-6 text-[12px] text-slate">Pouze Admin klubu může spravovat týmy. Vy jste přihlášen jako {userRole === 'coach' ? 'Trenér' : userRole === 'stats' ? 'Statistik' : 'Pozorovatel'}.</p>
+  )}
+</AppLayout>
