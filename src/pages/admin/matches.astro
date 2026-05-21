@@ -1,0 +1,70 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getSupabaseAdmin } from '../../lib/supabase';
+
+export const prerender = false;
+
+const url = new URL(Astro.request.url);
+const teamFilter = url.searchParams.get('team');
+const clubFilter = url.searchParams.get('club');
+
+const admin = getSupabaseAdmin();
+
+let q = admin
+  .from('matches')
+  .select('id, date, opponent, our_score, opp_score, team_id, club_id, teams(name), clubs(name)')
+  .order('date', { ascending: false })
+  .limit(100);
+if (teamFilter) q = q.eq('team_id', teamFilter);
+if (clubFilter) q = q.eq('club_id', clubFilter);
+
+const { data: matchesRaw } = await q;
+const matches = (matchesRaw ?? []) as any[];
+---
+
+<AdminLayout title="Zápasy · Admin" active="matches" pageTitle="Zápasy" pageSub={`${matches.length} ${matches.length === 1 ? 'zápas' : matches.length < 5 ? 'zápasy' : 'zápasů'} (max 100)${teamFilter ? ' · filtrováno podle týmu' : ''}`}>
+
+  {(teamFilter || clubFilter) && (
+    <div class="mb-4 flex flex-wrap items-center gap-2 text-[13px]">
+      <a href="/admin/matches" class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">× Odstranit filtr</a>
+    </div>
+  )}
+
+  {matches.length === 0 ? (
+    <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
+      <p class="text-[15px] font-semibold text-ink">Žádné zápasy</p>
+    </div>
+  ) : (
+    <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[720px] text-left text-[13px]">
+          <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+            <tr>
+              <th class="px-5 py-3">Datum</th>
+              <th class="px-3 py-3">Klub · Tým</th>
+              <th class="px-3 py-3">Soupeř</th>
+              <th class="px-3 py-3 text-center tabular-nums">Skóre</th>
+              <th class="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone">
+            {matches.map((m: any) => (
+              <tr class="transition-colors hover:bg-mist/60">
+                <td class="px-5 py-3 text-graphite">{new Date(m.date).toLocaleDateString('cs-CZ')}</td>
+                <td class="px-3 py-3 text-[12px]">
+                  <p class="text-ink">{m.clubs?.name ?? '—'}</p>
+                  <p class="text-stone-2">{m.teams?.name ?? '—'}</p>
+                </td>
+                <td class="px-3 py-3 font-semibold text-ink">{m.opponent}</td>
+                <td class="px-3 py-3 text-center font-bold tabular-nums text-ink">{m.our_score}–{m.opp_score}</td>
+                <td class="px-5 py-3 text-right">
+                  <a href={`/admin/matches/${m.id}`} class="text-[12px] font-semibold text-plum hover:underline">Detail →</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
+</AdminLayout>

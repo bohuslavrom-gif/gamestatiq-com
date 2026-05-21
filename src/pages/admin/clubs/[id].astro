@@ -72,11 +72,11 @@ const tierLabel: Record<string, string> = { trial: 'Trial', tym: 'Tým', klub: '
           <ul class="divide-y divide-stone">
             {(teams ?? []).map((t: any) => (
               <li class="flex items-center justify-between gap-3 px-5 py-3">
-                <div>
+                <a href={`/admin/teams/${t.id}`} class="flex-1 min-w-0 hover:text-plum">
                   <p class="text-[14px] font-semibold text-ink">{t.name}{t.is_archived && <span class="ml-2 text-[10px] uppercase tracking-wider text-stone-2">archiv</span>}</p>
                   <p class="text-[11px] text-slate">{t.sport} · sezóna {t.season}</p>
-                </div>
-                <span class="font-mono text-[10px] text-stone-2">{t.id.slice(0, 8)}…</span>
+                </a>
+                <a href={`/admin/teams/${t.id}`} class="text-[11px] font-semibold text-plum hover:underline">Detail →</a>
               </li>
             ))}
           </ul>
@@ -116,11 +116,12 @@ const tierLabel: Record<string, string> = { trial: 'Trial', tym: 'Tým', klub: '
           <ul class="divide-y divide-stone">
             {(matches ?? []).map((m: any) => (
               <li class="flex items-center justify-between gap-3 px-5 py-3 text-[13px]">
-                <div>
+                <a href={`/admin/matches/${m.id}`} class="flex-1 min-w-0 hover:text-plum">
                   <p class="font-semibold text-ink">vs {m.opponent}</p>
                   <p class="text-[11px] text-slate">{new Date(m.date).toLocaleDateString('cs-CZ')}</p>
-                </div>
+                </a>
                 <span class="font-bold tabular-nums text-ink">{m.our_score}–{m.opp_score}</span>
+                <a href={`/admin/matches/${m.id}`} class="text-[11px] font-semibold text-plum hover:underline">Detail →</a>
               </li>
             ))}
           </ul>

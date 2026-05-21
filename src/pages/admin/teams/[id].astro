@@ -1,0 +1,141 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getSupabaseAdmin } from '../../../lib/supabase';
+
+export const prerender = false;
+
+const id = Astro.params.id;
+if (!id) return Astro.redirect('/admin/clubs');
+
+const admin = getSupabaseAdmin();
+
+const { data: team } = await admin
+  .from('teams')
+  .select('*, clubs(id, name, slug)')
+  .eq('id', id)
+  .maybeSingle();
+if (!team) return Astro.redirect('/admin/clubs');
+
+const club = (team as any).clubs;
+
+const [{ data: players }, { data: matches }] = await Promise.all([
+  admin.from('players').select('*').eq('team_id', id).order('jersey_number', { ascending: true, nullsLast: true }),
+  admin.from('matches').select('id, date, opponent, our_score, opp_score').eq('team_id', id).order('date', { ascending: false }).limit(10),
+]);
+
+const url = new URL(Astro.request.url);
+const saved = url.searchParams.get('saved');
+const errorMsg = url.searchParams.get('error');
+---
+
+<AdminLayout title={`${team.name} · Admin`} active="clubs" pageTitle={team.name} pageSub={`Tým · ${club?.name ?? '—'} · ${team.sport} · sezóna ${team.season}`}>
+
+  {saved && <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">✓ Změny uloženy.</div>}
+  {errorMsg && <div class="mb-6 rounded-lg border border-signal/30 bg-signal/5 px-4 py-3 text-[14px] text-signal">{errorMsg}</div>}
+
+  <div class="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
+    <a href={`/admin/clubs/${club?.id}`} class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">← {club?.name}</a>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-[1fr_320px]">
+    <div class="space-y-6">
+
+      <!-- Add player form -->
+      <div class="rounded-xl border border-plum/30 bg-gradient-to-br from-plum/5 to-signal/5 p-5">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#4F3878]">Přidat hráče (super admin)</p>
+        <form method="POST" action="/api/super/team/add-player" class="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_80px_120px_120px_auto]">
+          <input type="hidden" name="team_id" value={team.id} />
+          <input type="text" name="first_name" required placeholder="Jméno *" class="rounded-md border border-stone bg-pearl px-3 py-2 text-[13px]" />
+          <input type="text" name="last_name" placeholder="Příjmení" class="rounded-md border border-stone bg-pearl px-3 py-2 text-[13px]" />
+          <input type="number" name="jersey_number" placeholder="#" min="0" max="999" class="rounded-md border border-stone bg-pearl px-3 py-2 text-[13px]" />
+          <select name="position" class="rounded-md border border-stone bg-pearl px-2 py-2 text-[13px]">
+            {['QB','RB','WR','OL','DL','LB','DB','ST','K','P','OTHER'].map((p) => <option value={p}>{p}</option>)}
+          </select>
+          <select name="status" class="rounded-md border border-stone bg-pearl px-2 py-2 text-[13px]">
+            <option value="active">Aktivní</option>
+            <option value="injured">Zranění</option>
+            <option value="suspended">Suspenze</option>
+            <option value="retired">Ukončil</option>
+          </select>
+          <button type="submit" class="rounded-md bg-plum px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#3F2B68]">+ Přidat</button>
+        </form>
+      </div>
+
+      <!-- Players list -->
+      <div class="rounded-xl border border-stone bg-pearl">
+        <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Soupiska</p>
+          <span class="text-[12px] text-slate">{(players ?? []).length} hráčů</span>
+        </div>
+        {(players ?? []).length === 0 ? (
+          <div class="p-6 text-center text-[13px] text-slate">Žádní hráči. Přidej výše.</div>
+        ) : (
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[640px] text-left text-[13px]">
+              <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                <tr>
+                  <th class="px-5 py-3 w-12 text-center tabular-nums">#</th>
+                  <th class="py-3">Jméno</th>
+                  <th class="px-3 py-3">Pozice</th>
+                  <th class="px-3 py-3">Status</th>
+                  <th class="px-5 py-3"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-stone">
+                {(players ?? []).map((p: any) => (
+                  <tr class="transition-colors hover:bg-mist/60">
+                    <td class="px-5 py-3 text-center tabular-nums text-graphite">{p.jersey_number ?? '—'}</td>
+                    <td class="py-3 text-ink font-semibold">{p.first_name} {p.last_name ?? ''}</td>
+                    <td class="px-3 py-3 text-graphite">{p.position}</td>
+                    <td class="px-3 py-3 text-graphite">{p.status}</td>
+                    <td class="px-5 py-3 text-right">
+                      <form method="POST" action="/api/super/team/remove-player" class="inline">
+                        <input type="hidden" name="player_id" value={p.id} />
+                        <input type="hidden" name="team_id" value={team.id} />
+                        <button type="submit" class="rounded-md border border-stone bg-pearl px-2 py-1 text-[11px] font-medium text-graphite hover:bg-mist hover:border-signal/40" onclick="return confirm('Smazat hráče včetně všech stats?')">Smazat</button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <!-- Recent matches link -->
+      <div class="rounded-xl border border-stone bg-pearl">
+        <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Posledních {(matches ?? []).length} zápasů</p>
+          <a href={`/admin/matches?team=${team.id}`} class="text-[12px] font-semibold text-plum hover:underline">Všechny →</a>
+        </div>
+        {(matches ?? []).length === 0 ? <div class="p-6 text-center text-[13px] text-slate">Žádné zápasy.</div> : (
+          <ul class="divide-y divide-stone">
+            {(matches ?? []).map((m: any) => (
+              <li class="flex items-center justify-between gap-3 px-5 py-3">
+                <a href={`/admin/matches/${m.id}`} class="text-[13px] font-semibold text-ink hover:text-plum">vs {m.opponent}</a>
+                <div class="flex items-center gap-3">
+                  <span class="text-[11px] text-slate">{new Date(m.date).toLocaleDateString('cs-CZ')}</span>
+                  <span class="font-bold tabular-nums text-ink">{m.our_score}–{m.opp_score}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+
+    <aside class="space-y-4">
+      <div class="rounded-xl border border-stone bg-pearl p-5">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Team info</p>
+        <dl class="mt-3 space-y-2 text-[12px]">
+          <div><dt class="text-stone-2">Sport</dt><dd class="text-ink">{team.sport}</dd></div>
+          <div><dt class="text-stone-2">Kategorie</dt><dd class="text-ink">{team.category ?? '—'}</dd></div>
+          <div><dt class="text-stone-2">Sezóna</dt><dd class="text-ink">{team.season}</dd></div>
+          <div><dt class="text-stone-2">Archivovaný</dt><dd class="text-ink">{team.is_archived ? 'Ano' : 'Ne'}</dd></div>
+          <div><dt class="text-stone-2">Team ID</dt><dd class="font-mono text-[11px] text-graphite">{team.id.slice(0, 16)}…</dd></div>
+        </dl>
+      </div>
+    </aside>
+  </div>
+</AdminLayout>

@@ -1,0 +1,48 @@
+import type { APIRoute } from 'astro';
+import { getSupabaseAdmin } from '../../../../lib/supabase';
+
+export const prerender = false;
+
+const NUMERIC_FIELDS = [
+  'our_score', 'opp_score',
+  'rush_yds', 'pass_yds', 'total_yds',
+  'off_drives', 'off_td',
+  'qb_att', 'qb_comp', 'qb_td', 'qb_int', 'qb_yds',
+  'xp1_att', 'xp1_ok', 'xp2_att', 'xp2_ok',
+  'def_drives', 'def_stops',
+  'opp_rush_yds', 'opp_pass_yds', 'opp_total_yds',
+  'pen_count', 'pen_yds',
+];
+
+export const POST: APIRoute = async ({ request, locals, redirect }) => {
+  if (!locals.isSuperAdmin) return redirect('/app', 303);
+
+  const form = await request.formData();
+  const matchId = String(form.get('match_id') ?? '').trim();
+  if (!matchId) {
+    return redirect('/admin/matches?error=missing_id', 303);
+  }
+
+  const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+
+  const date = String(form.get('date') ?? '').trim();
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) updates.date = date;
+  const opponent = String(form.get('opponent') ?? '').trim();
+  if (opponent) updates.opponent = opponent;
+
+  for (const k of NUMERIC_FIELDS) {
+    const raw = form.get(k);
+    if (raw == null) continue;
+    const s = String(raw).trim();
+    if (s === '') continue;
+    const n = parseInt(s, 10);
+    if (!isNaN(n) && n >= 0) updates[k] = n;
+  }
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin.from('matches').update(updates).eq('id', matchId);
+  if (error) {
+    return redirect(`/admin/matches/${matchId}?error=${encodeURIComponent(error.message)}`, 303);
+  }
+  return redirect(`/admin/matches/${matchId}?saved=1`, 303);
+};
