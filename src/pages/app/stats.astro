@@ -247,10 +247,11 @@ function photoOf(name: string, fallback?: string): string | undefined {
   return fallback;
 }
 
-// ── Player tables (season-only) — auto-prefer Supabase agg, GAS fallback ──
-// Consistent with the per-section source picker used elsewhere on the page:
-// if Supabase has player stats for this team, use them; otherwise fall back
-// to GAS publicStats. Both shapes are identical (QbPlayer/WrPlayer/DbPlayer).
+// ── Player tables (season-only) — prefer GAS (truth source), Supabase fallback ──
+// GAS publicStats has the COMPLETE season aggregate from Google Sheets (truth source).
+// Supabase has only matches that have been imported / written via PWA Scorer —
+// that's a subset and underreports. So we keep GAS as primary for player tables;
+// Supabase is fallback only when GAS returns nothing (e.g. new team without GAS sheet).
 const qbListGas  = stats?.qbStats ?? [];
 const wrListGas  = stats?.wrStats ?? [];
 const dbListGas  = stats?.defenseLeaders ?? [];
@@ -261,8 +262,8 @@ const dbListSupa = supabaseStats.defenseLeaders ?? [];
 const playerSource: 'gas' | 'supabase' =
   sourceForcedTo === 'gas' ? 'gas' :
   sourceForcedTo === 'supabase' ? 'supabase' :
-  // auto: Supabase if it has data, otherwise GAS
-  (qbListSupa.length + wrListSupa.length + dbListSupa.length > 0 ? 'supabase' : 'gas');
+  // auto: prefer GAS (full season truth), fall back to Supabase if GAS empty
+  (qbListGas.length + wrListGas.length + dbListGas.length > 0 ? 'gas' : 'supabase');
 
 const qbList = (playerSource === 'supabase' ? qbListSupa : qbListGas).slice().sort((a, b) => b.qb.td - a.qb.td);
 const wrList = (playerSource === 'supabase' ? wrListSupa : wrListGas).slice().sort((a, b) => b.wr.td - a.wr.td);
