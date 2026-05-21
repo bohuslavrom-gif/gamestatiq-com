@@ -1,0 +1,141 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getSupabaseAdmin } from '../../lib/supabase';
+
+export const prerender = false;
+
+const admin = getSupabaseAdmin();
+
+const [
+  { count: clubsCount },
+  { count: teamsCount },
+  { count: playersCount },
+  { count: matchesCount },
+  { count: leaguesCount },
+  { count: leagueMembersCount },
+  { count: leagueTeamsApproved },
+  { count: leagueTeamsPending },
+] = await Promise.all([
+  admin.from('clubs').select('id', { count: 'exact', head: true }),
+  admin.from('teams').select('id', { count: 'exact', head: true }),
+  admin.from('players').select('id', { count: 'exact', head: true }),
+  admin.from('matches').select('id', { count: 'exact', head: true }),
+  admin.from('leagues').select('id', { count: 'exact', head: true }),
+  admin.from('league_members').select('id', { count: 'exact', head: true }),
+  admin.from('league_teams').select('league_id', { count: 'exact', head: true }).not('approved_at', 'is', null),
+  admin.from('league_teams').select('league_id', { count: 'exact', head: true }).is('approved_at', null),
+]);
+
+// Recent clubs (last 5 created)
+const { data: recentClubs } = await admin
+  .from('clubs')
+  .select('id, name, subscription_tier, created_at')
+  .order('created_at', { ascending: false })
+  .limit(5);
+
+// Recent leagues
+const { data: recentLeagues } = await admin
+  .from('leagues')
+  .select('id, name, sport, subscription_tier, created_at')
+  .order('created_at', { ascending: false })
+  .limit(5);
+
+// Total users via auth admin API (defensive — may not work without service_role)
+let usersCount: number | null = null;
+try {
+  const { data: usersList } = await admin.auth.admin.listUsers({ perPage: 1 });
+  usersCount = (usersList as any)?.users?.length != null ? ((usersList as any).total ?? null) : null;
+} catch { /* ignore */ }
+
+const tierLabel: Record<string, string> = { trial: 'Trial', tym: 'Tým', klub: 'Klub', liga: 'Liga' };
+const formatDate = (s: string) => new Date(s).toLocaleDateString('cs-CZ');
+---
+
+<AdminLayout title="Přehled · Admin" active="overview" pageTitle="Přehled platformy" pageSub="Souhrn napříč všemi kluby a ligami">
+
+  <!-- KPI grid -->
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    {[
+      { label: 'Kluby',     value: clubsCount ?? 0,   accent: 'text-signal',     href: '/admin/clubs' },
+      { label: 'Týmy',      value: teamsCount ?? 0,   accent: 'text-[#1B5E83]',  href: '/admin/clubs' },
+      { label: 'Hráči',     value: playersCount ?? 0, accent: 'text-verde',      href: null },
+      { label: 'Zápasy',    value: matchesCount ?? 0, accent: 'text-[#A0531B]',  href: '/admin/matches' },
+      { label: 'Ligy',      value: leaguesCount ?? 0, accent: 'text-[#4F3878]',  href: '/admin/leagues' },
+      { label: 'Členové lig', value: leagueMembersCount ?? 0, accent: 'text-graphite', href: null },
+      { label: 'Schválené league_teams', value: leagueTeamsApproved ?? 0, accent: 'text-verde', href: '/admin/leagues' },
+      { label: 'Čekající pozvánky', value: leagueTeamsPending ?? 0, accent: 'text-[#A0531B]', href: '/admin/leagues' },
+    ].map((k) => (
+      k.href ? (
+        <a href={k.href} class="rounded-xl border border-stone bg-pearl p-5 transition-colors hover:border-plum/40">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">{k.label}</p>
+          <p class={`mt-3 text-3xl font-bold tabular-nums tracking-tight-3 ${k.accent}`}>{k.value}</p>
+        </a>
+      ) : (
+        <div class="rounded-xl border border-stone bg-pearl p-5">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">{k.label}</p>
+          <p class={`mt-3 text-3xl font-bold tabular-nums tracking-tight-3 ${k.accent}`}>{k.value}</p>
+        </div>
+      )
+    ))}
+  </div>
+
+  <!-- Recent activity grid -->
+  <div class="mt-8 grid gap-6 lg:grid-cols-2">
+    <!-- Recent clubs -->
+    <div class="rounded-xl border border-stone bg-pearl">
+      <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Nejnovější kluby</p>
+        <a href="/admin/clubs" class="text-[12px] font-semibold text-plum hover:underline">Všechny →</a>
+      </div>
+      <ul class="divide-y divide-stone">
+        {(recentClubs ?? []).length === 0 ? (
+          <li class="p-6 text-center text-[13px] text-slate">Zatím žádné kluby.</li>
+        ) : (recentClubs ?? []).map((c: any) => (
+          <li class="flex items-center justify-between gap-3 px-5 py-3">
+            <a href={`/admin/clubs/${c.id}`} class="min-w-0 flex-1 hover:text-signal">
+              <p class="truncate text-[14px] font-semibold text-ink">{c.name}</p>
+              <p class="text-[11px] text-slate">vytvořeno {formatDate(c.created_at)}</p>
+            </a>
+            <span class="rounded-md bg-mist px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-graphite">
+              {tierLabel[c.subscription_tier] ?? c.subscription_tier}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <!-- Recent leagues -->
+    <div class="rounded-xl border border-stone bg-pearl">
+      <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Nejnovější ligy</p>
+        <a href="/admin/leagues" class="text-[12px] font-semibold text-plum hover:underline">Všechny →</a>
+      </div>
+      <ul class="divide-y divide-stone">
+        {(recentLeagues ?? []).length === 0 ? (
+          <li class="p-6 text-center text-[13px] text-slate">Zatím žádné ligy.</li>
+        ) : (recentLeagues ?? []).map((l: any) => (
+          <li class="flex items-center justify-between gap-3 px-5 py-3">
+            <a href={`/admin/leagues/${l.id}`} class="min-w-0 flex-1 hover:text-plum">
+              <p class="truncate text-[14px] font-semibold text-ink">{l.name}</p>
+              <p class="text-[11px] text-slate">{l.sport} · vytvořeno {formatDate(l.created_at)}</p>
+            </a>
+            <span class="rounded-md bg-plum/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#4F3878]">
+              {tierLabel[l.subscription_tier] ?? l.subscription_tier}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </div>
+
+  <!-- Quick actions -->
+  <div class="mt-8 rounded-xl border border-plum/30 bg-gradient-to-br from-plum/5 to-signal/5 p-6">
+    <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Rychlé akce</p>
+    <p class="mt-1 text-[12px] text-slate">Pro premium customer onboarding nebo troubleshooting.</p>
+    <div class="mt-4 flex flex-wrap gap-2">
+      <a href="/admin/leagues?new=1" class="rounded-lg bg-plum px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#3F2B68]">+ Vytvořit ligu manuálně</a>
+      <a href="/admin/clubs" class="rounded-lg border border-stone bg-pearl px-4 py-2 text-[13px] font-medium text-graphite hover:bg-mist">Spravovat kluby</a>
+      <a href="/admin/users" class="rounded-lg border border-stone bg-pearl px-4 py-2 text-[13px] font-medium text-graphite hover:bg-mist">Spravovat uživatele</a>
+    </div>
+  </div>
+</AdminLayout>

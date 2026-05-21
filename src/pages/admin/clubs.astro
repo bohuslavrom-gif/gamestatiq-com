@@ -1,0 +1,93 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getSupabaseAdmin } from '../../lib/supabase';
+
+export const prerender = false;
+
+const admin = getSupabaseAdmin();
+
+const { data: clubsRaw } = await admin
+  .from('clubs')
+  .select('id, name, slug, sport, subscription_tier, subscription_status, owner_id, created_at, custom_domain')
+  .order('created_at', { ascending: false });
+const clubs = (clubsRaw ?? []) as any[];
+
+// Counts per club
+const clubIds = clubs.map((c) => c.id);
+const [teamsAgg, playersAgg, matchesAgg, membersAgg] = clubIds.length ? await Promise.all([
+  admin.from('teams').select('club_id', { count: 'exact', head: false }).in('club_id', clubIds),
+  admin.from('players').select('club_id', { count: 'exact', head: false }).in('club_id', clubIds),
+  admin.from('matches').select('club_id', { count: 'exact', head: false }).in('club_id', clubIds),
+  admin.from('club_members').select('club_id', { count: 'exact', head: false }).in('club_id', clubIds),
+]) : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+
+const tally = (rows: any[] | null): Map<string, number> => {
+  const m = new Map<string, number>();
+  for (const r of rows ?? []) m.set(r.club_id, (m.get(r.club_id) ?? 0) + 1);
+  return m;
+};
+const teamsCnt   = tally(teamsAgg.data);
+const playersCnt = tally(playersAgg.data);
+const matchesCnt = tally(matchesAgg.data);
+const membersCnt = tally(membersAgg.data);
+
+const tierLabel: Record<string, string> = { trial: 'Trial', tym: 'Tým', klub: 'Klub', liga: 'Liga' };
+const tierColor: Record<string, string> = {
+  trial: 'bg-sky/15 text-[#1B5E83]',
+  tym:   'bg-mist text-graphite',
+  klub:  'bg-signal/15 text-signal',
+  liga:  'bg-plum/15 text-[#4F3878]',
+};
+const statusLabel: Record<string, string> = {
+  trialing: 'Trial', active: 'Aktivní', past_due: 'Nezaplaceno', canceled: 'Zrušeno', incomplete: 'Neúplné',
+};
+---
+
+<AdminLayout title="Kluby · Admin" active="clubs" pageTitle="Kluby" pageSub={`${clubs.length} klub${clubs.length === 1 ? '' : clubs.length < 5 ? 'y' : 'ů'} celkem`}>
+  {clubs.length === 0 ? (
+    <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
+      <p class="text-[15px] font-semibold text-ink">Žádné kluby</p>
+      <p class="mt-1 text-[13px] text-slate">Kluby se vytvářejí přes <code class="rounded bg-mist px-1 py-0.5 text-[11px]">/signup</code>.</p>
+    </div>
+  ) : (
+    <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[900px] text-left text-[13px]">
+          <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+            <tr>
+              <th class="px-5 py-3">Název</th>
+              <th class="px-3 py-3">Tier</th>
+              <th class="px-3 py-3">Status</th>
+              <th class="px-3 py-3 text-center tabular-nums">Týmy</th>
+              <th class="px-3 py-3 text-center tabular-nums">Hráči</th>
+              <th class="px-3 py-3 text-center tabular-nums">Zápasy</th>
+              <th class="px-3 py-3 text-center tabular-nums">Členové</th>
+              <th class="px-3 py-3">Vytvořeno</th>
+              <th class="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone">
+            {clubs.map((c) => (
+              <tr class="transition-colors hover:bg-mist/60">
+                <td class="px-5 py-3">
+                  <a href={`/admin/clubs/${c.id}`} class="text-[14px] font-semibold text-ink hover:text-signal">{c.name}</a>
+                  <p class="text-[11px] text-slate">/{c.slug} · {c.sport ?? '—'}</p>
+                </td>
+                <td class="px-3 py-3"><span class={`rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${tierColor[c.subscription_tier] ?? 'bg-mist text-slate'}`}>{tierLabel[c.subscription_tier] ?? c.subscription_tier}</span></td>
+                <td class="px-3 py-3 text-[12px] text-graphite">{statusLabel[c.subscription_status] ?? c.subscription_status}</td>
+                <td class="px-3 py-3 text-center tabular-nums text-graphite">{teamsCnt.get(c.id) ?? 0}</td>
+                <td class="px-3 py-3 text-center tabular-nums text-graphite">{playersCnt.get(c.id) ?? 0}</td>
+                <td class="px-3 py-3 text-center tabular-nums text-graphite">{matchesCnt.get(c.id) ?? 0}</td>
+                <td class="px-3 py-3 text-center tabular-nums text-graphite">{membersCnt.get(c.id) ?? 0}</td>
+                <td class="px-3 py-3 text-[12px] text-slate">{new Date(c.created_at).toLocaleDateString('cs-CZ')}</td>
+                <td class="px-5 py-3 text-right">
+                  <a href={`/admin/clubs/${c.id}`} class="text-[12px] font-semibold text-plum hover:underline">Detail →</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
+</AdminLayout>

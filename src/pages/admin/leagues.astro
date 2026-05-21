@@ -1,0 +1,98 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getSupabaseAdmin } from '../../lib/supabase';
+
+export const prerender = false;
+
+const admin = getSupabaseAdmin();
+
+const { data: leaguesRaw } = await admin
+  .from('leagues')
+  .select('id, name, slug, sport, subscription_tier, subscription_status, owner_user_id, trial_ends_at, created_at')
+  .order('created_at', { ascending: false });
+const leagues = (leaguesRaw ?? []) as any[];
+
+const leagueIds = leagues.map((l) => l.id);
+const [membersAgg, teamsApprovedAgg, teamsPendingAgg] = leagueIds.length ? await Promise.all([
+  admin.from('league_members').select('league_id', { count: 'exact', head: false }).in('league_id', leagueIds),
+  admin.from('league_teams').select('league_id', { count: 'exact', head: false }).in('league_id', leagueIds).not('approved_at', 'is', null),
+  admin.from('league_teams').select('league_id', { count: 'exact', head: false }).in('league_id', leagueIds).is('approved_at', null),
+]) : [{ data: [] }, { data: [] }, { data: [] }];
+
+const tally = (rows: any[] | null): Map<string, number> => {
+  const m = new Map<string, number>();
+  for (const r of rows ?? []) m.set(r.league_id, (m.get(r.league_id) ?? 0) + 1);
+  return m;
+};
+const membersCnt = tally(membersAgg.data);
+const approvedCnt = tally(teamsApprovedAgg.data);
+const pendingCnt = tally(teamsPendingAgg.data);
+
+const tierColor: Record<string, string> = {
+  klub: 'bg-signal/15 text-signal',
+  liga: 'bg-plum/15 text-[#4F3878]',
+};
+const tierLabel: Record<string, string> = { klub: 'Klub', liga: 'Liga' };
+const statusLabel: Record<string, string> = {
+  trialing: 'Trial', active: 'Aktivní', past_due: 'Nezaplaceno', canceled: 'Zrušeno', incomplete: 'Neúplné',
+};
+
+const url = new URL(Astro.request.url);
+const showNew = url.searchParams.get('new') === '1';
+---
+
+<AdminLayout title="Ligy · Admin" active="leagues" pageTitle="Ligy" pageSub={`${leagues.length} ${leagues.length === 1 ? 'liga' : leagues.length < 5 ? 'ligy' : 'lig'} celkem`}>
+
+  <div class="mb-4 flex flex-wrap justify-end gap-2">
+    <a href="/admin/leagues/new" class="rounded-lg bg-plum px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#3F2B68]">+ Nová liga (manuálně)</a>
+  </div>
+
+  {leagues.length === 0 ? (
+    <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
+      <p class="text-[15px] font-semibold text-ink">Žádné ligy</p>
+      <p class="mt-1 text-[13px] text-slate">Ligy vznikají přes <code class="rounded bg-mist px-1 py-0.5 text-[11px]">/liga-signup</code> nebo manuálně přes "+ Nová liga".</p>
+    </div>
+  ) : (
+    <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[820px] text-left text-[13px]">
+          <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+            <tr>
+              <th class="px-5 py-3">Název</th>
+              <th class="px-3 py-3">Tier</th>
+              <th class="px-3 py-3">Status</th>
+              <th class="px-3 py-3 text-center tabular-nums">Schválené týmy</th>
+              <th class="px-3 py-3 text-center tabular-nums">Čekající</th>
+              <th class="px-3 py-3 text-center tabular-nums">Členové</th>
+              <th class="px-3 py-3">Vytvořeno</th>
+              <th class="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone">
+            {leagues.map((l) => (
+              <tr class="transition-colors hover:bg-mist/60">
+                <td class="px-5 py-3">
+                  <a href={`/admin/leagues/${l.id}`} class="text-[14px] font-semibold text-ink hover:text-plum">{l.name}</a>
+                  <p class="text-[11px] text-slate">/liga/{l.slug} · {l.sport}</p>
+                </td>
+                <td class="px-3 py-3"><span class={`rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${tierColor[l.subscription_tier] ?? 'bg-mist text-slate'}`}>{tierLabel[l.subscription_tier] ?? l.subscription_tier}</span></td>
+                <td class="px-3 py-3 text-[12px] text-graphite">{statusLabel[l.subscription_status] ?? l.subscription_status}</td>
+                <td class="px-3 py-3 text-center font-semibold tabular-nums text-verde">{approvedCnt.get(l.id) ?? 0}</td>
+                <td class="px-3 py-3 text-center tabular-nums text-[#A0531B]">{pendingCnt.get(l.id) ?? 0}</td>
+                <td class="px-3 py-3 text-center tabular-nums text-graphite">{membersCnt.get(l.id) ?? 0}</td>
+                <td class="px-3 py-3 text-[12px] text-slate">{new Date(l.created_at).toLocaleDateString('cs-CZ')}</td>
+                <td class="px-5 py-3 text-right">
+                  <a href={`/admin/leagues/${l.id}`} class="text-[12px] font-semibold text-plum hover:underline">Detail →</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
+
+  {showNew && (
+    <p class="mt-6 text-[12px] text-slate">→ Nová liga manuálně: <a href="/admin/leagues/new" class="font-semibold text-plum hover:underline">/admin/leagues/new</a></p>
+  )}
+</AdminLayout>

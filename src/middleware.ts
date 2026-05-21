@@ -1,6 +1,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { getSupabase, getSupabaseAdmin } from './lib/supabase';
 import { listTeamsForUser, pickCurrentTeam, setTeamCookie, getTeamCookie } from './lib/teams';
+import { isSuperAdmin } from './lib/admin';
 
 const PUBLIC_PATHS = [
   '/login',
@@ -44,6 +45,18 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   if (isProtected(url.pathname) && !user) {
     const next_url = url.pathname + url.search;
     return ctx.redirect(`/login?next=${encodeURIComponent(next_url)}`, 302);
+  }
+
+  // Iter 7: Super-admin guard on /admin/* and /api/super/*
+  if (url.pathname === '/admin' || url.pathname.startsWith('/admin/') || url.pathname.startsWith('/api/super/')) {
+    if (!user) {
+      return ctx.redirect(`/login?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
+    }
+    if (!isSuperAdmin(user)) {
+      // Not a super admin — silent redirect to /app so URL doesn't reveal admin surface
+      return ctx.redirect('/app', 302);
+    }
+    ctx.locals.isSuperAdmin = true;
   }
 
   // Logged-in users bounced away from auth pages

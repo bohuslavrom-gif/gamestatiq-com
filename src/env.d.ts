@@ -14,6 +14,8 @@ interface ImportMetaEnv {
   readonly STRIPE_PRICE_KLUB?: string;
   readonly STRIPE_PRICE_KLUB_V2?: string;
   readonly STRIPE_PRICE_LIGA?: string;
+  // Master admin allowlist (Iter 7) — comma-separated email addresses.
+  readonly SUPER_ADMIN_EMAILS?: string;
   readonly STRIPE_WEBHOOK_SECRET: string;
 }
 
@@ -32,5 +34,7 @@ declare namespace App {
     /** Iter 5: League context for league admin/staff users. */
     league?: import('./lib/supabase').League | null;
     leagueRole?: 'admin' | 'staff' | 'viewer';
+    /** Iter 7: Super-admin flag — true on /admin/* and /api/super/* routes only. */
+    isSuperAdmin?: boolean;
   }
 }

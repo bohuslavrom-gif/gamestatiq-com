@@ -1,0 +1,109 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getSupabaseAdmin } from '../../lib/supabase';
+import { isSuperAdmin } from '../../lib/admin';
+
+export const prerender = false;
+
+const admin = getSupabaseAdmin();
+
+// Profiles + their memberships (club + league)
+const { data: profilesRaw } = await admin
+  .from('profiles')
+  .select('id, email, first_name, last_name, created_at')
+  .order('created_at', { ascending: false })
+  .limit(100);
+const profiles = (profilesRaw ?? []) as any[];
+
+const userIds = profiles.map((p) => p.id);
+const [cmsRes, lmsRes] = userIds.length ? await Promise.all([
+  admin.from('club_members').select('user_id, role, clubs(name)').in('user_id', userIds),
+  admin.from('league_members').select('user_id, role, leagues(name)').in('user_id', userIds),
+]) : [{ data: [] }, { data: [] }];
+const cms = (cmsRes.data ?? []) as any[];
+const lms = (lmsRes.data ?? []) as any[];
+
+const clubMemByUser  = new Map<string, { name: string; role: string }[]>();
+const leagueMemByUser = new Map<string, { name: string; role: string }[]>();
+for (const m of cms) {
+  const arr = clubMemByUser.get(m.user_id) ?? [];
+  arr.push({ name: m.clubs?.name ?? '—', role: m.role });
+  clubMemByUser.set(m.user_id, arr);
+}
+for (const m of lms) {
+  const arr = leagueMemByUser.get(m.user_id) ?? [];
+  arr.push({ name: m.leagues?.name ?? '—', role: m.role });
+  leagueMemByUser.set(m.user_id, arr);
+}
+
+const initials = (fn: string, ln: string, email: string) => {
+  if (fn || ln) return ((fn?.[0] ?? '') + (ln?.[0] ?? '')).toUpperCase();
+  return (email?.[0] ?? '?').toUpperCase();
+};
+---
+
+<AdminLayout title="Uživatelé · Admin" active="users" pageTitle="Uživatelé" pageSub={`${profiles.length} ${profiles.length === 1 ? 'profil' : profiles.length < 5 ? 'profily' : 'profilů'} (max 100 zobrazeno)`}>
+
+  {profiles.length === 0 ? (
+    <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
+      <p class="text-[15px] font-semibold text-ink">Žádné profily</p>
+    </div>
+  ) : (
+    <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[820px] text-left text-[13px]">
+          <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+            <tr>
+              <th class="px-5 py-3">Uživatel</th>
+              <th class="px-3 py-3">E-mail</th>
+              <th class="px-3 py-3">Klubové členství</th>
+              <th class="px-3 py-3">Liga členství</th>
+              <th class="px-3 py-3">Registrace</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone">
+            {profiles.map((p) => {
+              const fn = p.first_name ?? '';
+              const ln = p.last_name ?? '';
+              const fullName = [fn, ln].filter(Boolean).join(' ') || '—';
+              const isAdminUser = isSuperAdmin({ email: p.email });
+              const clubMems = clubMemByUser.get(p.id) ?? [];
+              const leagueMems = leagueMemByUser.get(p.id) ?? [];
+              return (
+                <tr class="transition-colors hover:bg-mist/60">
+                  <td class="px-5 py-3">
+                    <div class="flex items-center gap-3">
+                      <span class={`inline-flex h-9 w-9 items-center justify-center rounded-full text-[12px] font-semibold ${isAdminUser ? 'bg-plum text-white' : 'bg-ink/5 text-ink'}`}>
+                        {initials(fn, ln, p.email ?? '?')}
+                      </span>
+                      <div>
+                        <p class="text-[14px] font-semibold text-ink">{fullName}{isAdminUser && <span class="ml-2 inline-flex items-center rounded-md bg-plum/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#4F3878]">Super admin</span>}</p>
+                        <p class="text-[10px] font-mono text-stone-2">{p.id.slice(0, 8)}…</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="px-3 py-3 text-[12px] text-graphite">{p.email ?? '—'}</td>
+                  <td class="px-3 py-3 text-[12px]">
+                    {clubMems.length === 0 ? <span class="text-stone-2">—</span> : (
+                      <ul class="space-y-0.5">
+                        {clubMems.map((m) => (<li>{m.name} <span class="text-[10px] text-stone-2">({m.role})</span></li>))}
+                      </ul>
+                    )}
+                  </td>
+                  <td class="px-3 py-3 text-[12px]">
+                    {leagueMems.length === 0 ? <span class="text-stone-2">—</span> : (
+                      <ul class="space-y-0.5">
+                        {leagueMems.map((m) => (<li>{m.name} <span class="text-[10px] text-stone-2">({m.role})</span></li>))}
+                      </ul>
+                    )}
+                  </td>
+                  <td class="px-3 py-3 text-[11px] text-slate">{new Date(p.created_at).toLocaleDateString('cs-CZ')}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
+</AdminLayout>

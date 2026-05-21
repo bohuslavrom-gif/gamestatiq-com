@@ -1,0 +1,71 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+
+const url = new URL(Astro.request.url);
+const error = url.searchParams.get('error');
+---
+
+<AdminLayout title="Nová liga · Admin" active="leagues" pageTitle="Nová liga (manuálně)" pageSub="Vytvořit ligu pro premium customer / federaci">
+
+  <div class="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
+    <a href="/admin/leagues" class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">← Všechny ligy</a>
+  </div>
+
+  {error && <div class="mb-6 rounded-lg border border-signal/30 bg-signal/5 px-4 py-3 text-[14px] text-signal">{error}</div>}
+
+  <div class="rounded-xl border border-plum/30 bg-gradient-to-br from-plum/5 to-signal/5 p-6 lg:p-8">
+    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#4F3878]">Super admin · Manuální vytvoření</p>
+    <h2 class="mt-2 text-[22px] font-bold tracking-tight-2 text-ink">Nová liga / federace</h2>
+    <p class="mt-1 text-[13px] text-graphite">
+      Vytvořte ligu pro premium customer. Trial je nastaven na <strong>60 dní</strong> (oproti 30 u self-serve).
+      Owner musí mít existující účet — pokud ne, požádej ho aby provedl <code class="rounded bg-mist px-1 py-0.5 text-[11px]">/signup</code> a pak ho přiřaď.
+    </p>
+
+    <form method="POST" action="/api/super/league/create" class="mt-6 space-y-4">
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block">
+          <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Název ligy *</span>
+          <input type="text" name="name" required maxlength="80" placeholder="Česká flag football liga" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-plum focus:outline-none focus:ring-2 focus:ring-plum/20" />
+        </label>
+        <label class="block">
+          <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Sport *</span>
+          <select name="sport" required class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-plum focus:outline-none focus:ring-2 focus:ring-plum/20">
+            <option value="flag-football" selected>Flag football</option>
+            <option value="american_football">American football</option>
+            <option value="football">Football (soccer)</option>
+            <option value="basketball">Basketball</option>
+            <option value="volleyball">Volejbal</option>
+            <option value="hockey">Hokej</option>
+            <option value="other">Jiný</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="block">
+        <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Tier</span>
+        <select name="tier" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-plum focus:outline-none focus:ring-2 focus:ring-plum/20">
+          <option value="liga" selected>Liga (Enterprise)</option>
+          <option value="klub">Klub (multi-team)</option>
+        </select>
+      </label>
+
+      <label class="block">
+        <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Owner e-mail (volitelný)</span>
+        <input type="email" name="owner_email" placeholder="admin@federace.cz" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-plum focus:outline-none focus:ring-2 focus:ring-plum/20" />
+        <p class="mt-1 text-[11px] text-slate">Pokud zadáte, owner musí mít existující účet (přes /signup). Bude přidán jako admin.</p>
+      </label>
+
+      <label class="block">
+        <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Popis (volitelný)</span>
+        <textarea name="description" rows="3" maxlength="500" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-plum focus:outline-none focus:ring-2 focus:ring-plum/20"></textarea>
+      </label>
+
+      <div class="flex flex-wrap items-center gap-3 pt-2">
+        <button type="submit" class="rounded-lg bg-plum px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#3F2B68]">Vytvořit ligu</button>
+        <a href="/admin/leagues" class="text-[13px] font-medium text-graphite hover:text-ink">Zrušit</a>
+      </div>
+    </form>
+  </div>
+</AdminLayout>

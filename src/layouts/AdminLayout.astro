@@ -1,0 +1,112 @@
+---
+import '../styles/global.css';
+import AdminSidebar from '../components/AdminSidebar.astro';
+
+interface Props {
+  title?: string;
+  active?: 'overview' | 'clubs' | 'leagues' | 'users' | 'matches' | 'settings';
+  pageTitle?: string;
+  pageSub?: string;
+}
+
+const {
+  title = 'Master admin · GameStatiq',
+  active = 'overview',
+  pageTitle,
+  pageSub,
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/brand/gamestatiq-favicon.svg" />
+    <meta name="theme-color" content="#0F1B2D" />
+    <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="bg-mist">
+    <AdminSidebar active={active} />
+
+    <!-- God mode top bar (always visible) -->
+    <div class="fixed top-0 left-0 right-0 z-40 flex h-9 items-center justify-center bg-gradient-to-r from-[#4F3878] via-ink to-signal text-[12px] font-semibold tracking-[0.05em] text-white">
+      <span class="inline-flex items-center gap-2">
+        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 7v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7l-8-5Z"/></svg>
+        SUPER ADMIN MODE · GameStatiq Master
+      </span>
+    </div>
+
+    <!-- Mobile top bar (below the god-mode bar) -->
+    <div class="sticky top-9 z-20 flex h-14 items-center justify-between border-b border-stone bg-pearl px-4 lg:hidden">
+      <button
+        type="button"
+        id="admin-sidebar-toggle"
+        aria-label="Otevřít menu"
+        class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-stone bg-pearl text-ink"
+      >
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" y1="7" x2="20" y2="7"/>
+          <line x1="4" y1="12" x2="20" y2="12"/>
+          <line x1="4" y1="17" x2="20" y2="17"/>
+        </svg>
+      </button>
+      <span class="inline-flex items-center gap-2">
+        <img src="/brand/gamestatiq-icon.svg" alt="" class="h-6 w-6" width="24" height="24" />
+        <span class="text-[15px] font-semibold tracking-tight-2">Game<span class="font-bold text-plum">Statiq</span></span>
+      </span>
+      <span class="w-9"></span>
+    </div>
+
+    <div
+      id="admin-sidebar-overlay"
+      class="fixed inset-0 z-20 hidden bg-ink/30 backdrop-blur-sm lg:hidden"
+      aria-hidden="true"
+    ></div>
+
+    <main class="pt-9 lg:pl-64">
+      {(pageTitle || pageSub) && (
+        <div class="border-b border-stone bg-pearl">
+          <div class="px-5 py-6 lg:px-10 lg:py-8">
+            {pageTitle && <h1 class="text-[26px] font-bold tracking-tight-2 text-ink lg:text-[30px]">{pageTitle}</h1>}
+            {pageSub && <p class="mt-1 max-w-2xl text-[15px] text-slate">{pageSub}</p>}
+          </div>
+        </div>
+      )}
+
+      <div class="px-5 py-8 lg:px-10 lg:py-10">
+        <slot />
+      </div>
+    </main>
+
+    <script>
+      const toggle = document.getElementById('admin-sidebar-toggle');
+      const sidebar = document.querySelector('.admin-sidebar');
+      const overlay = document.getElementById('admin-sidebar-overlay');
+
+      function setOpen(open: boolean) {
+        if (!sidebar || !overlay) return;
+        if (open) {
+          sidebar.classList.remove('-translate-x-full');
+          overlay.classList.remove('hidden');
+        } else {
+          sidebar.classList.add('-translate-x-full');
+          overlay.classList.add('hidden');
+        }
+      }
+
+      toggle?.addEventListener('click', () => setOpen(true));
+      overlay?.addEventListener('click', () => setOpen(false));
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') setOpen(false);
+      });
+    </script>
+  </body>
+</html>

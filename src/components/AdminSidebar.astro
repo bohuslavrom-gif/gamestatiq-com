@@ -1,0 +1,79 @@
+---
+interface Props {
+  active?: 'overview' | 'clubs' | 'leagues' | 'users' | 'matches' | 'settings';
+}
+const { active = 'overview' } = Astro.props;
+
+const navItems = [
+  { key: 'overview', label: 'Přehled',     href: '/admin',          icon: 'M3 12l9-9 9 9 M5 10v10h14V10' },
+  { key: 'clubs',    label: 'Kluby',       href: '/admin/clubs',    icon: 'M3 21h18 M3 10h18 M5 6l7-3 7 3 M4 10v11 M20 10v11 M8 14v3 M12 14v3 M16 14v3' },
+  { key: 'leagues',  label: 'Ligy',        href: '/admin/leagues',  icon: 'M12 2 15 8l7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z' },
+  { key: 'users',    label: 'Uživatelé',   href: '/admin/users',    icon: 'M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1 M16 3.13a4 4 0 0 1 0 7.75 M21 21v-1a5 5 0 0 0-3-4.58' },
+  { key: 'matches',  label: 'Zápasy',      href: '/admin/matches',  icon: 'M3 3v18h18 M7 13h3v6 M13 9h3v10 M19 5h3v14' },
+];
+
+const user = Astro.locals.user;
+const email = user?.email ?? '—';
+---
+
+<aside class="admin-sidebar fixed inset-y-0 left-0 top-9 z-30 w-64 flex-shrink-0 -translate-x-full transform border-r border-stone bg-pearl transition-transform duration-200 lg:translate-x-0">
+  <div class="flex h-full flex-col">
+    <div class="flex h-16 items-center gap-2.5 border-b border-stone px-5">
+      <img src="/brand/gamestatiq-icon.svg" alt="" class="h-7 w-7" width="28" height="28" />
+      <span class="text-[17px] font-semibold tracking-tight-2">
+        Game<span class="font-bold text-plum">Statiq</span>
+      </span>
+    </div>
+
+    <div class="border-b border-stone px-3 py-4">
+      <div class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left">
+        <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-plum text-[11px] font-bold tracking-[0.04em] text-white">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 7v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V7l-8-5Z"/></svg>
+        </span>
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-[14px] font-semibold tracking-tight-2 text-ink">Master admin</p>
+          <p class="truncate text-[11px] text-slate">{email}</p>
+        </div>
+      </div>
+    </div>
+
+    <nav class="flex-1 overflow-y-auto px-3 py-4">
+      <ul class="space-y-0.5">
+        {navItems.map((item) => (
+          <li>
+            <a
+              href={item.href}
+              aria-current={active === item.key ? 'page' : undefined}
+              class={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-medium transition-colors ${
+                active === item.key
+                  ? 'bg-plum/10 text-[#4F3878]'
+                  : 'text-graphite hover:bg-mist hover:text-ink'
+              }`}
+            >
+              <svg class="h-4 w-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <path d={item.icon} />
+              </svg>
+              {item.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+
+      <div class="mt-6 rounded-lg border border-plum/20 bg-plum/5 p-4">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#4F3878]">God mode</p>
+        <p class="mt-2 text-[12px] leading-relaxed text-graphite">
+          Vidíte všechny kluby, ligy a uživatele. Můžete vytvořit ligu manuálně pro premium customer a opravit problémy.
+        </p>
+      </div>
+    </nav>
+
+    <div class="border-t border-stone p-3">
+      <div class="flex items-center gap-2">
+        <a href="/app" class="flex-1 rounded-md border border-stone bg-pearl px-3 py-1.5 text-center text-[12px] font-medium text-graphite hover:bg-mist">← Klubový portál</a>
+      </div>
+      <form method="POST" action="/api/auth/logout" class="mt-2">
+        <button type="submit" class="block w-full rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">Odhlásit se</button>
+      </form>
+    </div>
+  </div>
+</aside>
