@@ -155,21 +155,8 @@ const winPct = stats && stats.record.matches > 0
 const ptDiff = stats ? stats.points.for - stats.points.against : 0;
 const ptDiffPerGame = stats && stats.record.matches > 0
   ? (ptDiff / stats.record.matches).toFixed(1) : '0';
-const totalQbTds = stats?.qbStats.reduce((s, p) => s + p.qb.td, 0) ?? 0;
-const totalWrTds = stats?.wrStats.reduce((s, p) => s + p.wr.td, 0) ?? 0;
-const totalSacks = stats?.defenseLeaders.reduce((s, p) => s + p.db.sack, 0) ?? 0;
-const totalInts = stats?.defenseLeaders.reduce((s, p) => s + p.db.int, 0) ?? 0;
-
-const teamStats = stats ? [
-  { label: 'Win %', value: `${winPct}%`, sub: `${stats.record.wins} V z ${stats.record.matches} zápasů` },
-  { label: 'Body / zápas', value: stats.points.forAvg.toFixed(1), sub: 'Útok' },
-  { label: 'Obdržené / zápas', value: stats.points.againstAvg.toFixed(1), sub: 'Obrana' },
-  { label: 'Rozdíl skóre', value: (ptDiff > 0 ? '+' : '') + ptDiff, sub: `${ptDiff > 0 ? '+' : ''}${ptDiffPerGame} / zápas` },
-  { label: 'TD passy', value: String(totalQbTds), sub: 'QB stats' },
-  { label: 'TD chyty', value: String(totalWrTds), sub: 'WR stats' },
-  { label: 'Sacky', value: String(totalSacks), sub: 'Obrana' },
-  { label: 'Interceptions', value: String(totalInts), sub: 'Defenzivní zákroky' },
-] : [];
+// Totals filled after qbList/wrList/dbList resolution below.
+let totalQbTds = 0, totalWrTds = 0, totalSacks = 0, totalInts = 0;
 
 // ── Down distribuce ────────────────────────────────────────
 function asBreakdown(v: DownBreakdown | undefined) {
@@ -260,10 +247,44 @@ function photoOf(name: string, fallback?: string): string | undefined {
   return fallback;
 }
 
-// ── Player tables (season-only via publicStats) ────────────
-const qbList = (stats?.qbStats ?? []).slice().sort((a, b) => b.qb.td - a.qb.td);
-const wrList = (stats?.wrStats ?? []).slice().sort((a, b) => b.wr.td - a.wr.td);
-const dbList = (stats?.defenseLeaders ?? []).slice().sort((a, b) => (b.db.flagPull + b.db.sack * 2 + b.db.int * 3) - (a.db.flagPull + a.db.sack * 2 + a.db.int * 3));
+// ── Player tables (season-only) — auto-prefer Supabase agg, GAS fallback ──
+// Consistent with the per-section source picker used elsewhere on the page:
+// if Supabase has player stats for this team, use them; otherwise fall back
+// to GAS publicStats. Both shapes are identical (QbPlayer/WrPlayer/DbPlayer).
+const qbListGas  = stats?.qbStats ?? [];
+const wrListGas  = stats?.wrStats ?? [];
+const dbListGas  = stats?.defenseLeaders ?? [];
+const qbListSupa = supabaseStats.qbStats ?? [];
+const wrListSupa = supabaseStats.wrStats ?? [];
+const dbListSupa = supabaseStats.defenseLeaders ?? [];
+
+const playerSource: 'gas' | 'supabase' =
+  sourceForcedTo === 'gas' ? 'gas' :
+  sourceForcedTo === 'supabase' ? 'supabase' :
+  // auto: Supabase if it has data, otherwise GAS
+  (qbListSupa.length + wrListSupa.length + dbListSupa.length > 0 ? 'supabase' : 'gas');
+
+const qbList = (playerSource === 'supabase' ? qbListSupa : qbListGas).slice().sort((a, b) => b.qb.td - a.qb.td);
+const wrList = (playerSource === 'supabase' ? wrListSupa : wrListGas).slice().sort((a, b) => b.wr.td - a.wr.td);
+const dbList = (playerSource === 'supabase' ? dbListSupa : dbListGas).slice().sort((a, b) => (b.db.flagPull + b.db.sack * 2 + b.db.int * 3) - (a.db.flagPull + a.db.sack * 2 + a.db.int * 3));
+
+// Aggregate totals from resolved source (so KPI tiles match the tables)
+totalQbTds = qbList.reduce((s, p) => s + p.qb.td, 0);
+totalWrTds = wrList.reduce((s, p) => s + p.wr.td, 0);
+totalSacks = dbList.reduce((s, p) => s + p.db.sack, 0);
+totalInts  = dbList.reduce((s, p) => s + p.db.int, 0);
+
+// Build sezónní team-stats KPI tiles (after totals are resolved)
+const teamStats = stats ? [
+  { label: 'Win %', value: `${winPct}%`, sub: `${stats.record.wins} V z ${stats.record.matches} zápasů` },
+  { label: 'Body / zápas', value: stats.points.forAvg.toFixed(1), sub: 'Útok' },
+  { label: 'Obdržené / zápas', value: stats.points.againstAvg.toFixed(1), sub: 'Obrana' },
+  { label: 'Rozdíl skóre', value: (ptDiff > 0 ? '+' : '') + ptDiff, sub: `${ptDiff > 0 ? '+' : ''}${ptDiffPerGame} / zápas` },
+  { label: 'TD passy', value: String(totalQbTds), sub: 'QB stats' },
+  { label: 'TD chyty', value: String(totalWrTds), sub: 'WR stats' },
+  { label: 'Sacky', value: String(totalSacks), sub: 'Obrana' },
+  { label: 'Interceptions', value: String(totalInts), sub: 'Defenzivní zákroky' },
+] : [];
 
 const tabs = [
   { key: 'team',    label: 'Tým' },
