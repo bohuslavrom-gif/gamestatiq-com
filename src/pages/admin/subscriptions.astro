@@ -30,6 +30,24 @@ const now = Date.now();
 const DAY = 24 * 3600 * 1000;
 const inDays = (iso: string | null) => iso ? Math.ceil((new Date(iso).getTime() - now) / DAY) : null;
 
+// Helper: classify trial state — avoids `<` operator inside .map() IIFE
+// where Astro parser misreads `trialDays < 0` as a tag.
+function classifyTrial(entity: any): { expired: boolean; warn: boolean; label: string; days: number | null } {
+  const d = inDays(entity.trial_ends_at);
+  if (entity.subscription_status !== 'trialing' || d === null) {
+    return { expired: false, warn: false, label: '', days: d };
+  }
+  const expired = d <= -1;
+  const warn = d >= 0 && d <= 7;
+  const label = expired ? `(před ${Math.abs(d)} dny)` : `(za ${d} dní)`;
+  return { expired, warn, label, days: d };
+}
+function periodLabel(entity: any): string {
+  const d = inDays(entity.current_period_end);
+  if (entity.subscription_status !== 'active' || d === null) return '';
+  return `(${d} dní)`;
+}
+
 const allEntities = [
   ...clubs.map((c) => ({ ...c, _type: 'club' as const })),
   ...leagues.map((l) => ({ ...l, _type: 'league' as const })),
@@ -144,10 +162,9 @@ const detailPathBase = tab === 'leagues' ? '/admin/leagues' : '/admin/clubs';
           </thead>
           <tbody class="divide-y divide-stone">
             {rowsForTab.map((e: any) => {
-              const trialDays = inDays(e.trial_ends_at);
-              const periodDays = inDays(e.current_period_end);
-              const trialWarn = e.subscription_status === 'trialing' && trialDays !== null && trialDays <= 7;
-              const trialExpired = e.subscription_status === 'trialing' && trialDays !== null && trialDays < 0;
+              const trial = classifyTrial(e);
+              const perLabel = periodLabel(e);
+              const trialClass = trial.expired ? 'text-signal font-semibold' : trial.warn ? 'text-[#A0531B] font-semibold' : 'text-graphite';
               return (
                 <tr class="transition-colors hover:bg-mist/60">
                   <td class="px-5 py-3">
@@ -156,17 +173,13 @@ const detailPathBase = tab === 'leagues' ? '/admin/leagues' : '/admin/clubs';
                   </td>
                   <td class="px-3 py-3"><span class="rounded-md bg-mist px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-graphite">{tierLabel[e.subscription_tier] ?? e.subscription_tier}</span></td>
                   <td class="px-3 py-3"><span class={`rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${statusColor[e.subscription_status]}`}>{statusLabel[e.subscription_status] ?? e.subscription_status}</span></td>
-                  <td class={`px-3 py-3 text-[12px] tabular-nums ${trialExpired ? 'text-signal font-semibold' : trialWarn ? 'text-[#A0531B] font-semibold' : 'text-graphite'}`}>
+                  <td class={`px-3 py-3 text-[12px] tabular-nums ${trialClass}`}>
                     {formatDate(e.trial_ends_at)}
-                    {trialDays !== null && e.subscription_status === 'trialing' && (
-                      <span class="ml-1 text-[10px]">({trialDays < 0 ? `před ${Math.abs(trialDays)} dny` : `za ${trialDays} dní`})</span>
-                    )}
+                    {trial.label && <span class="ml-1 text-[10px]">{trial.label}</span>}
                   </td>
                   <td class="px-3 py-3 text-[12px] tabular-nums text-graphite">
                     {formatDate(e.current_period_end)}
-                    {periodDays !== null && e.subscription_status === 'active' && (
-                      <span class="ml-1 text-[10px] text-stone-2">({periodDays} dní)</span>
-                    )}
+                    {perLabel && <span class="ml-1 text-[10px] text-stone-2">{perLabel}</span>}
                   </td>
                   <td class="px-3 py-3 font-mono text-[10px] text-stone-2">
                     {e.stripe_customer_id ? <p title={e.stripe_customer_id}>cus: {e.stripe_customer_id.slice(0, 10)}…</p> : <p>—</p>}
