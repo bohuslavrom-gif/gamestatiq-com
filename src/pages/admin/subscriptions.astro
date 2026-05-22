@@ -1,0 +1,267 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getSupabaseAdmin } from '../../lib/supabase';
+
+export const prerender = false;
+
+const url = new URL(Astro.request.url);
+const tab = url.searchParams.get('tab') ?? 'clubs';
+const saved = url.searchParams.get('saved');
+const errorMsg = url.searchParams.get('error');
+
+const admin = getSupabaseAdmin();
+
+const [{ data: clubsRaw }, { data: leaguesRaw }] = await Promise.all([
+  admin
+    .from('clubs')
+    .select('id, name, subscription_tier, subscription_status, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id, created_at')
+    .order('created_at', { ascending: false }),
+  admin
+    .from('leagues')
+    .select('id, name, subscription_tier, subscription_status, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id, created_at')
+    .order('created_at', { ascending: false }),
+]);
+
+const clubs   = (clubsRaw   ?? []) as any[];
+const leagues = (leaguesRaw ?? []) as any[];
+
+// Statistics for overview tiles
+const now = Date.now();
+const DAY = 24 * 3600 * 1000;
+const inDays = (iso: string | null) => iso ? Math.ceil((new Date(iso).getTime() - now) / DAY) : null;
+
+const allEntities = [
+  ...clubs.map((c) => ({ ...c, _type: 'club' as const })),
+  ...leagues.map((l) => ({ ...l, _type: 'league' as const })),
+];
+const stats = {
+  trialing:   allEntities.filter((e) => e.subscription_status === 'trialing').length,
+  active:     allEntities.filter((e) => e.subscription_status === 'active').length,
+  past_due:   allEntities.filter((e) => e.subscription_status === 'past_due').length,
+  canceled:   allEntities.filter((e) => e.subscription_status === 'canceled').length,
+  trial_ending_7d: allEntities.filter((e) => {
+    const d = inDays(e.trial_ends_at);
+    return e.subscription_status === 'trialing' && d !== null && d >= 0 && d <= 7;
+  }).length,
+  trial_expired: allEntities.filter((e) => {
+    const d = inDays(e.trial_ends_at);
+    return e.subscription_status === 'trialing' && d !== null && d < 0;
+  }).length,
+};
+
+const tierLabel: Record<string, string> = { trial: 'Trial', tym: 'Tým', klub: 'Klub', liga: 'Liga' };
+const statusLabel: Record<string, string> = {
+  trialing: 'Trial', active: 'Aktivní', past_due: 'Nezaplaceno', canceled: 'Zrušeno', incomplete: 'Neúplné',
+};
+const statusColor: Record<string, string> = {
+  trialing:   'bg-sky/15 text-[#1B5E83]',
+  active:     'bg-verde/15 text-[#1B6E62]',
+  past_due:   'bg-spark/15 text-[#A0531B]',
+  canceled:   'bg-stone text-slate',
+  incomplete: 'bg-spark/15 text-[#A0531B]',
+};
+const formatDate = (s: string | null) => s ? new Date(s).toLocaleDateString('cs-CZ') : '—';
+const formatDateInput = (s: string | null) => s ? s.slice(0, 10) : '';
+
+const SAVED_MSG: Record<string, string> = {
+  extended: '✓ Trial prodloužen.',
+  period:   '✓ Period end nastaven.',
+  status:   '✓ Status změněn.',
+};
+
+const tabs = [
+  { key: 'clubs',   label: `Klubové (${clubs.length})`,   accent: 'bg-signal text-white' },
+  { key: 'leagues', label: `Liga (${leagues.length})`,    accent: 'bg-plum text-white' },
+];
+
+const rowsForTab = tab === 'leagues' ? leagues : clubs;
+const entityType = tab === 'leagues' ? 'league' : 'club';
+const detailPathBase = tab === 'leagues' ? '/admin/leagues' : '/admin/clubs';
+---
+
+<AdminLayout title="Předplatné · Admin" active="subscriptions" pageTitle="Předplatné — centrální přehled" pageSub="Trial, fakturační období, status a Stripe ID napříč kluby a ligami">
+
+  {saved && SAVED_MSG[saved] && <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">{SAVED_MSG[saved]}</div>}
+  {errorMsg && <div class="mb-6 rounded-lg border border-signal/30 bg-signal/5 px-4 py-3 text-[14px] text-signal">{errorMsg}</div>}
+
+  <!-- KPI tiles -->
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+    <div class="rounded-xl border border-stone bg-pearl p-4">
+      <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Aktivní</p>
+      <p class="mt-2 text-2xl font-bold tabular-nums text-verde">{stats.active}</p>
+    </div>
+    <div class="rounded-xl border border-stone bg-pearl p-4">
+      <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Trial</p>
+      <p class="mt-2 text-2xl font-bold tabular-nums text-[#1B5E83]">{stats.trialing}</p>
+    </div>
+    <div class="rounded-xl border border-spark/30 bg-spark/5 p-4">
+      <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#A0531B]">Trial končí ≤7 dní</p>
+      <p class="mt-2 text-2xl font-bold tabular-nums text-[#A0531B]">{stats.trial_ending_7d}</p>
+    </div>
+    <div class="rounded-xl border border-signal/30 bg-signal/5 p-4">
+      <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-signal">Trial vypršel</p>
+      <p class="mt-2 text-2xl font-bold tabular-nums text-signal">{stats.trial_expired}</p>
+    </div>
+    <div class="rounded-xl border border-stone bg-pearl p-4">
+      <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Nezaplaceno</p>
+      <p class="mt-2 text-2xl font-bold tabular-nums text-[#A0531B]">{stats.past_due}</p>
+    </div>
+    <div class="rounded-xl border border-stone bg-pearl p-4">
+      <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Zrušené</p>
+      <p class="mt-2 text-2xl font-bold tabular-nums text-slate">{stats.canceled}</p>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="mt-8 flex flex-wrap gap-1 rounded-lg border border-stone bg-pearl p-1">
+    {tabs.map((t) => {
+      const isActive = tab === t.key;
+      return (
+        <a href={`/admin/subscriptions?tab=${t.key}`} class={`rounded-md px-4 py-2 text-[13px] font-medium transition-colors ${isActive ? t.accent : 'text-graphite hover:bg-mist'}`}>
+          {t.label}
+        </a>
+      );
+    })}
+  </div>
+
+  <!-- Table -->
+  <div class="mt-6 overflow-hidden rounded-xl border border-stone bg-pearl">
+    {rowsForTab.length === 0 ? (
+      <div class="p-12 text-center text-[13px] text-slate">Žádné záznamy.</div>
+    ) : (
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[1100px] text-left text-[13px]">
+          <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+            <tr>
+              <th class="px-5 py-3">Název</th>
+              <th class="px-3 py-3">Tier</th>
+              <th class="px-3 py-3">Status</th>
+              <th class="px-3 py-3">Trial končí</th>
+              <th class="px-3 py-3">Period end</th>
+              <th class="px-3 py-3">Stripe</th>
+              <th class="px-3 py-3">Akce</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone">
+            {rowsForTab.map((e: any) => {
+              const trialDays = inDays(e.trial_ends_at);
+              const periodDays = inDays(e.current_period_end);
+              const trialWarn = e.subscription_status === 'trialing' && trialDays !== null && trialDays <= 7;
+              const trialExpired = e.subscription_status === 'trialing' && trialDays !== null && trialDays < 0;
+              return (
+                <tr class="transition-colors hover:bg-mist/60">
+                  <td class="px-5 py-3">
+                    <a href={`${detailPathBase}/${e.id}`} class="text-[14px] font-semibold text-ink hover:text-plum">{e.name}</a>
+                    <p class="font-mono text-[10px] text-stone-2">{e.id.slice(0, 8)}…</p>
+                  </td>
+                  <td class="px-3 py-3"><span class="rounded-md bg-mist px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-graphite">{tierLabel[e.subscription_tier] ?? e.subscription_tier}</span></td>
+                  <td class="px-3 py-3"><span class={`rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${statusColor[e.subscription_status]}`}>{statusLabel[e.subscription_status] ?? e.subscription_status}</span></td>
+                  <td class={`px-3 py-3 text-[12px] tabular-nums ${trialExpired ? 'text-signal font-semibold' : trialWarn ? 'text-[#A0531B] font-semibold' : 'text-graphite'}`}>
+                    {formatDate(e.trial_ends_at)}
+                    {trialDays !== null && e.subscription_status === 'trialing' && (
+                      <span class="ml-1 text-[10px]">({trialDays < 0 ? `před ${Math.abs(trialDays)} dny` : `za ${trialDays} dní`})</span>
+                    )}
+                  </td>
+                  <td class="px-3 py-3 text-[12px] tabular-nums text-graphite">
+                    {formatDate(e.current_period_end)}
+                    {periodDays !== null && e.subscription_status === 'active' && (
+                      <span class="ml-1 text-[10px] text-stone-2">({periodDays} dní)</span>
+                    )}
+                  </td>
+                  <td class="px-3 py-3 font-mono text-[10px] text-stone-2">
+                    {e.stripe_customer_id ? <p title={e.stripe_customer_id}>cus: {e.stripe_customer_id.slice(0, 10)}…</p> : <p>—</p>}
+                    {e.stripe_subscription_id && <p title={e.stripe_subscription_id}>sub: {e.stripe_subscription_id.slice(0, 10)}…</p>}
+                  </td>
+                  <td class="px-3 py-3">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                      <!-- Extend trial +30 -->
+                      <form method="POST" action="/api/super/subscription/extend-trial" class="inline">
+                        <input type="hidden" name="entity_type" value={entityType} />
+                        <input type="hidden" name="entity_id" value={e.id} />
+                        <input type="hidden" name="days" value="30" />
+                        <input type="hidden" name="back" value={`/admin/subscriptions?tab=${tab}`} />
+                        <button type="submit" class="rounded-md border border-stone bg-pearl px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-graphite hover:bg-mist hover:border-plum/40" title="Prodloužit trial o 30 dní">+30d trial</button>
+                      </form>
+                      <!-- Detail link -->
+                      <a href={`${detailPathBase}/${e.id}`} class="rounded-md bg-plum/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#4F3878] hover:bg-plum hover:text-white">Detail</a>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+
+  <!-- Advanced ops collapsible -->
+  <details class="mt-6 rounded-xl border border-stone bg-pearl">
+    <summary class="cursor-pointer px-5 py-3 text-[13px] font-semibold text-ink hover:bg-mist">Pokročilé akce ▾</summary>
+    <div class="grid gap-4 border-t border-stone p-5 sm:grid-cols-2 lg:grid-cols-3">
+
+      <!-- Set period end manually -->
+      <div class="rounded-lg border border-stone bg-mist/40 p-4">
+        <p class="text-[12px] font-semibold text-ink">Nastavit period end (manuálně)</p>
+        <p class="mt-1 text-[11px] text-slate">Posune fakturační období na konkrétní datum.</p>
+        <form method="POST" action="/api/super/subscription/set-period-end" class="mt-3 space-y-2">
+          <input type="hidden" name="entity_type" value={entityType} />
+          <input type="hidden" name="back" value={`/admin/subscriptions?tab=${tab}`} />
+          <select name="entity_id" required class="w-full rounded-md border border-stone bg-pearl px-2 py-1.5 text-[12px]">
+            <option value="">— vyberte —</option>
+            {rowsForTab.map((e: any) => <option value={e.id}>{e.name}</option>)}
+          </select>
+          <input type="date" name="date" required class="w-full rounded-md border border-stone bg-pearl px-2 py-1.5 text-[12px]" />
+          <button type="submit" class="w-full rounded-md bg-plum px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-[#3F2B68]">Uložit period end</button>
+        </form>
+      </div>
+
+      <!-- Change status manually -->
+      <div class="rounded-lg border border-stone bg-mist/40 p-4">
+        <p class="text-[12px] font-semibold text-ink">Změnit status</p>
+        <p class="mt-1 text-[11px] text-slate">Použij pokud Stripe webhook neaktualizoval status nebo pro přímé fixy.</p>
+        <form method="POST" action="/api/super/subscription/status" class="mt-3 space-y-2">
+          <input type="hidden" name="entity_type" value={entityType} />
+          <input type="hidden" name="back" value={`/admin/subscriptions?tab=${tab}`} />
+          <select name="entity_id" required class="w-full rounded-md border border-stone bg-pearl px-2 py-1.5 text-[12px]">
+            <option value="">— vyberte —</option>
+            {rowsForTab.map((e: any) => <option value={e.id}>{e.name}</option>)}
+          </select>
+          <select name="status" required class="w-full rounded-md border border-stone bg-pearl px-2 py-1.5 text-[12px]">
+            {['trialing','active','past_due','canceled','incomplete'].map((s) => <option value={s}>{statusLabel[s]}</option>)}
+          </select>
+          <button type="submit" class="w-full rounded-md bg-plum px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-[#3F2B68]">Změnit status</button>
+        </form>
+      </div>
+
+      <!-- Custom trial extension -->
+      <div class="rounded-lg border border-stone bg-mist/40 p-4">
+        <p class="text-[12px] font-semibold text-ink">Trial extension (vlastní počet dní)</p>
+        <p class="mt-1 text-[11px] text-slate">Quick +30d v tabulce výše, vlastní hodnotu zde.</p>
+        <form method="POST" action="/api/super/subscription/extend-trial" class="mt-3 space-y-2">
+          <input type="hidden" name="entity_type" value={entityType} />
+          <input type="hidden" name="back" value={`/admin/subscriptions?tab=${tab}`} />
+          <select name="entity_id" required class="w-full rounded-md border border-stone bg-pearl px-2 py-1.5 text-[12px]">
+            <option value="">— vyberte —</option>
+            {rowsForTab.map((e: any) => <option value={e.id}>{e.name}</option>)}
+          </select>
+          <input type="number" name="days" min="1" max="365" value="60" required class="w-full rounded-md border border-stone bg-pearl px-2 py-1.5 text-[12px] tabular-nums" />
+          <button type="submit" class="w-full rounded-md bg-plum px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-[#3F2B68]">Prodloužit trial</button>
+        </form>
+      </div>
+    </div>
+  </details>
+
+  <!-- Stripe deep link helper -->
+  <div class="mt-6 rounded-xl border border-stone bg-pearl p-5">
+    <p class="text-[13px] font-semibold text-ink">🔗 Stripe Dashboard quick access</p>
+    <p class="mt-1 text-[12px] text-graphite">
+      Pro správu plateb a faktur otevři Stripe Dashboard. Customer ID najdeš v tabulce výše (sloupec Stripe).
+    </p>
+    <div class="mt-3 flex flex-wrap gap-2">
+      <a href="https://dashboard.stripe.com/customers" target="_blank" rel="noopener" class="rounded-md border border-stone bg-mist px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-pearl">Stripe Customers ↗</a>
+      <a href="https://dashboard.stripe.com/subscriptions" target="_blank" rel="noopener" class="rounded-md border border-stone bg-mist px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-pearl">Subscriptions ↗</a>
+      <a href="https://dashboard.stripe.com/invoices" target="_blank" rel="noopener" class="rounded-md border border-stone bg-mist px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-pearl">Invoices ↗</a>
+    </div>
+  </div>
+</AdminLayout>

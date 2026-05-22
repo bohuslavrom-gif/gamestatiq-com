@@ -1,15 +1,16 @@
 ---
 interface Props {
-  active?: 'overview' | 'clubs' | 'leagues' | 'users' | 'matches' | 'settings';
+  active?: 'overview' | 'clubs' | 'leagues' | 'users' | 'matches' | 'subscriptions' | 'settings';
 }
 const { active = 'overview' } = Astro.props;
 
 const navItems = [
-  { key: 'overview', label: 'Přehled',     href: '/admin',          icon: 'M3 12l9-9 9 9 M5 10v10h14V10' },
-  { key: 'clubs',    label: 'Kluby',       href: '/admin/clubs',    icon: 'M3 21h18 M3 10h18 M5 6l7-3 7 3 M4 10v11 M20 10v11 M8 14v3 M12 14v3 M16 14v3' },
-  { key: 'leagues',  label: 'Ligy',        href: '/admin/leagues',  icon: 'M12 2 15 8l7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z' },
-  { key: 'users',    label: 'Uživatelé',   href: '/admin/users',    icon: 'M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1 M16 3.13a4 4 0 0 1 0 7.75 M21 21v-1a5 5 0 0 0-3-4.58' },
-  { key: 'matches',  label: 'Zápasy',      href: '/admin/matches',  icon: 'M3 3v18h18 M7 13h3v6 M13 9h3v10 M19 5h3v14' },
+  { key: 'overview',       label: 'Přehled',     href: '/admin',                icon: 'M3 12l9-9 9 9 M5 10v10h14V10' },
+  { key: 'clubs',          label: 'Kluby',       href: '/admin/clubs',          icon: 'M3 21h18 M3 10h18 M5 6l7-3 7 3 M4 10v11 M20 10v11 M8 14v3 M12 14v3 M16 14v3' },
+  { key: 'leagues',        label: 'Ligy',        href: '/admin/leagues',        icon: 'M12 2 15 8l7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z' },
+  { key: 'users',          label: 'Uživatelé',   href: '/admin/users',          icon: 'M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1 M16 3.13a4 4 0 0 1 0 7.75 M21 21v-1a5 5 0 0 0-3-4.58' },
+  { key: 'matches',        label: 'Zápasy',      href: '/admin/matches',        icon: 'M3 3v18h18 M7 13h3v6 M13 9h3v10 M19 5h3v14' },
+  { key: 'subscriptions',  label: 'Předplatné',  href: '/admin/subscriptions',  icon: 'M3 7h18 M3 12h18 M3 17h18 M8 4v3 M16 4v3' },
 ];
 
 const user = Astro.locals.user;
