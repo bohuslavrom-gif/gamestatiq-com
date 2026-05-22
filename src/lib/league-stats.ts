@@ -491,3 +491,352 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
 
   return Array.from(byTeam.values());
 }
+
+// ── Iter 9c: Liga records (single-season + single-game) ──────────
+
+export type RecordEntry = {
+  category: string;
+  value: number;
+  formattedValue?: string;
+  playerName?: string;
+  jersey?: number | null;
+  photoUrl?: string | null;
+  teamName: string;
+  clubName: string;
+  matchContext?: string;  // "vs Lions · 12.5.2026" pro single-game
+  season: string;
+};
+
+export type LeagueRecords = {
+  season: string;
+  // Player single-season totals
+  playerSeason: {
+    qb: RecordEntry[];
+    wr: RecordEntry[];
+    db: RecordEntry[];
+  };
+  // Player single-game peaks
+  playerGame: {
+    qb: RecordEntry[];
+    wr: RecordEntry[];
+    db: RecordEntry[];
+  };
+  // Team single-season totals + records
+  teamSeason: RecordEntry[];
+  // Team single-game peaks
+  teamGame: RecordEntry[];
+};
+
+export async function fetchLeagueRecords(leagueId: string, season = '2026'): Promise<LeagueRecords> {
+  const empty: LeagueRecords = {
+    season,
+    playerSeason: { qb: [], wr: [], db: [] },
+    playerGame:   { qb: [], wr: [], db: [] },
+    teamSeason: [],
+    teamGame: [],
+  };
+  if (!leagueId) return empty;
+  const admin = getSupabaseAdmin();
+
+  // Approved teams + metadata
+  const { data: ltRaw } = await admin
+    .from('league_teams')
+    .select('team_id, teams(id, name, club_id, clubs(name, logo_url))')
+    .eq('league_id', leagueId)
+    .not('approved_at', 'is', null);
+  const lt = (ltRaw ?? []) as any[];
+  if (lt.length === 0) return empty;
+  const teamIds = lt.map((r) => r.team_id);
+  const teamMeta = new Map<string, { teamName: string; clubName: string }>();
+  for (const r of lt) {
+    teamMeta.set(r.team_id, { teamName: r.teams?.name ?? '—', clubName: r.teams?.clubs?.name ?? '—' });
+  }
+
+  // All matches across teams
+  const { data: matchesRaw } = await admin
+    .from('matches')
+    .select(`
+      id, team_id, date, opponent,
+      our_score, opp_score, off_td,
+      rush_yds, pass_yds, total_yds,
+      qb_att, qb_comp, qb_td, qb_int, qb_yds,
+      def_drives, def_stops,
+      pen_count, pen_yds
+    `)
+    .in('team_id', teamIds);
+  const matches = (matchesRaw ?? []) as any[];
+  if (matches.length === 0) return empty;
+
+  const matchById = new Map<string, any>();
+  for (const m of matches) matchById.set(m.id, m);
+  const matchIds = matches.map((m) => m.id);
+
+  // Player stats per match (with player metadata)
+  const { data: psRaw } = await admin
+    .from('match_player_stats')
+    .select(`
+      match_id, player_id,
+      qb_att, qb_comp, qb_yds, qb_td, qb_int,
+      wr_targets, wr_rec, wr_yds, wr_td, wr_pts,
+      db_flag_pull, db_sack, db_brkup, db_int,
+      players ( first_name, last_name, jersey_number, photo_url )
+    `)
+    .in('match_id', matchIds);
+  const psRows = (psRaw ?? []) as any[];
+
+  const formatDate = (s: string) => new Date(s).toLocaleDateString('cs-CZ');
+  const matchCtx = (match: any) => `vs ${match.opponent} · ${formatDate(match.date)}`;
+
+  // ── Player season totals: aggregate per player ──
+  type PlayerAgg = {
+    playerId: string; playerName: string; jersey: number | null; photoUrl: string | null;
+    teamName: string; clubName: string;
+    qbAtt: number; qbComp: number; qbYds: number; qbTd: number; qbInt: number;
+    wrTargets: number; wrRec: number; wrYds: number; wrTd: number; wrPts: number;
+    dbFlagPull: number; dbSack: number; dbInt: number; dbBrkup: number;
+  };
+  const playerAgg = new Map<string, PlayerAgg>();
+  for (const r of psRows) {
+    const p = r.players ?? {};
+    const id = r.player_id;
+    const m = matchById.get(r.match_id);
+    if (!m) continue;
+    const meta = teamMeta.get(m.team_id) ?? { teamName: '—', clubName: '—' };
+    let b = playerAgg.get(id);
+    if (!b) {
+      b = {
+        playerId: id,
+        playerName: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || '—',
+        jersey: p.jersey_number ?? null,
+        photoUrl: p.photo_url ?? null,
+        teamName: meta.teamName, clubName: meta.clubName,
+        qbAtt: 0, qbComp: 0, qbYds: 0, qbTd: 0, qbInt: 0,
+        wrTargets: 0, wrRec: 0, wrYds: 0, wrTd: 0, wrPts: 0,
+        dbFlagPull: 0, dbSack: 0, dbInt: 0, dbBrkup: 0,
+      };
+      playerAgg.set(id, b);
+    }
+    b.qbAtt += r.qb_att ?? 0; b.qbComp += r.qb_comp ?? 0; b.qbYds += r.qb_yds ?? 0;
+    b.qbTd  += r.qb_td  ?? 0; b.qbInt  += r.qb_int  ?? 0;
+    b.wrTargets += r.wr_targets ?? 0; b.wrRec += r.wr_rec ?? 0;
+    b.wrYds += r.wr_yds ?? 0; b.wrTd += r.wr_td ?? 0; b.wrPts += r.wr_pts ?? 0;
+    b.dbFlagPull += r.db_flag_pull ?? 0; b.dbSack += r.db_sack ?? 0;
+    b.dbInt += r.db_int ?? 0; b.dbBrkup += r.db_brkup ?? 0;
+  }
+  const players = Array.from(playerAgg.values());
+
+  // Helper: top entry by field
+  const topPlayer = (
+    field: keyof PlayerAgg,
+    category: string,
+    formatter?: (v: number) => string,
+  ): RecordEntry | null => {
+    const sorted = players.filter((p) => (p[field] as number) > 0).sort((a, b) => (b[field] as number) - (a[field] as number));
+    if (sorted.length === 0) return null;
+    const top = sorted[0];
+    return {
+      category, value: top[field] as number,
+      formattedValue: formatter ? formatter(top[field] as number) : undefined,
+      playerName: top.playerName, jersey: top.jersey, photoUrl: top.photoUrl,
+      teamName: top.teamName, clubName: top.clubName, season,
+    };
+  };
+
+  const playerSeasonQb = [
+    topPlayer('qbTd',  'Nejvíc TD pasů za sezónu'),
+    topPlayer('qbYds', 'Nejvíc yardů za sezónu (QB)'),
+    topPlayer('qbComp','Nejvíc kompletních pasů za sezónu'),
+  ].filter((x): x is RecordEntry => x !== null);
+
+  const playerSeasonWr = [
+    topPlayer('wrTd',  'Nejvíc TD chytů za sezónu'),
+    topPlayer('wrYds', 'Nejvíc receivingových yardů za sezónu'),
+    topPlayer('wrRec', 'Nejvíc receptionů za sezónu'),
+    topPlayer('wrPts', 'Nejvíc bodů (WR) za sezónu'),
+  ].filter((x): x is RecordEntry => x !== null);
+
+  const playerSeasonDb = [
+    topPlayer('dbInt',     'Nejvíc INT chycených za sezónu'),
+    topPlayer('dbSack',    'Nejvíc sacků za sezónu'),
+    topPlayer('dbFlagPull','Nejvíc flag pulls za sezónu'),
+    topPlayer('dbBrkup',   'Nejvíc breakupů za sezónu'),
+  ].filter((x): x is RecordEntry => x !== null);
+
+  // ── Player single-game peaks ──
+  // Each match_player_stats row IS a single-game stat. Find max per category.
+  const topGameStat = (
+    field: string,
+    category: string,
+  ): RecordEntry | null => {
+    const candidates = psRows
+      .map((r) => ({
+        value: (r[field] as number) ?? 0,
+        playerId: r.player_id,
+        player: r.players ?? {},
+        match: matchById.get(r.match_id),
+      }))
+      .filter((c) => c.value > 0 && c.match);
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => b.value - a.value);
+    const top = candidates[0];
+    const meta = teamMeta.get(top.match.team_id) ?? { teamName: '—', clubName: '—' };
+    return {
+      category, value: top.value,
+      playerName: `${top.player.first_name ?? ''} ${top.player.last_name ?? ''}`.trim() || '—',
+      jersey: top.player.jersey_number ?? null,
+      photoUrl: top.player.photo_url ?? null,
+      teamName: meta.teamName, clubName: meta.clubName,
+      matchContext: matchCtx(top.match), season,
+    };
+  };
+
+  const playerGameQb = [
+    topGameStat('qb_td',  'Nejvíc TD pasů v zápase'),
+    topGameStat('qb_yds', 'Nejvíc passing yardů v zápase'),
+    topGameStat('qb_comp','Nejvíc kompletních pasů v zápase'),
+  ].filter((x): x is RecordEntry => x !== null);
+
+  const playerGameWr = [
+    topGameStat('wr_td',  'Nejvíc TD chytů v zápase'),
+    topGameStat('wr_yds', 'Nejvíc receivingových yardů v zápase'),
+    topGameStat('wr_rec', 'Nejvíc receptionů v zápase'),
+  ].filter((x): x is RecordEntry => x !== null);
+
+  const playerGameDb = [
+    topGameStat('db_int',      'Nejvíc INT v zápase'),
+    topGameStat('db_sack',     'Nejvíc sacků v zápase'),
+    topGameStat('db_flag_pull','Nejvíc flag pulls v zápase'),
+  ].filter((x): x is RecordEntry => x !== null);
+
+  // ── Team season aggregates ──
+  type TeamAgg = {
+    teamId: string; teamName: string; clubName: string;
+    games: number; pointsFor: number; pointsAgainst: number;
+    totalYds: number; offTd: number; penCount: number; penYds: number;
+    wins: number; losses: number; ties: number;
+    defInts: number; defSacks: number;
+  };
+  const teamAgg = new Map<string, TeamAgg>();
+  for (const teamId of teamIds) {
+    const meta = teamMeta.get(teamId) ?? { teamName: '—', clubName: '—' };
+    teamAgg.set(teamId, {
+      teamId, teamName: meta.teamName, clubName: meta.clubName,
+      games: 0, pointsFor: 0, pointsAgainst: 0,
+      totalYds: 0, offTd: 0, penCount: 0, penYds: 0,
+      wins: 0, losses: 0, ties: 0, defInts: 0, defSacks: 0,
+    });
+  }
+  for (const m of matches) {
+    const ta = teamAgg.get(m.team_id); if (!ta) continue;
+    ta.games += 1;
+    ta.pointsFor += m.our_score ?? 0;
+    ta.pointsAgainst += m.opp_score ?? 0;
+    ta.totalYds += m.total_yds ?? 0;
+    ta.offTd += m.off_td ?? 0;
+    ta.penCount += m.pen_count ?? 0;
+    ta.penYds += m.pen_yds ?? 0;
+    if      (m.our_score >  m.opp_score) ta.wins   += 1;
+    else if (m.our_score <  m.opp_score) ta.losses += 1;
+    else                                  ta.ties   += 1;
+  }
+  // Add defense aggregates from psRows
+  for (const r of psRows) {
+    const m = matchById.get(r.match_id); if (!m) continue;
+    const ta = teamAgg.get(m.team_id); if (!ta) continue;
+    ta.defInts  += r.db_int  ?? 0;
+    ta.defSacks += r.db_sack ?? 0;
+  }
+  const teams = Array.from(teamAgg.values());
+
+  const topTeam = (
+    field: keyof TeamAgg,
+    category: string,
+    formatter?: (v: number) => string,
+  ): RecordEntry | null => {
+    const sorted = teams.filter((t) => (t[field] as number) > 0).sort((a, b) => (b[field] as number) - (a[field] as number));
+    if (sorted.length === 0) return null;
+    const top = sorted[0];
+    return {
+      category, value: top[field] as number,
+      formattedValue: formatter ? formatter(top[field] as number) : undefined,
+      teamName: top.teamName, clubName: top.clubName, season,
+    };
+  };
+
+  // Computed: best win percentage (only teams with games > 0)
+  const topWinPct = (): RecordEntry | null => {
+    const sorted = teams.filter((t) => t.games > 0).map((t) => ({
+      ...t, winPct: t.wins / t.games,
+    })).sort((a, b) => b.winPct - a.winPct);
+    if (sorted.length === 0) return null;
+    const top = sorted[0];
+    return {
+      category: 'Nejlepší Win % za sezónu',
+      value: Math.round(top.winPct * 100),
+      formattedValue: `${Math.round(top.winPct * 100)}%`,
+      teamName: top.teamName, clubName: top.clubName, season,
+      matchContext: `${top.wins}-${top.losses}${top.ties ? `-${top.ties}` : ''} (${top.games} zápasů)`,
+    };
+  };
+
+  const teamSeason = [
+    topTeam('pointsFor',   'Nejvíc bodů skórovaných za sezónu'),
+    topTeam('totalYds',    'Nejvíc yardů (offense) za sezónu'),
+    topTeam('offTd',       'Nejvíc TD (offense) za sezónu'),
+    topTeam('defInts',     'Nejvíc INT chycených týmem za sezónu'),
+    topTeam('defSacks',    'Nejvíc sacků týmem za sezónu'),
+    topWinPct(),
+  ].filter((x): x is RecordEntry => x !== null);
+
+  // ── Team single-game peaks ──
+  const topMatchStat = (
+    field: string,
+    category: string,
+    extract?: (m: any) => number,
+  ): RecordEntry | null => {
+    const candidates = matches.map((m) => ({
+      m, value: extract ? extract(m) : (m[field] as number) ?? 0,
+    })).filter((c) => c.value > 0);
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => b.value - a.value);
+    const top = candidates[0];
+    const meta = teamMeta.get(top.m.team_id) ?? { teamName: '—', clubName: '—' };
+    return {
+      category, value: top.value,
+      teamName: meta.teamName, clubName: meta.clubName,
+      matchContext: matchCtx(top.m), season,
+    };
+  };
+
+  const topMargin = (): RecordEntry | null => {
+    const candidates = matches
+      .map((m) => ({ m, value: (m.our_score ?? 0) - (m.opp_score ?? 0) }))
+      .filter((c) => c.value > 0);
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => b.value - a.value);
+    const top = candidates[0];
+    const meta = teamMeta.get(top.m.team_id) ?? { teamName: '—', clubName: '—' };
+    return {
+      category: 'Nejvyšší rozdíl skóre v zápase',
+      value: top.value,
+      formattedValue: `+${top.value}`,
+      teamName: meta.teamName, clubName: meta.clubName,
+      matchContext: `${top.m.our_score}–${top.m.opp_score} vs ${top.m.opponent} · ${formatDate(top.m.date)}`,
+      season,
+    };
+  };
+
+  const teamGame = [
+    topMatchStat('our_score', 'Nejvíc bodů skórovaných v zápase'),
+    topMatchStat('total_yds', 'Nejvíc total yardů v zápase'),
+    topMatchStat('off_td',    'Nejvíc TD v zápase'),
+    topMargin(),
+  ].filter((x): x is RecordEntry => x !== null);
+
+  return {
+    season,
+    playerSeason: { qb: playerSeasonQb, wr: playerSeasonWr, db: playerSeasonDb },
+    playerGame:   { qb: playerGameQb,   wr: playerGameWr,   db: playerGameDb },
+    teamSeason, teamGame,
+  };
+}

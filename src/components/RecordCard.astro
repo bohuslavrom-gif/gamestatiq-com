@@ -1,0 +1,49 @@
+---
+import type { RecordEntry } from '../lib/league-stats';
+
+interface Props {
+  record: RecordEntry;
+  accentColor: string;
+  isPlayer: boolean;  // true = show player info, false = team-only
+}
+
+const { record, accentColor, isPlayer } = Astro.props;
+const display = record.formattedValue ?? String(record.value);
+const initials = record.playerName
+  ? record.playerName.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+  : '?';
+---
+
+<div class="rounded-xl border border-stone bg-pearl p-5">
+  <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">{record.category}</p>
+  <p class="mt-3 text-[36px] font-bold tabular-nums tracking-tight-3" style={`color:${accentColor}`}>{display}</p>
+
+  {isPlayer && record.playerName && (
+    <div class="mt-3 flex items-center gap-3 border-t border-stone pt-3">
+      {record.photoUrl ? (
+        <img src={record.photoUrl} alt="" loading="lazy" class="h-9 w-9 flex-shrink-0 rounded-full object-cover" />
+      ) : (
+        <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink/5 text-[11px] font-semibold text-ink">{initials}</span>
+      )}
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-[13px] font-semibold text-ink">
+          {record.playerName}
+          {record.jersey != null && <span class="ml-1 text-[11px] text-stone-2">#{record.jersey}</span>}
+        </p>
+        <p class="truncate text-[11px] text-slate">{record.clubName} · {record.teamName}</p>
+      </div>
+    </div>
+  )}
+
+  {!isPlayer && (
+    <div class="mt-3 border-t border-stone pt-3">
+      <p class="text-[13px] font-semibold text-ink">{record.teamName}</p>
+      <p class="text-[11px] text-slate">{record.clubName}</p>
+    </div>
+  )}
+
+  {record.matchContext && (
+    <p class="mt-2 text-[10px] uppercase tracking-wider text-stone-2">{record.matchContext}</p>
+  )}
+  <p class="mt-1 text-[10px] text-stone-2">Sezóna {record.season}</p>
+</div>

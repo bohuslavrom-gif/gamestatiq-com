@@ -1,12 +1,14 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import TeamStatsSection from '../../components/TeamStatsSection.astro';
+import RecordCard from '../../components/RecordCard.astro';
 import { getSupabaseAdmin } from '../../lib/supabase';
 import {
   fetchLeagueStandings,
   fetchLeagueTeamStats,
   fetchLeagueAllPlayers,
   fetchLeagueRecentMatches,
+  fetchLeagueRecords,
   type TeamStatsRow,
 } from '../../lib/league-stats';
 
@@ -24,11 +26,12 @@ const { data: league } = await admin
   .maybeSingle();
 if (!league) return Astro.redirect('/');
 
-const [standings, teamStats, players, recent] = await Promise.all([
+const [standings, teamStats, players, recent, records] = await Promise.all([
   fetchLeagueStandings(league.id),
   fetchLeagueTeamStats(league.id),
   fetchLeagueAllPlayers(league.id),
   fetchLeagueRecentMatches(league.id, 5),
+  fetchLeagueRecords(league.id),
 ]);
 
 const totalMatches = standings.reduce((s, r) => s + r.played, 0);
@@ -55,6 +58,7 @@ const secondary = league.secondary_color || '#E63946';
 const tabs = [
   { key: 'team',    label: 'Týmové statistiky' },
   { key: 'players', label: 'Hráčské statistiky' },
+  { key: 'records', label: 'Ligové rekordy' },
 ];
 
 const lastResultColor: Record<string, string> = {
@@ -418,6 +422,105 @@ const posTabs = [
             )}
           </div>
         )}
+      </div>
+    )}
+
+    {totalTeams > 0 && tab === 'records' && (
+      <div class="space-y-12">
+
+        <!-- Player records: single-season totals -->
+        <div>
+          <h2 class="text-[22px] font-bold tracking-tight-2 text-ink">Hráčské rekordy · Celá sezóna</h2>
+          <p class="mt-1 text-[12px] text-slate">Součet napříč všemi zápasy ligy v sezóně {records.season}</p>
+
+          {records.playerSeason.qb.length > 0 && (
+            <div class="mt-5">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Quarterback</p>
+              <div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {records.playerSeason.qb.map((r) => (<RecordCard record={r} accentColor={secondary} isPlayer={true} />))}
+              </div>
+            </div>
+          )}
+
+          {records.playerSeason.wr.length > 0 && (
+            <div class="mt-6">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Wide receiver</p>
+              <div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {records.playerSeason.wr.map((r) => (<RecordCard record={r} accentColor={secondary} isPlayer={true} />))}
+              </div>
+            </div>
+          )}
+
+          {records.playerSeason.db.length > 0 && (
+            <div class="mt-6">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Obrana</p>
+              <div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {records.playerSeason.db.map((r) => (<RecordCard record={r} accentColor={secondary} isPlayer={true} />))}
+              </div>
+            </div>
+          )}
+
+          {records.playerSeason.qb.length === 0 && records.playerSeason.wr.length === 0 && records.playerSeason.db.length === 0 && (
+            <div class="mt-5 rounded-xl border border-stone bg-pearl p-8 text-center text-[13px] text-slate">
+              Zatím žádná hráčská data v lize.
+            </div>
+          )}
+        </div>
+
+        <!-- Player records: single-game peaks -->
+        <div>
+          <h2 class="text-[22px] font-bold tracking-tight-2 text-ink">Hráčské rekordy · Jeden zápas</h2>
+          <p class="mt-1 text-[12px] text-slate">Nejlepší výkon v jednom zápase za sezónu {records.season}</p>
+
+          {records.playerGame.qb.length > 0 && (
+            <div class="mt-5">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Quarterback</p>
+              <div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {records.playerGame.qb.map((r) => (<RecordCard record={r} accentColor={secondary} isPlayer={true} />))}
+              </div>
+            </div>
+          )}
+
+          {records.playerGame.wr.length > 0 && (
+            <div class="mt-6">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Wide receiver</p>
+              <div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {records.playerGame.wr.map((r) => (<RecordCard record={r} accentColor={secondary} isPlayer={true} />))}
+              </div>
+            </div>
+          )}
+
+          {records.playerGame.db.length > 0 && (
+            <div class="mt-6">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Obrana</p>
+              <div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {records.playerGame.db.map((r) => (<RecordCard record={r} accentColor={secondary} isPlayer={true} />))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <!-- Team records -->
+        {records.teamSeason.length > 0 && (
+          <div>
+            <h2 class="text-[22px] font-bold tracking-tight-2 text-ink">Týmové rekordy · Celá sezóna</h2>
+            <p class="mt-1 text-[12px] text-slate">Nejlepší týmové celkové výsledky za sezónu</p>
+            <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {records.teamSeason.map((r) => (<RecordCard record={r} accentColor={secondary} isPlayer={false} />))}
+            </div>
+          </div>
+        )}
+
+        {records.teamGame.length > 0 && (
+          <div>
+            <h2 class="text-[22px] font-bold tracking-tight-2 text-ink">Týmové rekordy · Jeden zápas</h2>
+            <p class="mt-1 text-[12px] text-slate">Nejvyšší týmové hodnoty v jednom zápase</p>
+            <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {records.teamGame.map((r) => (<RecordCard record={r} accentColor={secondary} isPlayer={false} />))}
+            </div>
+          </div>
+        )}
+
       </div>
     )}
 
