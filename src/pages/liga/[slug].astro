@@ -9,6 +9,8 @@ import {
   fetchLeagueAllPlayers,
   fetchLeagueRecentMatches,
   fetchLeagueRecords,
+  fetchLeagueCareerRecords,
+  CAREER_CATEGORY_LABELS,
   type TeamStatsRow,
 } from '../../lib/league-stats';
 
@@ -26,13 +28,22 @@ const { data: league } = await admin
   .maybeSingle();
 if (!league) return Astro.redirect('/');
 
-const [standings, teamStats, players, recent, records] = await Promise.all([
+const [standings, teamStats, players, recent, records, careerRecords] = await Promise.all([
   fetchLeagueStandings(league.id),
   fetchLeagueTeamStats(league.id),
   fetchLeagueAllPlayers(league.id),
   fetchLeagueRecentMatches(league.id, 5),
   fetchLeagueRecords(league.id),
+  fetchLeagueCareerRecords(league.id),
 ]);
+
+// Group career records by category for display (top by value per category)
+const careerByCategory = new Map<string, typeof careerRecords>();
+for (const r of careerRecords) {
+  const arr = careerByCategory.get(r.category) ?? [];
+  arr.push(r);
+  careerByCategory.set(r.category, arr);
+}
 
 const totalMatches = standings.reduce((s, r) => s + r.played, 0);
 const totalTeams = standings.length;
@@ -427,6 +438,49 @@ const posTabs = [
 
     {totalTeams > 0 && tab === 'records' && (
       <div class="space-y-12">
+
+        <!-- Career records (manual historic entries) -->
+        {careerByCategory.size > 0 && (
+          <div>
+            <h2 class="text-[22px] font-bold tracking-tight-2 text-ink">Kariérní rekordy</h2>
+            <p class="mt-1 text-[12px] text-slate">Historické rekordy přesahující sezónu — zapsané manuálně ligovým adminem</p>
+            <div class="mt-5 space-y-6">
+              {Array.from(careerByCategory.entries()).map(([cat, rows]) => (
+                <div>
+                  <p class="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">{CAREER_CATEGORY_LABELS[cat] ?? cat}</p>
+                  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {rows.slice(0, 3).map((r) => {
+                      const initials = r.playerName.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2).toUpperCase();
+                      return (
+                        <div class="rounded-xl border border-stone bg-pearl p-5">
+                          <p class="text-[36px] font-bold tabular-nums tracking-tight-3" style={`color:${secondary}`}>{r.value}</p>
+                          <div class="mt-3 flex items-center gap-3 border-t border-stone pt-3">
+                            {r.photoUrl ? (
+                              <img src={r.photoUrl} alt="" loading="lazy" class="h-9 w-9 rounded-full object-cover" />
+                            ) : (
+                              <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink/5 text-[11px] font-semibold text-ink">{initials}</span>
+                            )}
+                            <div class="min-w-0 flex-1">
+                              <p class="truncate text-[13px] font-semibold text-ink">
+                                {r.playerName}
+                                {r.jersey != null && <span class="ml-1 text-[11px] text-stone-2">#{r.jersey}</span>}
+                              </p>
+                              <p class="truncate text-[11px] text-slate">
+                                {[r.clubName, r.teamName].filter(Boolean).join(' · ') || '—'}
+                              </p>
+                            </div>
+                          </div>
+                          {r.seasonRange && <p class="mt-2 text-[10px] uppercase tracking-wider text-stone-2">{r.seasonRange}</p>}
+                          {r.notes && <p class="mt-1 text-[11px] text-slate">{r.notes}</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <!-- Player records: single-season totals -->
         <div>

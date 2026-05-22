@@ -3,8 +3,8 @@ import { getSupabaseAdmin, type Club } from '../lib/supabase';
 
 interface Props {
   // Klub nav keys: dashboard | stats | players | matches | billing | settings
-  // Liga nav keys: dashboard | teams | standings | leaders | billing | settings
-  active?: 'dashboard' | 'stats' | 'players' | 'matches' | 'teams' | 'standings' | 'leaders' | 'billing' | 'settings';
+  // Liga nav keys: dashboard | teams | standings | leaders | records | billing | settings
+  active?: 'dashboard' | 'stats' | 'players' | 'matches' | 'teams' | 'standings' | 'leaders' | 'records' | 'billing' | 'settings';
 }
 const { active = 'dashboard' } = Astro.props;
 
@@ -63,6 +63,7 @@ const leagueNavItems = [
   { key: 'teams',        label: 'Týmy ligy',      href: '/app/league/teams',       icon: 'M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1' },
   { key: 'standings',    label: 'Standings',      href: '/app/league/standings',   icon: 'M3 3v18h18 M7 13h3v6 M13 9h3v10 M19 5h3v14' },
   { key: 'leaders',      label: 'Leaderboards',   href: '/app/league/leaders',     icon: 'M12 2v6 M12 22v-6 M4 12H2 M22 12h-2 M5.6 5.6 4.2 4.2 M19.8 19.8l-1.4-1.4 M5.6 18.4 4.2 19.8 M19.8 4.2l-1.4 1.4' },
+  { key: 'records',      label: 'Rekordy',        href: '/app/league/records',     icon: 'M12 2 15 8l7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z' },
   { key: 'billing',      label: 'Předplatné',     href: '/app/league/billing',     icon: 'M3 7h18 M3 12h18 M3 17h18' },
   { key: 'settings',     label: 'Nastavení',      href: '/app/league/settings',    icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z' },
 ];

@@ -840,3 +840,61 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
     teamSeason, teamGame,
   };
 }
+
+// ── Iter 9d: Career records (manual entries from league_records table) ──
+
+export type CareerRecord = {
+  id: string;
+  category: string;
+  playerName: string;
+  jersey: number | null;
+  teamName: string | null;
+  clubName: string | null;
+  photoUrl: string | null;
+  value: number;
+  seasonRange: string | null;
+  notes: string | null;
+};
+
+// Predefined category labels — UI shows these in human-readable form
+export const CAREER_CATEGORY_LABELS: Record<string, string> = {
+  qb_td_career:    'Nejvíc TD pasů za kariéru',
+  qb_yds_career:   'Nejvíc yardů (QB) za kariéru',
+  qb_comp_career:  'Nejvíc kompletních pasů za kariéru',
+  wr_td_career:    'Nejvíc TD chytů za kariéru',
+  wr_yds_career:   'Nejvíc receivingových yardů za kariéru',
+  wr_rec_career:   'Nejvíc receptionů za kariéru',
+  wr_pts_career:   'Nejvíc bodů (WR) za kariéru',
+  db_int_career:   'Nejvíc INT za kariéru',
+  db_sack_career:  'Nejvíc sacků za kariéru',
+  db_flag_pull_career: 'Nejvíc flag pulls za kariéru',
+  db_brkup_career: 'Nejvíc breakupů za kariéru',
+  // Team category (no player)
+  team_points_career: 'Nejvíc bodů za kariéru (tým)',
+  team_wins_career:   'Nejvíc výher za kariéru (tým)',
+};
+
+export const CAREER_CATEGORIES = Object.keys(CAREER_CATEGORY_LABELS);
+
+export async function fetchLeagueCareerRecords(leagueId: string): Promise<CareerRecord[]> {
+  if (!leagueId) return [];
+  const admin = getSupabaseAdmin();
+  const { data } = await admin
+    .from('league_records')
+    .select('id, category, player_name, jersey, team_name, club_name, photo_url, value, season_range, notes')
+    .eq('league_id', leagueId)
+    .order('value', { ascending: false });
+
+  return ((data ?? []) as any[]).map((r) => ({
+    id: r.id,
+    category: r.category,
+    playerName: r.player_name,
+    jersey: r.jersey,
+    teamName: r.team_name,
+    clubName: r.club_name,
+    photoUrl: r.photo_url,
+    value: r.value,
+    seasonRange: r.season_range,
+    notes: r.notes,
+  }));
+}
