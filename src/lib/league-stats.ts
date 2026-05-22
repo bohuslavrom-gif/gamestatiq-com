@@ -6,6 +6,56 @@
 
 import { getSupabaseAdmin } from './supabase';
 
+// ── Recent matches across all league teams ────────────────────
+
+export type LeagueMatchRow = {
+  id: string;
+  date: string;
+  opponent: string;
+  ourScore: number;
+  oppScore: number;
+  result: 'W' | 'L' | 'T';
+  teamId: string;
+  teamName: string;
+  clubName: string;
+  clubLogoUrl: string | null;
+};
+
+export async function fetchLeagueRecentMatches(leagueId: string, limit = 10): Promise<LeagueMatchRow[]> {
+  if (!leagueId) return [];
+  const admin = getSupabaseAdmin();
+
+  // Approved teams in this league
+  const { data: ltRaw } = await admin
+    .from('league_teams')
+    .select('team_id')
+    .eq('league_id', leagueId)
+    .not('approved_at', 'is', null);
+  const teamIds = ((ltRaw ?? []) as { team_id: string }[]).map((r) => r.team_id);
+  if (teamIds.length === 0) return [];
+
+  // Latest matches across those teams
+  const { data: matchesRaw } = await admin
+    .from('matches')
+    .select('id, date, opponent, our_score, opp_score, team_id, teams(name, club_id, clubs(name, logo_url))')
+    .in('team_id', teamIds)
+    .order('date', { ascending: false })
+    .limit(limit);
+
+  return ((matchesRaw ?? []) as any[]).map((m) => ({
+    id: m.id,
+    date: m.date,
+    opponent: m.opponent,
+    ourScore: m.our_score,
+    oppScore: m.opp_score,
+    result: m.our_score > m.opp_score ? 'W' : m.our_score < m.opp_score ? 'L' : 'T',
+    teamId: m.team_id,
+    teamName: m.teams?.name ?? '—',
+    clubName: m.teams?.clubs?.name ?? '—',
+    clubLogoUrl: m.teams?.clubs?.logo_url ?? null,
+  })) as LeagueMatchRow[];
+}
+
 // ── Standings ────────────────────────────────────────────────────
 
 export type StandingsRow = {
