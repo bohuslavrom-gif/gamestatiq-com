@@ -1,0 +1,82 @@
+---
+import type { TeamStatsRow } from '../lib/league-stats';
+
+interface Column {
+  key: keyof TeamStatsRow;
+  label: string;
+  bold?: boolean;
+  accent?: boolean;
+}
+
+interface Props {
+  title: string;
+  subtitle: string;
+  columns: Column[];
+  rows: TeamStatsRow[];
+  accentColor: string;  // league.secondary_color for #1 + accent cells
+}
+
+const { title, subtitle, columns, rows, accentColor } = Astro.props;
+---
+
+<div>
+  <div class="mb-3">
+    <h3 class="text-[18px] font-bold tracking-tight-2 text-ink">{title}</h3>
+    <p class="text-[12px] text-slate">{subtitle}</p>
+  </div>
+  <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+    {rows.length === 0 ? (
+      <div class="p-8 text-center text-[13px] text-slate">Žádná data.</div>
+    ) : (
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-[13px]">
+          <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+            <tr>
+              <th class="px-5 py-3 w-10 text-center">#</th>
+              <th class="py-3">Tým</th>
+              {columns.map((c) => (
+                <th class="px-3 py-3 text-center tabular-nums">{c.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone">
+            {rows.map((row, i) => {
+              const abbr = row.teamName.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || '?';
+              return (
+                <tr class="transition-colors hover:bg-mist/60">
+                  <td class="px-5 py-2.5 text-center">
+                    <span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${accentColor}` : ''}>{i + 1}</span>
+                  </td>
+                  <td class="py-2.5">
+                    <div class="flex items-center gap-2.5">
+                      {row.clubLogoUrl ? (
+                        <img src={row.clubLogoUrl} alt="" loading="lazy" class="h-8 w-8 rounded-lg bg-mist object-contain" />
+                      ) : (
+                        <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[10px] font-bold text-white" style={`background-color:${row.primaryColor}`}>{abbr}</span>
+                      )}
+                      <div>
+                        <p class="text-[13px] font-semibold text-ink">{row.teamName}</p>
+                        <p class="text-[10px] text-slate">{row.clubName}</p>
+                      </div>
+                    </div>
+                  </td>
+                  {columns.map((c) => {
+                    const val = row[c.key];
+                    const classes = [
+                      'px-3 py-2.5 text-center tabular-nums',
+                      c.bold ? 'font-bold text-ink' : 'text-graphite',
+                    ].join(' ');
+                    const style = c.accent ? `color:${accentColor}` : '';
+                    return (
+                      <td class={classes} style={style}>{val}</td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</div>
