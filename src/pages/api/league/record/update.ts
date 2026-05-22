@@ -16,6 +16,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
 
   const form = await request.formData();
   const id          = String(form.get('id') ?? '').trim();
+  const recordType  = String(form.get('record_type') ?? 'career').trim();
   const category    = String(form.get('category') ?? '').trim();
   const playerName  = String(form.get('player_name') ?? '').trim();
   const jerseyRaw   = String(form.get('jersey') ?? '').trim();
@@ -28,6 +29,9 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
 
   if (!id || !category || !playerName || !valueRaw) {
     return redirect(`/app/league/records?error=${encodeURIComponent('Chybí povinná pole.')}`, 303);
+  }
+  if (!['season', 'career'].includes(recordType)) {
+    return redirect(`/app/league/records?error=${encodeURIComponent('Neplatný typ rekordu.')}`, 303);
   }
   const value = parseInt(valueRaw, 10);
   if (isNaN(value) || value < 0) {
@@ -47,6 +51,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   }
 
   const { error } = await admin.from('league_records').update({
+    record_type: recordType,
     category,
     player_name: playerName,
     jersey,
@@ -62,5 +67,5 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   if (error) {
     return redirect(`/app/league/records?error=${encodeURIComponent(error.message)}`, 303);
   }
-  return redirect('/app/league/records?saved=updated', 303);
+  return redirect(`/app/league/records?tab=${recordType}&saved=updated`, 303);
 };

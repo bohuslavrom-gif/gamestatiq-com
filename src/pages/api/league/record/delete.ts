@@ -19,13 +19,14 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   if (!id) return redirect('/app/league/records?error=missing_id', 303);
 
   const admin = getSupabaseAdmin();
-  const { data: rec } = await admin.from('league_records').select('league_id').eq('id', id).maybeSingle();
+  const { data: rec } = await admin.from('league_records').select('league_id, record_type').eq('id', id).maybeSingle();
   if (!rec || (rec as { league_id: string }).league_id !== league.id) {
     return redirect(`/app/league/records?error=${encodeURIComponent('Rekord neexistuje.')}`, 303);
   }
+  const tab = ((rec as any).record_type as string) ?? 'career';
   const { error } = await admin.from('league_records').delete().eq('id', id);
   if (error) {
     return redirect(`/app/league/records?error=${encodeURIComponent(error.message)}`, 303);
   }
-  return redirect('/app/league/records?saved=deleted', 303);
+  return redirect(`/app/league/records?tab=${tab}&saved=deleted`, 303);
 };

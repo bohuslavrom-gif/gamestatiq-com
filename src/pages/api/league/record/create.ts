@@ -17,6 +17,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   }
 
   const form = await request.formData();
+  const recordType  = String(form.get('record_type') ?? 'career').trim();
   const category    = String(form.get('category') ?? '').trim();
   const playerName  = String(form.get('player_name') ?? '').trim();
   const jerseyRaw   = String(form.get('jersey') ?? '').trim();
@@ -27,6 +28,9 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   const seasonRange = String(form.get('season_range') ?? '').trim();
   const notes       = String(form.get('notes') ?? '').trim();
 
+  if (!['season', 'career'].includes(recordType)) {
+    return redirect(`/app/league/records?error=${encodeURIComponent('Neplatný typ rekordu.')}`, 303);
+  }
   if (!category || !playerName || !valueRaw) {
     return redirect(`/app/league/records?error=${encodeURIComponent('Kategorie, jméno a hodnota jsou povinné.')}`, 303);
   }
@@ -43,6 +47,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   const admin = getSupabaseAdmin();
   const { error } = await admin.from('league_records').insert({
     league_id: league.id,
+    record_type: recordType,
     category,
     player_name: playerName,
     jersey,
@@ -57,5 +62,5 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   if (error) {
     return redirect(`/app/league/records?error=${encodeURIComponent('Uložení selhalo: ' + error.message)}`, 303);
   }
-  return redirect('/app/league/records?saved=created', 303);
+  return redirect(`/app/league/records?tab=${recordType}&saved=created`, 303);
 };

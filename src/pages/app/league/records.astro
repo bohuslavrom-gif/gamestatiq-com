@@ -1,6 +1,13 @@
 ---
 import AppLayout from '../../../layouts/AppLayout.astro';
-import { fetchLeagueCareerRecords, CAREER_CATEGORY_LABELS, CAREER_CATEGORIES } from '../../../lib/league-stats';
+import {
+  fetchLeagueManualRecords,
+  RECORD_CATEGORY_LABELS,
+  RECORD_CATEGORIES,
+  RECORD_TYPE_LABEL,
+  type RecordType,
+  type ManualRecord,
+} from '../../../lib/league-stats';
 
 export const prerender = false;
 
@@ -10,14 +17,20 @@ if (!league) return Astro.redirect('/app');
 
 const canEdit = role === 'admin' || role === 'staff';
 
-const records = await fetchLeagueCareerRecords(league.id);
-
 const url = new URL(Astro.request.url);
+const tabRaw = url.searchParams.get('tab') ?? 'season';
+const tab: RecordType = tabRaw === 'career' ? 'career' : 'season';
 const saved = url.searchParams.get('saved');
 const errorMsg = url.searchParams.get('error');
 const editId = url.searchParams.get('edit');
 const addMode = url.searchParams.get('add') === '1';
-const editingRecord = editId ? records.find((r) => r.id === editId) : null;
+
+const all = await fetchLeagueManualRecords(league.id);
+const records = all.filter((r) => r.recordType === tab);
+const editingRecord = editId ? all.find((r) => r.id === editId) : null;
+// If editing a record from the other tab, switch tab in form
+const formType: RecordType = editingRecord ? editingRecord.recordType : tab;
+
 const showForm = canEdit && (addMode || !!editingRecord);
 
 const SAVED_MSG: Record<string, string> = {
@@ -26,8 +39,13 @@ const SAVED_MSG: Record<string, string> = {
   deleted: '✓ Rekord smazán.',
 };
 
-// Group records by category for display
-const byCategory = new Map<string, typeof records>();
+const tabs: { key: RecordType; label: string; count: number }[] = [
+  { key: 'season', label: 'Sezónní rekordy', count: all.filter((r) => r.recordType === 'season').length },
+  { key: 'career', label: 'Kariérní rekordy', count: all.filter((r) => r.recordType === 'career').length },
+];
+
+// Group filtered records by category
+const byCategory = new Map<string, ManualRecord[]>();
 for (const r of records) {
   const arr = byCategory.get(r.category) ?? [];
   arr.push(r);
@@ -38,8 +56,8 @@ for (const r of records) {
 <AppLayout
   title={`Rekordy · ${league.name}`}
   active="records"
-  pageTitle="Kariérní rekordy ligy"
-  pageSub={`${league.name} · ${records.length} ${records.length === 1 ? 'rekord' : records.length < 5 ? 'rekordy' : 'rekordů'}`}
+  pageTitle="Ligové rekordy"
+  pageSub={`${league.name} · ${all.length} ${all.length === 1 ? 'rekord' : all.length < 5 ? 'rekordy' : 'rekordů'} celkem`}
 >
 
   {saved && SAVED_MSG[saved] && <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">{SAVED_MSG[saved]}</div>}
@@ -55,41 +73,60 @@ for (const r of records) {
     </div>
   )}
 
-  <!-- Add / Edit form -->
+  <!-- Sub-tabs -->
+  <div class="mb-6 flex flex-wrap gap-1 rounded-lg border border-stone bg-pearl p-1">
+    {tabs.map((t) => {
+      const isActive = tab === t.key;
+      return (
+        <a href={`?tab=${t.key}`} class={`rounded-md px-4 py-2 text-[13px] font-medium transition-colors ${isActive ? 'bg-ink text-white' : 'text-graphite hover:bg-mist'}`}>
+          {t.label}<span class="ml-1 text-[10px] opacity-70">({t.count})</span>
+        </a>
+      );
+    })}
+  </div>
+
+  <!-- Add/Edit form -->
   {showForm && (
     <div class="mb-6 rounded-xl border border-plum/30 bg-gradient-to-br from-plum/5 to-signal/5 p-6">
-      <p class="text-[15px] font-semibold tracking-tight-2 text-ink">{editingRecord ? 'Upravit rekord' : 'Přidat kariérní rekord'}</p>
+      <p class="text-[15px] font-semibold tracking-tight-2 text-ink">{editingRecord ? 'Upravit rekord' : 'Přidat rekord'}</p>
       <p class="mt-1 text-[12px] text-graphite">
-        Manuální zápis historických rekordů (před érou GameStatiq). Ukáže se public na <code class="rounded bg-mist px-1 py-0.5 text-[11px]">/liga/{league.slug}</code> v sekci Ligové rekordy.
+        Manuální záznam ligového rekordu. Zobrazí se na public <code class="rounded bg-mist px-1 py-0.5 text-[11px]">/liga/{league.slug}</code> v sekci Ligové rekordy.
       </p>
 
       <form method="POST" action={editingRecord ? '/api/league/record/update' : '/api/league/record/create'} class="mt-5 space-y-4">
         {editingRecord && <input type="hidden" name="id" value={editingRecord.id} />}
 
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 sm:grid-cols-3">
           <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Typ rekordu *</span>
+            <select name="record_type" required class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[13px] text-ink">
+              <option value="season" selected={formType === 'season'}>Sezónní</option>
+              <option value="career" selected={formType === 'career'}>Kariérní</option>
+            </select>
+          </label>
+          <label class="block sm:col-span-2">
             <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Kategorie *</span>
             <select name="category" required class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[13px] text-ink">
               <option value="">— vyberte —</option>
-              {CAREER_CATEGORIES.map((c) => (
-                <option value={c} selected={c === editingRecord?.category}>{CAREER_CATEGORY_LABELS[c] ?? c}</option>
+              {RECORD_CATEGORIES.map((c) => (
+                <option value={c} selected={c === editingRecord?.category}>{RECORD_CATEGORY_LABELS[c] ?? c}</option>
               ))}
             </select>
           </label>
-          <label class="block">
-            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Hodnota *</span>
-            <input type="number" min="0" name="value" required value={editingRecord?.value ?? ''} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] tabular-nums" placeholder="312" />
-          </label>
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-[1fr_120px]">
+        <div class="grid gap-4 sm:grid-cols-[1fr_120px_140px]">
           <label class="block">
             <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Jméno hráče / týmu *</span>
             <input type="text" name="player_name" required value={editingRecord?.playerName ?? ''} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px]" placeholder="Tomáš Vacek" />
           </label>
           <label class="block">
             <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Číslo dresu</span>
-            <input type="number" min="0" max="999" name="jersey" value={editingRecord?.jersey ?? ''} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] tabular-nums" placeholder="12" />
+            <input type="number" min="0" max="999" name="jersey" value={editingRecord?.jersey ?? ''} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] tabular-nums" />
+          </label>
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Hodnota *</span>
+            <input type="number" min="0" name="value" required value={editingRecord?.value ?? ''} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] tabular-nums" placeholder="53" />
           </label>
         </div>
 
@@ -106,8 +143,8 @@ for (const r of records) {
 
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block">
-            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Roky / sezóny</span>
-            <input type="text" name="season_range" value={editingRecord?.seasonRange ?? ''} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px]" placeholder="2018–2024 nebo 2020–dnes" />
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Roky / sezóna</span>
+            <input type="text" name="season_range" value={editingRecord?.seasonRange ?? ''} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px]" placeholder="Sezóna 2026 nebo 2018–2024" />
           </label>
           <label class="block">
             <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">URL fotky (volitelné)</span>
@@ -117,41 +154,41 @@ for (const r of records) {
 
         <label class="block">
           <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Poznámka (volitelné)</span>
-          <textarea name="notes" rows="2" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[13px]" placeholder="Vítěz MVP 2022; první hráč co dosáhl 300 TD;…">{editingRecord?.notes ?? ''}</textarea>
+          <textarea name="notes" rows="2" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[13px]" placeholder="MVP 2022; první kdo dosáhl 300 TD;…">{editingRecord?.notes ?? ''}</textarea>
         </label>
 
         <div class="flex flex-wrap items-center gap-3 pt-2">
           <button type="submit" class="rounded-lg bg-plum px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#3F2B68]">{editingRecord ? 'Uložit změny' : 'Přidat rekord'}</button>
-          <a href="/app/league/records" class="text-[13px] font-medium text-graphite hover:text-ink">Zrušit</a>
+          <a href={`/app/league/records?tab=${tab}`} class="text-[13px] font-medium text-graphite hover:text-ink">Zrušit</a>
         </div>
       </form>
     </div>
   )}
 
-  <!-- Records list grouped by category -->
+  <!-- Records list -->
   <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 class="text-[18px] font-bold tracking-tight-2 text-ink">Seznam rekordů</h2>
+        <h2 class="text-[18px] font-bold tracking-tight-2 text-ink">{RECORD_TYPE_LABEL[tab]} rekordy</h2>
         <p class="text-[12px] text-slate">{records.length} celkem · {byCategory.size} kategorií</p>
       </div>
       {canEdit && !addMode && !editingRecord && (
-        <a href="/app/league/records?add=1" class="rounded-lg bg-plum px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#3F2B68]">+ Přidat rekord</a>
+        <a href={`/app/league/records?tab=${tab}&add=1`} class="rounded-lg bg-plum px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#3F2B68]">+ Přidat rekord</a>
       )}
     </div>
 
     {records.length === 0 ? (
       <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
-        <p class="text-[15px] font-semibold text-ink">Zatím žádné rekordy</p>
+        <p class="text-[15px] font-semibold text-ink">Zatím žádné {tab === 'season' ? 'sezónní' : 'kariérní'} rekordy</p>
         <p class="mt-1 text-[13px] text-slate">
-          {canEdit ? 'Klikněte na "+ Přidat rekord" a začněte zapisovat historické úspěchy hráčů a týmů.' : 'Zatím nebyly přidány žádné kariérní rekordy.'}
+          {canEdit ? 'Klikněte na "+ Přidat rekord" a začněte zapisovat.' : 'Liga admin zatím nepřidal žádné rekordy.'}
         </p>
       </div>
     ) : (
       Array.from(byCategory.entries()).map(([cat, rows]) => (
         <div class="rounded-xl border border-stone bg-pearl">
           <div class="border-b border-stone px-5 py-4">
-            <p class="text-[14px] font-semibold tracking-tight-2 text-ink">{CAREER_CATEGORY_LABELS[cat] ?? cat}</p>
+            <p class="text-[14px] font-semibold tracking-tight-2 text-ink">{RECORD_CATEGORY_LABELS[cat] ?? cat}</p>
             <p class="text-[11px] text-slate">{rows.length} {rows.length === 1 ? 'záznam' : rows.length < 5 ? 'záznamy' : 'záznamů'}</p>
           </div>
           <ul class="divide-y divide-stone">
@@ -161,7 +198,7 @@ for (const r of records) {
                   <img src={r.photoUrl} alt="" loading="lazy" class="h-10 w-10 rounded-full object-cover" />
                 ) : (
                   <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-ink/5 text-[12px] font-semibold text-ink">
-                    {(r.playerName ?? '?').split(' ').map((w) => w[0] ?? '').join('').slice(0, 2).toUpperCase()}
+                    {r.playerName.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2).toUpperCase()}
                   </span>
                 )}
                 <div class="min-w-0 flex-1">
@@ -178,7 +215,7 @@ for (const r of records) {
                 <span class="text-[24px] font-bold tabular-nums text-plum">{r.value}</span>
                 {canEdit && (
                   <div class="flex items-center gap-2">
-                    <a href={`/app/league/records?edit=${r.id}`} class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[11px] font-medium text-graphite hover:bg-mist">Upravit</a>
+                    <a href={`/app/league/records?tab=${r.recordType}&edit=${r.id}`} class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[11px] font-medium text-graphite hover:bg-mist">Upravit</a>
                     <form method="POST" action="/api/league/record/delete" class="inline">
                       <input type="hidden" name="id" value={r.id} />
                       <button type="submit" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[11px] font-medium text-graphite hover:border-signal/40 hover:text-signal" onclick="return confirm('Smazat rekord? Akce je nevratná.')">Smazat</button>
