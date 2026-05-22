@@ -1,0 +1,101 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { getSupabaseAdmin } from '../../lib/supabase';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const currentTeam = Astro.locals.team ?? null;
+const currentTeamId = currentTeam?.id ?? null;
+
+const admin = getSupabaseAdmin();
+
+// User's role in this team's club (drives edit/delete affordances)
+let role: string | null = null;
+if (currentTeam?.club_id) {
+  const { data: cm } = await admin
+    .from('club_members')
+    .select('role')
+    .eq('club_id', currentTeam.club_id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  role = (cm as { role: string } | null)?.role ?? null;
+}
+const canEdit = role === 'admin' || role === 'coach' || role === 'stats';
+const canDelete = role === 'admin';
+
+// Matches for the current team
+const { data: matchesRaw } = currentTeamId
+  ? await admin
+      .from('matches')
+      .select('id, date, opponent, our_score, opp_score, off_drives, qb_td')
+      .eq('team_id', currentTeamId)
+      .order('date', { ascending: false })
+  : { data: [] as any[] };
+const matches = (matchesRaw ?? []) as any[];
+
+const url = new URL(Astro.request.url);
+const saved = url.searchParams.get('saved');
+const errorMsg = url.searchParams.get('error');
+const SAVED_MSG: Record<string, string> = {
+  deleted: '✓ Zápas smazán.',
+  '1': '✓ Změny uloženy.',
+};
+---
+
+<AppLayout
+  title="Zápasy · GameStatiq"
+  active="matches"
+  pageTitle="Zápasy"
+  pageSub={currentTeam ? `${currentTeam.name} · ${matches.length} ${matches.length === 1 ? 'zápas' : matches.length < 5 ? 'zápasy' : 'zápasů'}` : 'Načítám…'}
+>
+  {saved && SAVED_MSG[saved] && <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">{SAVED_MSG[saved]}</div>}
+  {errorMsg && <div class="mb-6 rounded-lg border border-signal/30 bg-signal/5 px-4 py-3 text-[14px] text-signal">{errorMsg}</div>}
+
+  {!canEdit && (
+    <div class="mb-6 rounded-lg border border-sky/30 bg-sky/5 px-4 py-3 text-[13px] text-[#1B5E83]">
+      Vaše role <strong>{role ?? '—'}</strong> nedovoluje úpravy. Pro korekce statistik je potřeba role Admin, Trenér, nebo Statistik.
+    </div>
+  )}
+
+  {matches.length === 0 ? (
+    <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
+      <p class="text-[15px] font-semibold text-ink">Žádné zápasy v týmu {currentTeam?.name ?? ''}</p>
+      <p class="mt-1 text-[13px] text-slate">
+        Zápisy se vytváří v <a href="https://scorer.gamestatiq.com" target="_blank" rel="noopener" class="font-semibold text-signal hover:underline">Scorer PWA</a>.
+        Po uložení se objeví zde.
+      </p>
+    </div>
+  ) : (
+    <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[640px] text-left text-[13px]">
+          <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+            <tr>
+              <th class="px-5 py-3">Datum</th>
+              <th class="px-3 py-3">Soupeř</th>
+              <th class="px-3 py-3 text-center tabular-nums">Skóre</th>
+              <th class="px-3 py-3 text-center tabular-nums">QB TD</th>
+              <th class="px-3 py-3 text-center tabular-nums">Drives</th>
+              <th class="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone">
+            {matches.map((m: any) => (
+              <tr class="transition-colors hover:bg-mist/60">
+                <td class="px-5 py-3 text-graphite">{new Date(m.date).toLocaleDateString('cs-CZ')}</td>
+                <td class="px-3 py-3 font-semibold text-ink">{m.opponent}</td>
+                <td class="px-3 py-3 text-center font-bold tabular-nums text-ink">{m.our_score}–{m.opp_score}</td>
+                <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.qb_td ?? 0}</td>
+                <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.off_drives ?? 0}</td>
+                <td class="px-5 py-3 text-right">
+                  <a href={`/app/matches/${m.id}`} class="text-[12px] font-semibold text-signal hover:underline">{canEdit ? 'Upravit →' : 'Detail →'}</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
+</AppLayout>

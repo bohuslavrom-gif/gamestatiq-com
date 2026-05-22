@@ -1,0 +1,265 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro';
+import { getSupabaseAdmin } from '../../../lib/supabase';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const id = Astro.params.id;
+if (!id) return Astro.redirect('/app/matches');
+
+const admin = getSupabaseAdmin();
+
+const { data: match } = await admin
+  .from('matches')
+  .select('*, teams(id, name, club_id, clubs(name))')
+  .eq('id', id)
+  .maybeSingle();
+if (!match) return Astro.redirect('/app/matches');
+
+const team = (match as any).teams;
+const club = team?.clubs;
+
+// Verify user has access to this club + resolve role
+const { data: cm } = await admin
+  .from('club_members')
+  .select('role')
+  .eq('club_id', (match as any).club_id)
+  .eq('user_id', user.id)
+  .maybeSingle();
+const role = (cm as { role: string } | null)?.role ?? null;
+if (!role) return Astro.redirect('/app/matches');
+
+const canEdit   = role === 'admin' || role === 'coach' || role === 'stats';
+const canDelete = role === 'admin';
+const readOnly  = !canEdit;
+
+// Per-match player stats with player metadata
+const { data: psRaw } = await admin
+  .from('match_player_stats')
+  .select(`
+    match_id, player_id,
+    qb_att, qb_comp, qb_yds, qb_td, qb_int, qb_sack,
+    wr_targets, wr_rec, wr_yds, wr_td, wr_xp, wr_pts,
+    db_flag_pull, db_sack, db_brkup, db_int,
+    players ( first_name, last_name, jersey_number, position )
+  `)
+  .eq('match_id', id);
+const ps = (psRaw ?? []) as any[];
+
+// All players in the match's team (for "add to stats" dropdown)
+const { data: teamPlayers } = await admin
+  .from('players')
+  .select('id, first_name, last_name, jersey_number, position')
+  .eq('team_id', (match as any).team_id)
+  .order('jersey_number', { ascending: true, nullsLast: true });
+const playersInStats = new Set(ps.map((r) => r.player_id));
+const availablePlayers = ((teamPlayers ?? []) as any[]).filter((p) => !playersInStats.has(p.id));
+
+const url = new URL(Astro.request.url);
+const saved = url.searchParams.get('saved');
+const errorMsg = url.searchParams.get('error');
+const SAVED_MSG: Record<string, string> = {
+  '1':       '✓ Změny uloženy.',
+  stats:     '✓ Statistiky hráče uloženy.',
+  added:     '✓ Hráč přidán do statistik.',
+  removed:   '✓ Hráč odebrán ze statistik.',
+};
+
+const roleLabel: Record<string, string> = { admin: 'Admin', coach: 'Trenér', stats: 'Statistik', viewer: 'Pozorovatel' };
+---
+
+<AppLayout
+  title={`vs ${match.opponent} · ${team?.name ?? ''}`}
+  active="matches"
+  pageTitle={`vs ${match.opponent}`}
+  pageSub={`${new Date(match.date).toLocaleDateString('cs-CZ')} · ${team?.name ?? '—'} · skóre ${match.our_score}–${match.opp_score} · vy: ${roleLabel[role] ?? role}`}
+>
+
+  {saved && SAVED_MSG[saved] && <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">{SAVED_MSG[saved]}</div>}
+  {errorMsg && <div class="mb-6 rounded-lg border border-signal/30 bg-signal/5 px-4 py-3 text-[14px] text-signal">{errorMsg}</div>}
+
+  <div class="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
+    <a href="/app/matches" class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">← Všechny zápasy</a>
+  </div>
+
+  {readOnly && (
+    <div class="mb-6 rounded-lg border border-sky/30 bg-sky/5 px-4 py-3 text-[13px] text-[#1B5E83]">
+      Vaše role <strong>{roleLabel[role] ?? role}</strong> umožňuje pouze prohlížení. Pro úpravy je potřeba role Admin, Trenér, nebo Statistik.
+    </div>
+  )}
+
+  <!-- Match-level edit form -->
+  <div class="rounded-xl border border-stone bg-pearl">
+    <div class="border-b border-stone px-5 py-4">
+      <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Zápasové statistiky</p>
+      <p class="text-[12px] text-slate">Korekce hodnot zápisu — pro opravu chybně zapsaných hodnot z PWA Scoreru</p>
+    </div>
+    <form method="POST" action="/api/club/match/update" class="p-5">
+      <input type="hidden" name="match_id" value={match.id} />
+
+      <div class="grid gap-4 sm:grid-cols-3">
+        <label class="block">
+          <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Datum</span>
+          <input type="date" name="date" value={match.date} readonly={readOnly} class="mt-1.5 block w-full rounded-md border border-stone bg-pearl px-3 py-2 text-[13px]" />
+        </label>
+        <label class="block sm:col-span-2">
+          <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Soupeř</span>
+          <input type="text" name="opponent" value={match.opponent} readonly={readOnly} class="mt-1.5 block w-full rounded-md border border-stone bg-pearl px-3 py-2 text-[13px]" />
+        </label>
+      </div>
+
+      <p class="mt-6 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Skóre + drives</p>
+      <div class="mt-2 grid gap-3 sm:grid-cols-4">
+        {[
+          ['our_score', 'Naše skóre'], ['opp_score', 'Soupeřovo skóre'],
+          ['off_drives', 'Útočné drives'], ['off_td', 'Útočné TD'],
+          ['def_drives', 'Defenzivní drives'], ['def_stops', 'Defenzivní stops'],
+          ['rush_yds', 'Rush yds'], ['pass_yds', 'Pass yds'],
+          ['total_yds', 'Total yds'],
+          ['opp_rush_yds', 'Opp rush'], ['opp_pass_yds', 'Opp pass'], ['opp_total_yds', 'Opp total'],
+        ].map(([k, label]) => (
+          <label class="block">
+            <span class="text-[10px] uppercase tracking-wider text-stone-2">{label}</span>
+            <input type="number" min="0" name={k} value={(match as any)[k] ?? 0} readonly={readOnly} class="mt-1 block w-full rounded-md border border-stone bg-pearl px-2 py-1.5 text-[13px] tabular-nums" />
+          </label>
+        ))}
+      </div>
+
+      <p class="mt-6 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">QB team agg + XP + fauly</p>
+      <div class="mt-2 grid gap-3 sm:grid-cols-4">
+        {[
+          ['qb_att', 'QB ATT'], ['qb_comp', 'QB COMP'], ['qb_yds', 'QB YDS'],
+          ['qb_td', 'QB TD'], ['qb_int', 'QB INT'],
+          ['xp1_att', '1XP ATT'], ['xp1_ok', '1XP OK'],
+          ['xp2_att', '2XP ATT'], ['xp2_ok', '2XP OK'],
+          ['pen_count', 'Fauly count'], ['pen_yds', 'Fauly yds'],
+        ].map(([k, label]) => (
+          <label class="block">
+            <span class="text-[10px] uppercase tracking-wider text-stone-2">{label}</span>
+            <input type="number" min="0" name={k} value={(match as any)[k] ?? 0} readonly={readOnly} class="mt-1 block w-full rounded-md border border-stone bg-pearl px-2 py-1.5 text-[13px] tabular-nums" />
+          </label>
+        ))}
+      </div>
+
+      {canEdit && (
+        <div class="mt-6">
+          <button type="submit" class="rounded-md bg-signal px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#C8313D]">Uložit změny zápasu</button>
+        </div>
+      )}
+    </form>
+
+    {canDelete && (
+      <div class="border-t border-stone bg-mist/40 px-5 py-3">
+        <form method="POST" action="/api/club/match/delete" onsubmit="return confirm('Smazat zápas včetně všech player stats, plays, faulů a drives? Nevratné.')">
+          <input type="hidden" name="match_id" value={match.id} />
+          <button type="submit" class="rounded-md border border-signal/40 bg-signal/5 px-3 py-2 text-[12px] font-semibold text-signal hover:bg-signal hover:text-white">Smazat celý zápas (jen Admin)</button>
+        </form>
+      </div>
+    )}
+  </div>
+
+  <!-- Per-player stats: editable -->
+  <div class="mt-8 rounded-xl border border-stone bg-pearl">
+    <div class="flex items-center justify-between border-b border-stone px-5 py-4">
+      <div>
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Per-hráč statistiky</p>
+        <p class="text-[12px] text-slate">{ps.length} hráčů · upravte čísla a klikněte Uložit u řádku</p>
+      </div>
+    </div>
+
+    {canEdit && availablePlayers.length > 0 && (
+      <div class="border-b border-stone bg-mist/40 px-5 py-3">
+        <form method="POST" action="/api/club/match/add-player-stat" class="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="match_id" value={match.id} />
+          <label class="block flex-1 min-w-[260px]">
+            <span class="text-[10px] uppercase tracking-wider text-slate">Přidat hráče (z {team?.name} rosteru)</span>
+            <select name="player_id" required class="mt-1 block w-full rounded-md border border-stone bg-pearl px-3 py-1.5 text-[13px]">
+              <option value="">— vyberte hráče —</option>
+              {availablePlayers.map((p: any) => (
+                <option value={p.id}>#{p.jersey_number ?? '—'} {p.first_name} {p.last_name ?? ''} ({p.position})</option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" class="rounded-md bg-signal px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#C8313D]">+ Přidat do statistik</button>
+        </form>
+      </div>
+    )}
+
+    {ps.length === 0 ? (
+      <div class="p-8 text-center text-[13px] text-slate">Žádné per-hráč staty.</div>
+    ) : (
+      <div class="divide-y divide-stone">
+        {ps.map((row: any) => {
+          const p = row.players ?? {};
+          const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ') || '—';
+          return (
+            <div id={`player-${row.player_id}`} class="px-5 py-4">
+              <!-- Header row OUTSIDE update form (remove form sits here, can't be nested) -->
+              <div class="mb-3 flex flex-wrap items-center gap-3">
+                <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink/5 text-[12px] font-semibold text-ink">#{p.jersey_number ?? '?'}</span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-[14px] font-semibold text-ink">{fullName}</p>
+                  <p class="text-[11px] text-slate">{p.position ?? '—'}</p>
+                </div>
+                {canEdit && (
+                  <form method="POST" action="/api/club/match/remove-player-stat" class="inline">
+                    <input type="hidden" name="match_id" value={row.match_id} />
+                    <input type="hidden" name="player_id" value={row.player_id} />
+                    <button type="submit" class="rounded-md border border-stone bg-pearl px-2 py-1 text-[11px] font-medium text-graphite hover:border-signal/40 hover:text-signal" onclick="return confirm('Odebrat staty tohoto hráče z tohoto zápasu?')">Odebrat ze statistik</button>
+                  </form>
+                )}
+              </div>
+
+              <form method="POST" action="/api/club/match/update-player-stat" class="space-y-3">
+                <input type="hidden" name="match_id" value={row.match_id} />
+                <input type="hidden" name="player_id" value={row.player_id} />
+
+                <div class="grid gap-2 sm:grid-cols-6">
+                  {[
+                    ['qb_att', 'QB ATT'], ['qb_comp', 'COMP'], ['qb_yds', 'YDS'],
+                    ['qb_td', 'TD'], ['qb_int', 'INT'], ['qb_sack', 'SACK'],
+                  ].map(([k, label]) => (
+                    <label class="block">
+                      <span class="text-[9px] uppercase tracking-wider text-stone-2">{label}</span>
+                      <input type="number" min="0" name={k} value={row[k] ?? 0} readonly={readOnly} class="mt-0.5 block w-full rounded-md border border-stone bg-pearl px-2 py-1 text-[12px] tabular-nums" />
+                    </label>
+                  ))}
+                </div>
+
+                <div class="grid gap-2 sm:grid-cols-6">
+                  {[
+                    ['wr_targets', 'WR TARG'], ['wr_rec', 'REC'], ['wr_yds', 'YDS'],
+                    ['wr_td', 'TD'], ['wr_xp', 'XP'], ['wr_pts', 'PTS'],
+                  ].map(([k, label]) => (
+                    <label class="block">
+                      <span class="text-[9px] uppercase tracking-wider text-stone-2">{label}</span>
+                      <input type="number" min="0" name={k} value={row[k] ?? 0} readonly={readOnly} class="mt-0.5 block w-full rounded-md border border-stone bg-pearl px-2 py-1 text-[12px] tabular-nums" />
+                    </label>
+                  ))}
+                </div>
+
+                <div class="grid gap-2 sm:grid-cols-4">
+                  {[
+                    ['db_flag_pull', 'FLAG'], ['db_sack', 'D SACK'],
+                    ['db_int', 'INT'], ['db_brkup', 'BRKUP'],
+                  ].map(([k, label]) => (
+                    <label class="block">
+                      <span class="text-[9px] uppercase tracking-wider text-stone-2">{label}</span>
+                      <input type="number" min="0" name={k} value={row[k] ?? 0} readonly={readOnly} class="mt-0.5 block w-full rounded-md border border-stone bg-pearl px-2 py-1 text-[12px] tabular-nums" />
+                    </label>
+                  ))}
+                  {canEdit && (
+                    <div class="flex items-end">
+                      <button type="submit" class="w-full rounded-md bg-signal px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#C8313D]">Uložit hráče</button>
+                    </div>
+                  )}
+                </div>
+              </form>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</AppLayout>
