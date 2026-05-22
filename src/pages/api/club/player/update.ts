@@ -75,7 +75,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
 
   if (error) {
     const msg = error.code === '23505'
-      ? 'Číslo dresu už používá jiný hráč.'
+      ? 'Číslo dresu už používá jiný hráč v tomto týmu.'
       : 'Uložení selhalo: ' + error.message;
     return redirect(`/app/players?error=${encodeURIComponent(msg)}`, 303);
   }
