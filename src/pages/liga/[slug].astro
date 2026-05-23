@@ -8,12 +8,14 @@ import {
   fetchLeagueTeamStats,
   fetchLeagueAllPlayers,
   fetchLeagueRecentMatches,
+  fetchLeagueMatches,
   fetchLeagueRecords,
   fetchLeagueManualRecords,
   RECORD_CATEGORY_LABELS,
   type TeamStatsRow,
   type ManualRecord,
   type RecordType,
+  type LeagueMatchListRow,
 } from '../../lib/league-stats';
 
 export const prerender = false;
@@ -30,14 +32,24 @@ const { data: league } = await admin
   .maybeSingle();
 if (!league) return Astro.redirect('/');
 
-const [standings, teamStats, players, recent, records, manualRecords] = await Promise.all([
+const [standings, teamStats, players, recent, allMatches, records, manualRecords] = await Promise.all([
   fetchLeagueStandings(league.id),
   fetchLeagueTeamStats(league.id),
   fetchLeagueAllPlayers(league.id),
   fetchLeagueRecentMatches(league.id, 5),
+  fetchLeagueMatches(league.id),
   fetchLeagueRecords(league.id),
   fetchLeagueManualRecords(league.id),
 ]);
+
+// Build team filter options from matches (dedup by teamId)
+const teamFilterMap = new Map<string, { id: string; label: string }>();
+for (const m of allMatches) {
+  if (!teamFilterMap.has(m.teamId)) {
+    teamFilterMap.set(m.teamId, { id: m.teamId, label: `${m.clubName} ${m.teamName}` });
+  }
+}
+const teamFilterOptions = Array.from(teamFilterMap.values()).sort((a, b) => a.label.localeCompare(b.label, 'cs'));
 
 // Split manual records by type
 const seasonRecords: ManualRecord[] = manualRecords.filter((r) => r.recordType === 'season');
@@ -75,6 +87,10 @@ const tab = url.searchParams.get('tab') ?? 'team';
 const playerPos = url.searchParams.get('pos') ?? 'qb';
 const recordsSubRaw = url.searchParams.get('sub') ?? 'season';
 const recordsSub: RecordType = recordsSubRaw === 'career' ? 'career' : 'season';
+const matchesTeamFilter = url.searchParams.get('team') ?? '';
+const filteredMatches: LeagueMatchListRow[] = matchesTeamFilter
+  ? allMatches.filter((m) => m.teamId === matchesTeamFilter)
+  : allMatches;
 
 const primary = league.primary_color || '#0F1B2D';
 const secondary = league.secondary_color || '#E63946';
@@ -82,6 +98,7 @@ const secondary = league.secondary_color || '#E63946';
 const tabs = [
   { key: 'team',    label: 'Týmové statistiky' },
   { key: 'players', label: 'Hráčské statistiky' },
+  { key: 'matches', label: 'Zápasy' },
   { key: 'records', label: 'Ligové rekordy' },
 ];
 
@@ -453,6 +470,82 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
         )}
 
         <p class="mt-3 text-[11px] text-stone-2">Tip: klikni na hlavičku sloupce a seřaď tabulku podle této hodnoty. Druhý klik otočí pořadí.</p>
+      </div>
+    )}
+
+    {totalTeams > 0 && tab === 'matches' && (
+      <div>
+        <!-- Filter by team -->
+        <form method="GET" class="mb-5 flex flex-wrap items-end gap-3">
+          <input type="hidden" name="tab" value="matches" />
+          <label class="block min-w-[260px]">
+            <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Filtrovat podle týmu</span>
+            <select name="team" onchange="this.form.submit()" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2 text-[13px] text-ink">
+              <option value="">Všechny týmy ({allMatches.length})</option>
+              {teamFilterOptions.map((t) => (
+                <option value={t.id} selected={t.id === matchesTeamFilter}>{t.label}</option>
+              ))}
+            </select>
+          </label>
+          {matchesTeamFilter && (
+            <a href={`?tab=matches`} class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist">× Zrušit filtr</a>
+          )}
+          <p class="text-[11px] text-stone-2">Zobrazeno {filteredMatches.length} z {allMatches.length} zápasů</p>
+        </form>
+
+        {filteredMatches.length === 0 ? (
+          <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
+            <p class="text-[15px] font-semibold text-ink">Žádné odehrané zápasy</p>
+            <p class="mt-1 text-[13px] text-slate">Zápasy se zobrazí po prvním uložení ze Scorer PWA.</p>
+          </div>
+        ) : (
+          <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-[760px] text-left text-[13px]">
+                <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                  <tr>
+                    <th class="px-5 py-3 w-28">Datum</th>
+                    <th class="py-3">Tým</th>
+                    <th class="py-3">Soupeř</th>
+                    <th class="px-3 py-3 text-center tabular-nums w-24">Skóre</th>
+                    <th class="px-3 py-3 text-center w-16">Výsledek</th>
+                    <th class="px-3 py-3 text-right w-24">&nbsp;</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-stone">
+                  {filteredMatches.map((m) => (
+                    <tr class="hover:bg-mist/40 transition-colors">
+                      <td class="px-5 py-3 tabular-nums text-graphite">{new Date(m.date).toLocaleDateString('cs-CZ')}</td>
+                      <td class="py-3">
+                        <div class="flex items-center gap-2.5">
+                          {m.clubLogoUrl ? (
+                            <img src={m.clubLogoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-md object-contain" />
+                          ) : (
+                            <span class="inline-flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white" style={`background-color:${m.primaryColor}`}>
+                              {m.clubName.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 2).toUpperCase()}
+                            </span>
+                          )}
+                          <div class="min-w-0">
+                            <p class="text-[13px] font-semibold text-ink">{m.clubName}</p>
+                            <p class="text-[10px] text-slate">{m.teamName}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="py-3 text-[13px] text-graphite">{m.opponent}</td>
+                      <td class="px-3 py-3 text-center font-bold tabular-nums text-ink">{m.ourScore}–{m.oppScore}</td>
+                      <td class="px-3 py-3 text-center">
+                        <span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${lastResultColor[m.result]}`}>{m.result}</span>
+                      </td>
+                      <td class="px-5 py-3 text-right">
+                        <a href={`/liga/${league.slug}/zapas/${m.id}`} class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[11px] font-semibold text-graphite hover:bg-mist hover:text-ink">Detail →</a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     )}
 

@@ -1,0 +1,498 @@
+---
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+import { getSupabaseAdmin } from '../../../../lib/supabase';
+import { fetchMatchDetail } from '../../../../lib/league-stats';
+
+export const prerender = false;
+
+const slug = Astro.params.slug;
+const matchId = Astro.params.matchId;
+if (!slug || !matchId) return Astro.redirect('/');
+
+const admin = getSupabaseAdmin();
+
+const { data: league } = await admin
+  .from('leagues')
+  .select('id, name, slug, sport, primary_color, secondary_color, logo_url')
+  .eq('slug', slug)
+  .maybeSingle();
+if (!league) return Astro.redirect('/');
+
+const match = await fetchMatchDetail(matchId, league.id);
+if (!match) return Astro.redirect(`/liga/${slug}?tab=matches`);
+
+const primary = league.primary_color || '#0F1B2D';
+const secondary = league.secondary_color || '#E63946';
+
+const dateStr = new Date(match.date).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' });
+
+// Score percentages
+const compPct = match.qbAtt > 0 ? Math.round((match.qbComp / match.qbAtt) * 100) : 0;
+const xp1Pct = match.xp1Att > 0 ? Math.round((match.xp1Ok / match.xp1Att) * 100) : 0;
+const xp2Pct = match.xp2Att > 0 ? Math.round((match.xp2Ok / match.xp2Att) * 100) : 0;
+const defStopPct = match.defDrives > 0 ? Math.round((match.defStops / match.defDrives) * 100) : 0;
+
+const sportLabel: Record<string, string> = {
+  'flag-football':     'Flag football',
+  'american_football': 'American football',
+  'football':          'Fotbal',
+  'basketball':        'Basketball',
+  'volleyball':        'Volejbal',
+  'hockey':            'Hokej',
+  'other':             'Sport',
+};
+
+const resultColor: Record<string, string> = {
+  W: 'bg-verde text-white',
+  L: 'bg-signal text-white',
+  T: 'bg-stone-2 text-white',
+};
+const resultLabel: Record<string, string> = { W: 'Výhra', L: 'Prohra', T: 'Remíza' };
+
+const qbPlayers = match.players.filter((p) => p.qbAtt > 0).sort((a, b) => b.qbTd - a.qbTd || b.qbYds - a.qbYds);
+const wrPlayers = match.players.filter((p) => p.wrTargets > 0 || p.wrTd > 0).sort((a, b) => b.wrTd - a.wrTd || b.wrPts - a.wrPts);
+const dbPlayers = match.players.filter((p) => p.dbFlagPull > 0 || p.dbSack > 0 || p.dbInt > 0 || p.dbBrkup > 0)
+  .sort((a, b) => (b.dbInt * 3 + b.dbSack * 2 + b.dbFlagPull) - (a.dbInt * 3 + a.dbSack * 2 + a.dbFlagPull));
+
+const pageTitle = `${match.team.clubName} ${match.team.name} vs ${match.opponent} · ${dateStr} · ${league.name}`;
+const pageDesc = `Detailní statistiky zápasu ${match.team.clubName} ${match.team.name} vs ${match.opponent} (${dateStr}). Konečné skóre ${match.ourScore}–${match.oppScore}.`;
+---
+
+<BaseLayout title={pageTitle} description={pageDesc}>
+
+  <!-- Hero -->
+  <section class="border-b border-stone" style={`background: linear-gradient(135deg, ${primary} 0%, ${secondary} 100%)`}>
+    <div class="mx-auto max-w-7xl px-5 py-8 lg:px-8 lg:py-10">
+      <!-- Breadcrumb -->
+      <div class="mb-4 flex flex-wrap items-center gap-2 text-[12px] text-white/85">
+        <a href={`/liga/${league.slug}`} class="hover:text-white">← {league.name}</a>
+        <span class="text-white/40">/</span>
+        <a href={`/liga/${league.slug}?tab=matches`} class="hover:text-white">Zápasy</a>
+        <span class="text-white/40">/</span>
+        <span class="text-white/60">{dateStr}</span>
+      </div>
+
+      <div class="grid items-center gap-6 lg:grid-cols-[1fr_auto_1fr]">
+        <!-- Home -->
+        <div class="flex items-center gap-4">
+          {match.team.clubLogoUrl ? (
+            <img src={match.team.clubLogoUrl} alt="" class="h-16 w-16 rounded-xl bg-white/95 object-contain p-1.5 shadow-lg" />
+          ) : (
+            <span class="inline-flex h-16 w-16 items-center justify-center rounded-xl bg-white/15 text-xl font-bold text-white backdrop-blur-sm">
+              {match.team.clubName.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase()}
+            </span>
+          )}
+          <div class="min-w-0">
+            <p class="text-[18px] font-bold text-white">{match.team.clubName}</p>
+            <p class="text-[12px] text-white/75">{match.team.name}</p>
+          </div>
+        </div>
+
+        <!-- Score -->
+        <div class="flex items-center gap-4 self-center justify-self-center">
+          <span class="text-[56px] font-bold tabular-nums tracking-tight-3 text-white">{match.ourScore}</span>
+          <span class="text-[24px] font-medium text-white/60">–</span>
+          <span class="text-[56px] font-bold tabular-nums tracking-tight-3 text-white">{match.oppScore}</span>
+        </div>
+
+        <!-- Away -->
+        <div class="flex items-center justify-end gap-4">
+          <div class="min-w-0 text-right">
+            <p class="text-[18px] font-bold text-white">{match.opponent}</p>
+            <p class="text-[12px] text-white/75">Soupeř</p>
+          </div>
+          <span class="inline-flex h-16 w-16 items-center justify-center rounded-xl bg-white/15 text-xl font-bold text-white backdrop-blur-sm">
+            {match.opponent.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || '—'}
+          </span>
+        </div>
+      </div>
+
+      <div class="mt-6 flex flex-wrap items-center gap-3">
+        <span class={`rounded-md px-3 py-1 text-[11px] font-bold uppercase tracking-wider ${resultColor[match.result]}`}>{resultLabel[match.result]}</span>
+        <span class="text-[12px] text-white/85">{dateStr}</span>
+        <span class="text-[12px] text-white/60">·</span>
+        <span class="text-[12px] text-white/85">{sportLabel[league.sport] ?? league.sport}</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- KPI tiles -->
+  <section class="mx-auto max-w-7xl px-5 py-8 lg:px-8 lg:py-10">
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="rounded-xl border border-stone bg-pearl p-5">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Total Yards</p>
+        <p class="mt-1 text-[28px] font-bold tabular-nums tracking-tight-3" style={`color:${secondary}`}>{match.totalYds}</p>
+        <p class="mt-1 text-[11px] text-graphite">{match.passYds} pass · {match.rushYds} rush</p>
+      </div>
+      <div class="rounded-xl border border-stone bg-pearl p-5">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Offense TD</p>
+        <p class="mt-1 text-[28px] font-bold tabular-nums tracking-tight-3" style={`color:${secondary}`}>{match.offTd}</p>
+        <p class="mt-1 text-[11px] text-graphite">{match.xp1Ok}/{match.xp1Att} 1XP · {match.xp2Ok}/{match.xp2Att} 2XP</p>
+      </div>
+      <div class="rounded-xl border border-stone bg-pearl p-5">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Pass Efficiency</p>
+        <p class="mt-1 text-[28px] font-bold tabular-nums tracking-tight-3" style={`color:${secondary}`}>{match.passEfficiency}</p>
+        <p class="mt-1 text-[11px] text-graphite">{match.qbComp}/{match.qbAtt} ({compPct}%) · {match.qbTd} TD · {match.qbInt} INT</p>
+      </div>
+      <div class="rounded-xl border border-stone bg-pearl p-5">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">Penalties</p>
+        <p class="mt-1 text-[28px] font-bold tabular-nums tracking-tight-3" style={`color:${secondary}`}>{match.penCount}</p>
+        <p class="mt-1 text-[11px] text-graphite">{match.penYds} yardů</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Team stats detail -->
+  <section class="mx-auto max-w-7xl px-5 pb-8 lg:px-8">
+    <h2 class="mb-4 text-[20px] font-bold tracking-tight-2 text-ink">Týmové statistiky</h2>
+    <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+      <table class="w-full text-[13px]">
+        <tbody class="divide-y divide-stone">
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate w-1/2">Skóre</td>
+            <td class="px-5 py-3 text-right font-bold tabular-nums text-ink">{match.ourScore}–{match.oppScore}</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">Offense TD</td>
+            <td class="px-5 py-3 text-right font-bold tabular-nums text-ink">{match.offTd}</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">1-point konverze</td>
+            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.xp1Ok}/{match.xp1Att} <span class="text-stone-2">({xp1Pct}%)</span></td>
+          </tr>
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">2-point konverze</td>
+            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.xp2Ok}/{match.xp2Att} <span class="text-stone-2">({xp2Pct}%)</span></td>
+          </tr>
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">Pass yardy</td>
+            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.passYds}</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">Rush yardy</td>
+            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.rushYds}</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">Total yardy</td>
+            <td class="px-5 py-3 text-right font-bold tabular-nums text-ink">{match.totalYds}</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">QB Att/Comp/Int</td>
+            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.qbAtt}/{match.qbComp}/{match.qbInt} <span class="text-stone-2">({compPct}% comp)</span></td>
+          </tr>
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">QB TD pasy</td>
+            <td class="px-5 py-3 text-right font-bold tabular-nums text-ink">{match.qbTd}</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">QB yardy</td>
+            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.qbYds}</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">Pass efficiency (NCAA)</td>
+            <td class="px-5 py-3 text-right font-bold tabular-nums" style={`color:${secondary}`}>{match.passEfficiency}</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">Soupeřovy pass yardy</td>
+            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.oppPassYds}</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">Obrana — drives/stops</td>
+            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.defStops}/{match.defDrives} <span class="text-stone-2">({defStopPct}%)</span></td>
+          </tr>
+          <tr>
+            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">Fauly · yardy</td>
+            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.penCount} · {match.penYds}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Player stats -->
+  <section class="mx-auto max-w-7xl px-5 pb-12 lg:px-8">
+    <h2 class="mb-4 text-[20px] font-bold tracking-tight-2 text-ink">Hráčské statistiky</h2>
+
+    {match.players.length === 0 ? (
+      <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
+        <p class="text-[14px] font-semibold text-ink">Žádné hráčské statistiky pro tento zápas</p>
+        <p class="mt-1 text-[12px] text-slate">Statistik je teprve uloží ze Scorer PWA.</p>
+      </div>
+    ) : (
+      <div class="space-y-8">
+
+        <!-- QB -->
+        {qbPlayers.length > 0 && (
+          <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+            <div class="border-b border-stone px-5 py-3">
+              <p class="text-[14px] font-semibold text-ink">Quarterback ({qbPlayers.length})</p>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="sortable-table w-full min-w-[700px] text-left text-[13px]" data-accent={secondary} data-default-sort="6" data-default-dir="desc">
+                <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                  <tr>
+                    <th class="px-5 py-3 w-10">#</th>
+                    <th class="py-3" data-sort="text" data-sort-col="1">Hráč</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="2">ATT</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">COMP</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">%</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">YDS</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">TD</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">INT</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-stone">
+                  {qbPlayers.map((p, i) => {
+                    const pct = p.qbAtt > 0 ? Math.round((p.qbComp / p.qbAtt) * 100) : 0;
+                    return (
+                      <tr>
+                        <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
+                        <td class="py-2.5" data-sort-value={p.name}>
+                          <div class="flex items-center gap-2.5">
+                            {p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                            <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
+                          </div>
+                        </td>
+                        <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbAtt}>{p.qbAtt}</td>
+                        <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.qbComp}>{p.qbComp}</td>
+                        <td class="px-3 py-2.5 text-center tabular-nums" style={`color:${secondary}`} data-sort-value={pct}>{pct}%</td>
+                        <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbYds}>{p.qbYds}</td>
+                        <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.qbTd}>{p.qbTd}</td>
+                        <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbInt}>{p.qbInt}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <!-- WR -->
+        {wrPlayers.length > 0 && (
+          <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+            <div class="border-b border-stone px-5 py-3">
+              <p class="text-[14px] font-semibold text-ink">Wide receiver ({wrPlayers.length})</p>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="sortable-table w-full min-w-[700px] text-left text-[13px]" data-accent={secondary} data-default-sort="6" data-default-dir="desc">
+                <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                  <tr>
+                    <th class="px-5 py-3 w-10">#</th>
+                    <th class="py-3" data-sort="text" data-sort-col="1">Hráč</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="2">TARG</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">REC</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">%</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">YDS</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">TD</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">PTS</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-stone">
+                  {wrPlayers.map((p, i) => {
+                    const pct = p.wrTargets > 0 ? Math.round((p.wrRec / p.wrTargets) * 100) : 0;
+                    return (
+                      <tr>
+                        <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
+                        <td class="py-2.5" data-sort-value={p.name}>
+                          <div class="flex items-center gap-2.5">
+                            {p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                            <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
+                          </div>
+                        </td>
+                        <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.wrTargets}>{p.wrTargets}</td>
+                        <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.wrRec}>{p.wrRec}</td>
+                        <td class="px-3 py-2.5 text-center tabular-nums" style={`color:${secondary}`} data-sort-value={pct}>{pct}%</td>
+                        <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.wrYds}>{p.wrYds}</td>
+                        <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.wrTd}>{p.wrTd}</td>
+                        <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${secondary}`} data-sort-value={p.wrPts}>{p.wrPts}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <!-- DB -->
+        {dbPlayers.length > 0 && (
+          <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+            <div class="border-b border-stone px-5 py-3">
+              <p class="text-[14px] font-semibold text-ink">Obrana ({dbPlayers.length})</p>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="sortable-table w-full min-w-[640px] text-left text-[13px]" data-accent={secondary} data-default-sort="5" data-default-dir="desc">
+                <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+                  <tr>
+                    <th class="px-5 py-3 w-10">#</th>
+                    <th class="py-3" data-sort="text" data-sort-col="1">Hráč</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="2">FLAG</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">SACK</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">INT</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">BRKUP</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-stone">
+                  {dbPlayers.map((p, i) => (
+                    <tr>
+                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
+                      <td class="py-2.5" data-sort-value={p.name}>
+                        <div class="flex items-center gap-2.5">
+                          {p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                          <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
+                        </div>
+                      </td>
+                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.dbFlagPull}>{p.dbFlagPull}</td>
+                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${secondary}`} data-sort-value={p.dbSack}>{p.dbSack}</td>
+                      <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.dbInt}>{p.dbInt}</td>
+                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.dbBrkup}>{p.dbBrkup}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <p class="text-[11px] text-stone-2">Tip: klikni na hlavičku sloupce a seřaď tabulku podle této hodnoty. Druhý klik otočí pořadí.</p>
+      </div>
+    )}
+  </section>
+
+  <!-- Footer link back -->
+  <section class="border-t border-stone bg-pearl">
+    <div class="mx-auto max-w-7xl px-5 py-6 lg:px-8">
+      <div class="flex flex-wrap items-center justify-between gap-3 text-[12px] text-slate">
+        <a href={`/liga/${league.slug}?tab=matches`} class="font-semibold text-ink hover:text-signal">← Zpět na všechny zápasy</a>
+        <p class="text-[11px] text-stone-2">Powered by <a href="/" class="font-semibold text-ink hover:text-signal">GameStatiq</a></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sortable tables script (shared with /liga/[slug]) -->
+  <style is:global>
+    .sortable-table thead th[data-sort] {
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      transition: background-color 0.12s;
+    }
+    .sortable-table thead th[data-sort]:hover {
+      background-color: rgba(15, 27, 45, 0.06);
+    }
+    .sortable-table thead th[data-sort] .sort-icon {
+      display: inline-block;
+      margin-left: 4px;
+      font-size: 9px;
+      opacity: 0.85;
+    }
+    .sortable-table thead th[data-sort]:not(.is-active) .sort-icon {
+      opacity: 0.25;
+    }
+    .sortable-table thead th.is-active {
+      color: #0F1B2D;
+    }
+  </style>
+
+  <script is:inline>
+    (function () {
+      function getCellSortValue(row, colIdx, type) {
+        var cell = row.children[colIdx];
+        if (!cell) return type === 'numeric' ? 0 : '';
+        var raw = cell.getAttribute('data-sort-value');
+        if (raw === null) raw = cell.textContent || '';
+        raw = String(raw).trim();
+        if (type === 'numeric') {
+          var n = parseFloat(raw.replace(/[^\d.\-]/g, ''));
+          return isNaN(n) ? 0 : n;
+        }
+        return raw;
+      }
+      function applySort(table, colIdx, type, dir) {
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        var accent = table.getAttribute('data-accent') || '#E63946';
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+        rows.sort(function (a, b) {
+          var av = getCellSortValue(a, colIdx, type);
+          var bv = getCellSortValue(b, colIdx, type);
+          if (type === 'numeric') return dir === 'desc' ? bv - av : av - bv;
+          return dir === 'desc'
+            ? String(bv).localeCompare(String(av), 'cs')
+            : String(av).localeCompare(String(bv), 'cs');
+        });
+        rows.forEach(function (r, idx) {
+          tbody.appendChild(r);
+          var rankCell = r.querySelector('td.rank-cell span');
+          if (rankCell) {
+            rankCell.textContent = String(idx + 1);
+            if (idx === 0) {
+              rankCell.className = 'inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums text-white';
+              rankCell.style.backgroundColor = accent;
+            } else {
+              rankCell.className = 'inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums bg-mist text-graphite';
+              rankCell.style.backgroundColor = '';
+            }
+          }
+        });
+        var ths = table.querySelectorAll('thead th[data-sort]');
+        ths.forEach(function (th) {
+          var existing = th.querySelector('.sort-icon');
+          if (existing) existing.remove();
+          th.classList.remove('is-active');
+          var thCol = parseInt(th.getAttribute('data-sort-col'), 10);
+          var icon = document.createElement('span');
+          icon.className = 'sort-icon';
+          if (thCol === colIdx) {
+            th.classList.add('is-active');
+            icon.textContent = dir === 'desc' ? '▼' : '▲';
+          } else {
+            icon.textContent = '↕';
+          }
+          th.appendChild(icon);
+        });
+      }
+      function initTable(table) {
+        var ths = table.querySelectorAll('thead th[data-sort]');
+        var state = { col: null, dir: 'desc' };
+        ths.forEach(function (th) {
+          var icon = document.createElement('span');
+          icon.className = 'sort-icon';
+          icon.textContent = '↕';
+          th.appendChild(icon);
+        });
+        ths.forEach(function (th) {
+          th.addEventListener('click', function () {
+            var col = parseInt(th.getAttribute('data-sort-col'), 10);
+            var type = th.getAttribute('data-sort');
+            var dir;
+            if (state.col === col) dir = state.dir === 'desc' ? 'asc' : 'desc';
+            else dir = type === 'numeric' ? 'desc' : 'asc';
+            state = { col: col, dir: dir };
+            applySort(table, col, type, dir);
+          });
+        });
+        var defCol = parseInt(table.getAttribute('data-default-sort'), 10);
+        var defDir = table.getAttribute('data-default-dir') || 'desc';
+        if (!isNaN(defCol)) {
+          state = { col: defCol, dir: defDir };
+          ths.forEach(function (th) {
+            var thCol = parseInt(th.getAttribute('data-sort-col'), 10);
+            if (thCol === defCol) {
+              th.classList.add('is-active');
+              var icon = th.querySelector('.sort-icon');
+              if (icon) icon.textContent = defDir === 'desc' ? '▼' : '▲';
+            }
+          });
+        }
+      }
+      function init() {
+        document.querySelectorAll('table.sortable-table').forEach(initTable);
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+      else init();
+    })();
+  </script>
+
+</BaseLayout>

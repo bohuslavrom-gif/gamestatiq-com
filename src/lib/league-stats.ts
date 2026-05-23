@@ -924,3 +924,198 @@ export const CAREER_CATEGORIES = RECORD_CATEGORIES;
 export async function fetchLeagueCareerRecords(leagueId: string): Promise<ManualRecord[]> {
   return fetchLeagueManualRecords(leagueId, 'career');
 }
+
+// ── Iter 10: Zápasy záložka + match detail ─────────────────────
+
+export type LeagueMatchListRow = {
+  id: string;
+  date: string;
+  opponent: string;
+  ourScore: number;
+  oppScore: number;
+  result: 'W' | 'L' | 'T';
+  teamId: string;
+  teamName: string;
+  clubName: string;
+  clubLogoUrl: string | null;
+  primaryColor: string;
+};
+
+/**
+ * All matches across approved league teams, no limit. Sorted by date DESC.
+ */
+export async function fetchLeagueMatches(leagueId: string): Promise<LeagueMatchListRow[]> {
+  if (!leagueId) return [];
+  const admin = getSupabaseAdmin();
+
+  const { data: ltRaw } = await admin
+    .from('league_teams')
+    .select('team_id')
+    .eq('league_id', leagueId)
+    .not('approved_at', 'is', null);
+  const teamIds = ((ltRaw ?? []) as { team_id: string }[]).map((r) => r.team_id);
+  if (teamIds.length === 0) return [];
+
+  const { data: matchesRaw } = await admin
+    .from('matches')
+    .select('id, date, opponent, our_score, opp_score, team_id, teams(name, primary_color, club_id, clubs(name, logo_url))')
+    .in('team_id', teamIds)
+    .order('date', { ascending: false });
+
+  return ((matchesRaw ?? []) as any[]).map((m) => ({
+    id: m.id,
+    date: m.date,
+    opponent: m.opponent,
+    ourScore: m.our_score,
+    oppScore: m.opp_score,
+    result: m.our_score > m.opp_score ? 'W' : m.our_score < m.opp_score ? 'L' : 'T',
+    teamId: m.team_id,
+    teamName: m.teams?.name ?? '—',
+    clubName: m.teams?.clubs?.name ?? '—',
+    clubLogoUrl: m.teams?.clubs?.logo_url ?? null,
+    primaryColor: m.teams?.primary_color ?? '#0F1B2D',
+  })) as LeagueMatchListRow[];
+}
+
+export type MatchPlayerStat = {
+  playerId: string;
+  name: string;
+  jersey: number | null;
+  photoUrl: string | null;
+  position: string | null;
+  qbAtt: number; qbComp: number; qbYds: number; qbTd: number; qbInt: number; qbSack: number;
+  wrTargets: number; wrRec: number; wrYds: number; wrTd: number; wrPts: number;
+  dbFlagPull: number; dbSack: number; dbInt: number; dbBrkup: number;
+};
+
+export type MatchDetail = {
+  id: string;
+  date: string;
+  opponent: string;
+  ourScore: number;
+  oppScore: number;
+  result: 'W' | 'L' | 'T';
+  team: {
+    id: string;
+    name: string;
+    clubName: string;
+    clubLogoUrl: string | null;
+    primaryColor: string;
+  };
+  league: { id: string; name: string; slug: string } | null;
+  // Team-level stats
+  offTd: number;
+  xp1Ok: number; xp1Att: number; xp2Ok: number; xp2Att: number;
+  qbAtt: number; qbComp: number; qbYds: number; qbTd: number; qbInt: number;
+  rushYds: number; passYds: number; totalYds: number;
+  oppPassYds: number;
+  defDrives: number; defStops: number;
+  penCount: number; penYds: number;
+  passEfficiency: number;
+  players: MatchPlayerStat[];
+};
+
+/**
+ * Single match with all team-level + player-level stats. League-aware:
+ * only returns if the match's team belongs to an approved league_teams row.
+ */
+export async function fetchMatchDetail(matchId: string, leagueId: string): Promise<MatchDetail | null> {
+  if (!matchId || !leagueId) return null;
+  const admin = getSupabaseAdmin();
+
+  // Approved teams in this league (whitelist)
+  const { data: ltRaw } = await admin
+    .from('league_teams')
+    .select('team_id')
+    .eq('league_id', leagueId)
+    .not('approved_at', 'is', null);
+  const allowedTeams = new Set(((ltRaw ?? []) as { team_id: string }[]).map((r) => r.team_id));
+  if (allowedTeams.size === 0) return null;
+
+  const { data: m } = await admin
+    .from('matches')
+    .select(`
+      id, team_id, date, opponent,
+      our_score, opp_score, off_td,
+      xp1_att, xp1_ok, xp2_att, xp2_ok,
+      qb_att, qb_comp, qb_td, qb_int, qb_yds,
+      rush_yds, pass_yds, total_yds,
+      opp_pass_yds,
+      def_drives, def_stops,
+      pen_count, pen_yds,
+      teams(id, name, primary_color, club_id, clubs(name, logo_url))
+    `)
+    .eq('id', matchId)
+    .maybeSingle();
+
+  if (!m) return null;
+  const match = m as any;
+  if (!allowedTeams.has(match.team_id)) return null;
+
+  // League metadata (resolved later by caller; supplied as null here)
+  const team = match.teams ?? {};
+  const club = team.clubs ?? {};
+
+  // Player stats
+  const { data: psRaw } = await admin
+    .from('match_player_stats')
+    .select(`
+      player_id,
+      qb_att, qb_comp, qb_yds, qb_td, qb_int, qb_sack,
+      wr_targets, wr_rec, wr_yds, wr_td, wr_pts,
+      db_flag_pull, db_sack, db_brkup, db_int,
+      players ( first_name, last_name, jersey_number, photo_url, position )
+    `)
+    .eq('match_id', matchId);
+
+  const players: MatchPlayerStat[] = ((psRaw ?? []) as any[]).map((r) => {
+    const p = r.players ?? {};
+    return {
+      playerId: r.player_id,
+      name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || '—',
+      jersey: p.jersey_number ?? null,
+      photoUrl: p.photo_url ?? null,
+      position: p.position ?? null,
+      qbAtt: r.qb_att ?? 0, qbComp: r.qb_comp ?? 0, qbYds: r.qb_yds ?? 0,
+      qbTd: r.qb_td ?? 0, qbInt: r.qb_int ?? 0, qbSack: r.qb_sack ?? 0,
+      wrTargets: r.wr_targets ?? 0, wrRec: r.wr_rec ?? 0, wrYds: r.wr_yds ?? 0,
+      wrTd: r.wr_td ?? 0, wrPts: r.wr_pts ?? 0,
+      dbFlagPull: r.db_flag_pull ?? 0, dbSack: r.db_sack ?? 0,
+      dbInt: r.db_int ?? 0, dbBrkup: r.db_brkup ?? 0,
+    };
+  });
+
+  // NCAA passing efficiency
+  const att = match.qb_att ?? 0;
+  const eff = att > 0
+    ? Math.round(((8.4 * (match.qb_yds ?? 0)) + (330 * (match.qb_td ?? 0)) + (100 * (match.qb_comp ?? 0)) - (200 * (match.qb_int ?? 0))) / att)
+    : 0;
+
+  return {
+    id: match.id,
+    date: match.date,
+    opponent: match.opponent,
+    ourScore: match.our_score ?? 0,
+    oppScore: match.opp_score ?? 0,
+    result: (match.our_score ?? 0) > (match.opp_score ?? 0) ? 'W' : (match.our_score ?? 0) < (match.opp_score ?? 0) ? 'L' : 'T',
+    team: {
+      id: team.id ?? match.team_id,
+      name: team.name ?? '—',
+      clubName: club.name ?? '—',
+      clubLogoUrl: club.logo_url ?? null,
+      primaryColor: team.primary_color ?? '#0F1B2D',
+    },
+    league: null,
+    offTd: match.off_td ?? 0,
+    xp1Ok: match.xp1_ok ?? 0, xp1Att: match.xp1_att ?? 0,
+    xp2Ok: match.xp2_ok ?? 0, xp2Att: match.xp2_att ?? 0,
+    qbAtt: att, qbComp: match.qb_comp ?? 0, qbYds: match.qb_yds ?? 0,
+    qbTd: match.qb_td ?? 0, qbInt: match.qb_int ?? 0,
+    rushYds: match.rush_yds ?? 0, passYds: match.pass_yds ?? 0, totalYds: match.total_yds ?? 0,
+    oppPassYds: match.opp_pass_yds ?? 0,
+    defDrives: match.def_drives ?? 0, defStops: match.def_stops ?? 0,
+    penCount: match.pen_count ?? 0, penYds: match.pen_yds ?? 0,
+    passEfficiency: eff,
+    players,
+  };
+}
