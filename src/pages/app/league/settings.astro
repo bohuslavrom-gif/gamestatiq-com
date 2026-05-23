@@ -48,7 +48,17 @@ const publicUrl = `gamestatiq.com/liga/${league.slug}`;
   pageTitle="Nastavení ligy"
   pageSub={`${league.name} · ${members.length} členů`}
 >
-  {saved && (
+  {saved === 'logo' && (
+    <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">
+      ✓ Logo nahráno.
+    </div>
+  )}
+  {saved === 'logo_removed' && (
+    <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">
+      ✓ Logo odebráno.
+    </div>
+  )}
+  {saved && saved !== 'logo' && saved !== 'logo_removed' && (
     <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">
       ✓ Změny uloženy.
     </div>
@@ -101,7 +111,7 @@ const publicUrl = `gamestatiq.com/liga/${league.slug}`;
               <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Popis (volitelný)</span>
               <textarea name="description" rows="3" maxlength="500" placeholder="Krátký popis pro fanoušky a partnery…" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20">{league.description ?? ''}</textarea>
             </label>
-            <div class="grid gap-4 sm:grid-cols-3">
+            <div class="grid gap-4 sm:grid-cols-2">
               <label class="block">
                 <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Primární barva</span>
                 <input type="color" name="primary" value={league.primary_color} class="mt-1.5 block h-10 w-full cursor-pointer rounded-lg border border-stone bg-pearl" />
@@ -110,16 +120,36 @@ const publicUrl = `gamestatiq.com/liga/${league.slug}`;
                 <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Sekundární barva</span>
                 <input type="color" name="secondary" value={league.secondary_color} class="mt-1.5 block h-10 w-full cursor-pointer rounded-lg border border-stone bg-pearl" />
               </label>
-              <label class="block">
-                <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Logo URL</span>
-                <input type="url" name="logo_url" placeholder="https://…" value={league.logo_url ?? ''} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[13px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
-              </label>
             </div>
             <div class="flex flex-wrap items-center gap-3 pt-2">
               <button type="submit" class="rounded-lg bg-signal px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#C8313D]">Uložit změny</button>
               <a href="/app/league" class="text-[13px] font-medium text-graphite hover:text-ink">Zrušit</a>
             </div>
           </form>
+
+          <!-- Logo upload (separate form, multipart) -->
+          <div class="mt-6 border-t border-stone pt-5">
+            <p class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Logo ligy</p>
+            <div class="mt-3 flex flex-wrap items-center gap-5">
+              {league.logo_url ? (
+                <img src={league.logo_url} alt="" class="h-20 w-20 rounded-xl border border-stone bg-pearl object-contain p-2" />
+              ) : (
+                <span class="inline-flex h-20 w-20 items-center justify-center rounded-xl border border-dashed border-stone bg-mist text-[10px] font-semibold uppercase tracking-wider text-stone-2">No logo</span>
+              )}
+              <div class="flex-1 min-w-[240px] space-y-3">
+                <form method="POST" action="/api/league/logo/upload" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2">
+                  <input type="file" name="logo" accept="image/svg+xml,image/png,image/jpeg,image/webp" required class="text-[12px]" />
+                  <button type="submit" class="rounded-md bg-signal px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#C8313D]">{league.logo_url ? 'Vyměnit' : 'Nahrát'}</button>
+                </form>
+                {league.logo_url && (
+                  <form method="POST" action="/api/league/logo/remove" class="inline">
+                    <button type="submit" onclick="return confirm('Odebrat aktuální logo?')" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[11px] font-medium text-graphite hover:border-signal/40 hover:text-signal">Odebrat logo</button>
+                  </form>
+                )}
+                <p class="text-[11px] text-stone-2">SVG / PNG / JPG / WebP · max 5 MB · zobrazí se na public stránce <code class="rounded bg-mist px-1 py-0.5 text-[11px]">/liga/{league.slug}</code></p>
+              </div>
+            </div>
+          </div>
         ) : (
           <dl class="mt-5 space-y-3 text-[13px]">
             <div class="flex"><dt class="w-32 text-slate">Název</dt><dd class="text-ink">{league.name}</dd></div>

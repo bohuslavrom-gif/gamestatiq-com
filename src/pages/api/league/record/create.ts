@@ -23,7 +23,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   const jerseyRaw   = String(form.get('jersey') ?? '').trim();
   const teamName    = String(form.get('team_name') ?? '').trim();
   const clubName    = String(form.get('club_name') ?? '').trim();
-  const photoUrl    = String(form.get('photo_url') ?? '').trim();
+  let   photoUrl    = String(form.get('photo_url') ?? '').trim();
   const valueRaw    = String(form.get('value') ?? '').trim();
   const seasonRange = String(form.get('season_range') ?? '').trim();
   const notes       = String(form.get('notes') ?? '').trim();
@@ -45,6 +45,31 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   }
 
   const admin = getSupabaseAdmin();
+
+  // Optional file upload — overrides photoUrl if a file is provided
+  const photoFile = form.get('photo_file') as File | null;
+  if (photoFile && photoFile instanceof File && photoFile.size > 0) {
+    const ALLOWED = ['image/svg+xml', 'image/png', 'image/jpeg', 'image/webp'];
+    const MAX = 5 * 1024 * 1024;
+    if (photoFile.size > MAX) {
+      return redirect(`/app/league/records?error=${encodeURIComponent('Foto max 5 MB.')}`, 303);
+    }
+    if (!ALLOWED.includes(photoFile.type)) {
+      return redirect(`/app/league/records?error=${encodeURIComponent('Foto: povolené SVG, PNG, JPG, WebP.')}`, 303);
+    }
+    const ext = (photoFile.name.split('.').pop() ?? 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const path = `${league.id}/records/photo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const buf = new Uint8Array(await photoFile.arrayBuffer());
+    const { error: upErr } = await admin.storage.from('league-assets').upload(path, buf, {
+      contentType: photoFile.type, cacheControl: '3600', upsert: false,
+    });
+    if (upErr) {
+      return redirect(`/app/league/records?error=${encodeURIComponent('Upload fotky selhal: ' + upErr.message)}`, 303);
+    }
+    const { data: { publicUrl } } = admin.storage.from('league-assets').getPublicUrl(path);
+    photoUrl = publicUrl;
+  }
+
   const { error } = await admin.from('league_records').insert({
     league_id: league.id,
     record_type: recordType,

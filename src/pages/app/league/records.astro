@@ -93,7 +93,7 @@ for (const r of records) {
         Manuální záznam ligového rekordu. Zobrazí se na public <code class="rounded bg-mist px-1 py-0.5 text-[11px]">/liga/{league.slug}</code> v sekci Ligové rekordy.
       </p>
 
-      <form method="POST" action={editingRecord ? '/api/league/record/update' : '/api/league/record/create'} class="mt-5 space-y-4">
+      <form method="POST" action={editingRecord ? '/api/league/record/update' : '/api/league/record/create'} enctype="multipart/form-data" class="mt-5 space-y-4">
         {editingRecord && <input type="hidden" name="id" value={editingRecord.id} />}
 
         <div class="grid gap-4 sm:grid-cols-3">
@@ -146,10 +146,22 @@ for (const r of records) {
             <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Roky / sezóna</span>
             <input type="text" name="season_range" value={editingRecord?.seasonRange ?? ''} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px]" placeholder="Sezóna 2026 nebo 2018–2024" />
           </label>
-          <label class="block">
-            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">URL fotky (volitelné)</span>
-            <input type="url" name="photo_url" value={editingRecord?.photoUrl ?? ''} class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[13px]" placeholder="https://…" />
-          </label>
+          <div class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Foto hráče (volitelné)</span>
+            <div class="mt-1.5 flex items-center gap-3">
+              {editingRecord?.photoUrl && (
+                <img src={editingRecord.photoUrl} alt="" class="h-12 w-12 rounded-full border border-stone object-cover" />
+              )}
+              <div class="flex-1 space-y-1.5">
+                <input type="file" name="photo_file" accept="image/svg+xml,image/png,image/jpeg,image/webp" class="block w-full text-[12px] text-graphite file:mr-2 file:rounded-md file:border-0 file:bg-plum file:px-3 file:py-1.5 file:text-[12px] file:font-semibold file:text-white hover:file:bg-[#3F2B68]" />
+                <p class="text-[10px] text-stone-2">SVG / PNG / JPG / WebP · max 5 MB · {editingRecord?.photoUrl ? 'nová fotka nahradí stávající' : 'nepovinné'}</p>
+              </div>
+            </div>
+            {/* Keep existing photo_url when editing (preserved if no new file uploaded) */}
+            {editingRecord?.photoUrl && (
+              <input type="hidden" name="photo_url" value={editingRecord.photoUrl} />
+            )}
+          </div>
         </div>
 
         <label class="block">

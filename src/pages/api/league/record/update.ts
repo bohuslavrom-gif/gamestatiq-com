@@ -22,7 +22,7 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   const jerseyRaw   = String(form.get('jersey') ?? '').trim();
   const teamName    = String(form.get('team_name') ?? '').trim();
   const clubName    = String(form.get('club_name') ?? '').trim();
-  const photoUrl    = String(form.get('photo_url') ?? '').trim();
+  let   photoUrl    = String(form.get('photo_url') ?? '').trim();
   const valueRaw    = String(form.get('value') ?? '').trim();
   const seasonRange = String(form.get('season_range') ?? '').trim();
   const notes       = String(form.get('notes') ?? '').trim();
@@ -45,9 +45,44 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
 
   const admin = getSupabaseAdmin();
   // Verify record belongs to user's league
-  const { data: rec } = await admin.from('league_records').select('league_id').eq('id', id).maybeSingle();
+  const { data: rec } = await admin.from('league_records').select('league_id, photo_url').eq('id', id).maybeSingle();
   if (!rec || (rec as { league_id: string }).league_id !== league.id) {
     return redirect(`/app/league/records?error=${encodeURIComponent('Rekord neexistuje nebo není ze stejné ligy.')}`, 303);
+  }
+  const oldPhotoUrl = (rec as { photo_url: string | null }).photo_url;
+
+  // Optional file upload — overrides photoUrl if a file is provided
+  const photoFile = form.get('photo_file') as File | null;
+  if (photoFile && photoFile instanceof File && photoFile.size > 0) {
+    const ALLOWED = ['image/svg+xml', 'image/png', 'image/jpeg', 'image/webp'];
+    const MAX = 5 * 1024 * 1024;
+    if (photoFile.size > MAX) {
+      return redirect(`/app/league/records?error=${encodeURIComponent('Foto max 5 MB.')}`, 303);
+    }
+    if (!ALLOWED.includes(photoFile.type)) {
+      return redirect(`/app/league/records?error=${encodeURIComponent('Foto: povolené SVG, PNG, JPG, WebP.')}`, 303);
+    }
+    const ext = (photoFile.name.split('.').pop() ?? 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const path = `${league.id}/records/photo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const buf = new Uint8Array(await photoFile.arrayBuffer());
+    const { error: upErr } = await admin.storage.from('league-assets').upload(path, buf, {
+      contentType: photoFile.type, cacheControl: '3600', upsert: false,
+    });
+    if (upErr) {
+      return redirect(`/app/league/records?error=${encodeURIComponent('Upload fotky selhal: ' + upErr.message)}`, 303);
+    }
+    const { data: { publicUrl } } = admin.storage.from('league-assets').getPublicUrl(path);
+    photoUrl = publicUrl;
+
+    // Delete old photo if it was in our bucket
+    if (oldPhotoUrl) {
+      try {
+        const oldPath = oldPhotoUrl.split('/league-assets/')[1];
+        if (oldPath) await admin.storage.from('league-assets').remove([oldPath]);
+      } catch {
+        // ignore — old URL may be external
+      }
+    }
   }
 
   const { error } = await admin.from('league_records').update({
