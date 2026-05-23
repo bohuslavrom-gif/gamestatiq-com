@@ -1,9 +1,9 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import TeamStatsSection from '../../components/TeamStatsSection.astro';
-import RecordCard from '../../components/RecordCard.astro';
-import { getSupabaseAdmin } from '../../lib/supabase';
-import { getLangFromUrl, useTranslations, localizedPath } from '../../i18n/utils';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import TeamStatsSection from '../../../components/TeamStatsSection.astro';
+import RecordCard from '../../../components/RecordCard.astro';
+import { getSupabaseAdmin } from '../../../lib/supabase';
+import { getLangFromUrl, useTranslations, localizedPath } from '../../../i18n/utils';
 import {
   fetchLeagueStandings,
   fetchLeagueTeamStats,
@@ -17,7 +17,7 @@ import {
   type ManualRecord,
   type RecordType,
   type LeagueMatchListRow,
-} from '../../lib/league-stats';
+} from '../../../lib/league-stats';
 
 const lang = getLangFromUrl(Astro.url);
 const t = useTranslations(lang);
@@ -766,166 +766,3 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                 <p class="truncate text-[13px] font-semibold text-ink">{m.clubName} {m.teamName} <span class="text-slate">vs</span> {m.opponent}</p>
                 <p class="text-[10px] text-slate">{new Date(m.date).toLocaleDateString(lang === 'cs' ? 'cs-CZ' : lang === 'de' ? 'de-DE' : 'en-US')}</p>
               </div>
-              <span class="font-bold tabular-nums text-ink">{m.ourScore}–{m.oppScore}</span>
-              <span class={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${lastResultColor[m.result]}`}>{m.result}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  )}
-
-  <!-- Footer -->
-  <section class="border-t border-stone bg-pearl">
-    <div class="mx-auto max-w-7xl px-5 py-6 lg:px-8">
-      <div class="flex flex-wrap items-center justify-between gap-3 text-[12px] text-slate">
-        <p>{t('pliga.footer.poweredby')} <a href={localizedPath('/', lang)} class="font-semibold text-ink hover:text-signal">GameStatiq</a> · {t('pliga.footer.tagline')}</p>
-        <p class="text-[11px] text-stone-2">{t('pliga.footer.update')}</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- Sortable tables: click-to-sort script (Iter 9f) -->
-  <style is:global>
-    .sortable-table thead th[data-sort] {
-      cursor: pointer;
-      user-select: none;
-      position: relative;
-      transition: background-color 0.12s;
-    }
-    .sortable-table thead th[data-sort]:hover {
-      background-color: rgba(15, 27, 45, 0.06);
-    }
-    .sortable-table thead th[data-sort] .sort-icon {
-      display: inline-block;
-      margin-left: 4px;
-      font-size: 9px;
-      opacity: 0.85;
-    }
-    .sortable-table thead th[data-sort]:not(.is-active) .sort-icon {
-      opacity: 0.25;
-    }
-    .sortable-table thead th.is-active {
-      color: #0F1B2D;
-    }
-  </style>
-
-  <script is:inline>
-    (function () {
-      function getCellSortValue(row, colIdx, type) {
-        var cell = row.children[colIdx];
-        if (!cell) return type === 'numeric' ? 0 : '';
-        var raw = cell.getAttribute('data-sort-value');
-        if (raw === null) raw = cell.textContent || '';
-        raw = String(raw).trim();
-        if (type === 'numeric') {
-          var n = parseFloat(raw.replace(/[^\d.\-]/g, ''));
-          return isNaN(n) ? 0 : n;
-        }
-        return raw;
-      }
-
-      function applySort(table, colIdx, type, dir) {
-        var tbody = table.querySelector('tbody');
-        if (!tbody) return;
-        var accent = table.getAttribute('data-accent') || '#E63946';
-        var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
-        rows.sort(function (a, b) {
-          var av = getCellSortValue(a, colIdx, type);
-          var bv = getCellSortValue(b, colIdx, type);
-          if (type === 'numeric') {
-            return dir === 'desc' ? bv - av : av - bv;
-          }
-          return dir === 'desc'
-            ? String(bv).localeCompare(String(av), 'cs')
-            : String(av).localeCompare(String(bv), 'cs');
-        });
-        rows.forEach(function (r, idx) {
-          tbody.appendChild(r);
-          var rankCell = r.querySelector('td.rank-cell span');
-          if (rankCell) {
-            rankCell.textContent = String(idx + 1);
-            if (idx === 0) {
-              rankCell.className = 'inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums text-white';
-              rankCell.style.backgroundColor = accent;
-            } else {
-              rankCell.className = 'inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums bg-mist text-graphite';
-              rankCell.style.backgroundColor = '';
-            }
-          }
-        });
-        // Update icons
-        var ths = table.querySelectorAll('thead th[data-sort]');
-        ths.forEach(function (th) {
-          var existing = th.querySelector('.sort-icon');
-          if (existing) existing.remove();
-          th.classList.remove('is-active');
-          var thCol = parseInt(th.getAttribute('data-sort-col'), 10);
-          var icon = document.createElement('span');
-          icon.className = 'sort-icon';
-          if (thCol === colIdx) {
-            th.classList.add('is-active');
-            icon.textContent = dir === 'desc' ? '▼' : '▲';
-          } else {
-            icon.textContent = '↕';
-          }
-          th.appendChild(icon);
-        });
-      }
-
-      function initTable(table) {
-        var ths = table.querySelectorAll('thead th[data-sort]');
-        var state = { col: null, dir: 'desc' };
-
-        // Initial idle icons
-        ths.forEach(function (th) {
-          var icon = document.createElement('span');
-          icon.className = 'sort-icon';
-          icon.textContent = '↕';
-          th.appendChild(icon);
-        });
-
-        ths.forEach(function (th) {
-          th.addEventListener('click', function () {
-            var col = parseInt(th.getAttribute('data-sort-col'), 10);
-            var type = th.getAttribute('data-sort');
-            var dir;
-            if (state.col === col) {
-              dir = state.dir === 'desc' ? 'asc' : 'desc';
-            } else {
-              // numeric defaults desc, text defaults asc
-              dir = type === 'numeric' ? 'desc' : 'asc';
-            }
-            state = { col: col, dir: dir };
-            applySort(table, col, type, dir);
-          });
-        });
-
-        // Mark default sort column as active (server-side already sorted)
-        var defCol = parseInt(table.getAttribute('data-default-sort'), 10);
-        var defDir = table.getAttribute('data-default-dir') || 'desc';
-        if (!isNaN(defCol)) {
-          state = { col: defCol, dir: defDir };
-          ths.forEach(function (th) {
-            var thCol = parseInt(th.getAttribute('data-sort-col'), 10);
-            if (thCol === defCol) {
-              th.classList.add('is-active');
-              var icon = th.querySelector('.sort-icon');
-              if (icon) icon.textContent = defDir === 'desc' ? '▼' : '▲';
-            }
-          });
-        }
-      }
-
-      function init() {
-        document.querySelectorAll('table.sortable-table').forEach(initTable);
-      }
-
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-      } else {
-        init();
-      }
-    })();
-  </script>
-</BaseLayout>

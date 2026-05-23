@@ -1,8 +1,8 @@
 ---
-import BaseLayout from '../../../../layouts/BaseLayout.astro';
-import { getSupabaseAdmin } from '../../../../lib/supabase';
-import { fetchMatchDetail } from '../../../../lib/league-stats';
-import { getLangFromUrl, useTranslations, localizedPath } from '../../../../i18n/utils';
+import BaseLayout from '../../../../../layouts/BaseLayout.astro';
+import { getSupabaseAdmin } from '../../../../../lib/supabase';
+import { fetchMatchDetail } from '../../../../../lib/league-stats';
+import { getLangFromUrl, useTranslations, localizedPath } from '../../../../../i18n/utils';
 
 const lang = getLangFromUrl(Astro.url);
 const t = useTranslations(lang);
@@ -482,18 +482,4 @@ const pageDesc = `${match.team.clubName} ${match.team.name} vs ${match.opponent}
             var thCol = parseInt(th.getAttribute('data-sort-col'), 10);
             if (thCol === defCol) {
               th.classList.add('is-active');
-              var icon = th.querySelector('.sort-icon');
-              if (icon) icon.textContent = defDir === 'desc' ? '▼' : '▲';
-            }
-          });
-        }
-      }
-      function init() {
-        document.querySelectorAll('table.sortable-table').forEach(initTable);
-      }
-      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-      else init();
-    })();
-  </script>
-
-</BaseLayout>
+              v
