@@ -1,8 +1,8 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
-import { fetchPublicStats, fetchCoachStats, fetchPlayerMatchStats, type DownBreakdown, type OffSnapshot, type PlaybookAction } from '../../lib/bobcats';
+import type { DownBreakdown, OffSnapshot, PlaybookAction } from '../../lib/bobcats';
 import { fetchPlayerEnrichmentByName, enrich } from '../../lib/players';
-import { fetchSupabaseStats, mergeMatchLogs, fetchSupabasePlayerMatchStats, fetchSupabaseCoachStats, matchKey } from '../../lib/supabase-stats';
+import { fetchSupabaseStats, fetchSupabasePlayerMatchStats, fetchSupabaseCoachStats } from '../../lib/supabase-stats';
 
 export const prerender = false;
 
@@ -10,16 +10,13 @@ export const prerender = false;
 const currentTeam = Astro.locals.team ?? null;
 const currentTeamId = currentTeam?.id ?? null;
 
-// GAS bridge is still season+team-name keyed ("Muži"/"Ženy"). If the current
-// portal team has a name GAS doesn't know, we skip the GAS fetch and rely on
-// Supabase only.
-const gasTeamName: 'Muži' | 'Ženy' | null =
-  currentTeam?.name === 'Muži' ? 'Muži' :
-  currentTeam?.name === 'Ženy' ? 'Ženy' : null;
+// Iter 16: GAS sunset — all data now from Supabase only. Keep `stats` + `coach`
+// as `null` so the rest of the component (which uses `coach?.x ?? supabase`)
+// gracefully falls back to Supabase.
+const stats: any = null;
+const coach: any = null;
 
-const [stats, coach, enrichmentMap, supabaseStats, supabaseCoach] = await Promise.all([
-  gasTeamName ? fetchPublicStats(gasTeamName) : Promise.resolve(null),
-  gasTeamName ? fetchCoachStats(gasTeamName)  : Promise.resolve(null),
+const [enrichmentMap, supabaseStats, supabaseCoach] = await Promise.all([
   fetchPlayerEnrichmentByName(currentTeamId),
   fetchSupabaseStats(currentTeamId),
   fetchSupabaseCoachStats(currentTeamId),
@@ -29,18 +26,13 @@ const [stats, coach, enrichmentMap, supabaseStats, supabaseCoach] = await Promis
 const url = new URL(Astro.request.url);
 const view = url.searchParams.get('view') ?? 'team';
 const scopeParam = url.searchParams.get('match') ?? 'all';
-const sourceParamRaw = url.searchParams.get('source') ?? 'auto';
-const sourceParam = (['auto', 'gas', 'supabase'].includes(sourceParamRaw) ? sourceParamRaw : 'auto') as 'auto' | 'gas' | 'supabase';
+// Iter 16: GAS sunset — source param frozen to 'supabase'. Legacy param ignored.
+const sourceParam: 'supabase' = 'supabase';
 
-// ── Merged match log (GAS + Supabase) ──────────────────────
-// Supabase entries override GAS where keys match (date + opponent).
-// Re-indexed chronologically so URL ?match=<idx> works on the merged list.
-const mergedLog = mergeMatchLogs(coach?.matchLog ?? [], supabaseStats.matches);
-
-const gasKeys = new Set((coach?.matchLog ?? []).map(matchKey));
-const supabaseOnlyMatches = supabaseStats.matches.filter(
-  (m) => !gasKeys.has(matchKey(m))
-);
+// ── Match log: Supabase only (GAS sunset) ──
+// Each match summary already carries idx (chronological), date, opponent etc.
+const mergedLog = supabaseStats.matches;
+const supabaseOnlyMatches = supabaseStats.matches;
 
 const selectedMatch = scopeParam !== 'all'
   ? mergedLog.find((m) => String(m.idx) === scopeParam) ?? null
@@ -50,21 +42,18 @@ const scopeLabel = selectedMatch
   ? `${selectedMatch.opponent} · ${selectedMatch.date}`
   : 'celá sezóna';
 
-// Per-match player stats — Supabase if entry has supabaseId, otherwise GAS.
-const matchPlayerStats = (view === 'players' && selectedMatch)
-  ? ((selectedMatch as any).source === 'supabase' && (selectedMatch as any).supabaseId
-      ? await fetchSupabasePlayerMatchStats(
-          (selectedMatch as any).supabaseId,
-          selectedMatch.date,
-          selectedMatch.opponent,
-        )
-      : await fetchPlayerMatchStats('Muži', selectedMatch.date, selectedMatch.opponent))
+// Per-match player stats — Supabase only (Iter 16: GAS sunset)
+const matchPlayerStats = (view === 'players' && selectedMatch && (selectedMatch as any).supabaseId)
+  ? await fetchSupabasePlayerMatchStats(
+      (selectedMatch as any).supabaseId,
+      selectedMatch.date,
+      selectedMatch.opponent,
+    )
   : null;
 
 // Helper to build URL preserving other params
 const buildHref = (overrides: Record<string, string>) => {
   const u = new URLSearchParams({ view, match: scopeParam });
-  if (sourceParam !== 'auto') u.set('source', sourceParam);
   if (currentTeamId) u.set('team', currentTeamId);
   for (const [k, v] of Object.entries(overrides)) {
     if (v === '') u.delete(k); else u.set(k, v);
@@ -86,13 +75,11 @@ const off: OffSnapshot = selectedMatch
       xp1Att: selectedMatch.xp1Att, xp1Ok: selectedMatch.xp1Ok, xp1Pct: selectedMatch.xp1Pct,
       xp2Att: selectedMatch.xp2Att, xp2Ok: selectedMatch.xp2Ok, xp2Pct: selectedMatch.xp2Pct,
     }
-  : (coach?.totals.off ?? {});
+  : (supabaseCoach?.totals.off ?? {});
 
-// ── v6.2: Per-section data source picker (auto/gas/supabase) ──
-type SourceUsed = 'gas' | 'supabase' | null;
-const sourceForcedTo: 'gas' | 'supabase' | null =
-  sourceParam === 'gas' ? 'gas' :
-  sourceParam === 'supabase' ? 'supabase' : null;
+// Iter 16: GAS sunset — type kept for backward compat but only 'supabase' used
+type SourceUsed = 'supabase' | null;
+const sourceForcedTo: 'supabase' = 'supabase';
 
 const downDistGas      = coach?.totals.downDist;
 const downDistSupabase = supabaseCoach?.totals.downDist;
@@ -105,34 +92,27 @@ const playbookSupabase = supabaseCoach?.totals.playbookAkce ?? [];
 const faulyGas      = coach?.faulyBreakdown ?? [];
 const faulySupabase = supabaseCoach?.faulyBreakdown ?? [];
 
-function resolveSource<T>(supa: T, supaHas: boolean, gas: T, gasHas: boolean): { src: SourceUsed; data: T } {
-  if (sourceForcedTo === 'gas')      return { src: 'gas',      data: gas };
-  if (sourceForcedTo === 'supabase') return { src: 'supabase', data: supa };
-  // auto
-  if (supaHas) return { src: 'supabase', data: supa };
-  if (gasHas)  return { src: 'gas',      data: gas };
-  return { src: null, data: gas };  // neither has data → render empty using gas shape
+// Iter 16: GAS sunset — always returns Supabase. `gas` param kept for legacy signature.
+function resolveSource<T>(supa: T, supaHas: boolean, _gas: T, _gasHas: boolean): { src: SourceUsed; data: T } {
+  return { src: supaHas ? 'supabase' : null, data: supa };
 }
 
-// Single-match views (selectedMatch.*) always come from the entry's own source
-// (Supabase entry → already has Supabase per-match data baked in; GAS entry → GAS).
-// Multi-match (season) views use resolveSource.
 const downDistRes = isSingleMatch
-  ? { src: (selectedMatch as any)?.source ?? 'gas' as SourceUsed, data: selectedMatch?.downDist }
+  ? { src: 'supabase' as SourceUsed, data: selectedMatch?.downDist }
   : resolveSource(downDistSupabase, downDistSupabaseHas, downDistGas, !!downDistGas);
 const playbookRes = isSingleMatch
-  ? { src: (selectedMatch as any)?.source ?? 'gas' as SourceUsed, data: selectedMatch?.playbookAkce ?? [] }
+  ? { src: 'supabase' as SourceUsed, data: selectedMatch?.playbookAkce ?? [] }
   : resolveSource(playbookSupabase, playbookSupabase.length > 0, playbookGas, playbookGas.length > 0);
 const faulyRes = isSingleMatch
-  ? { src: (selectedMatch as any)?.source ?? 'gas' as SourceUsed, data: faulyGas }  // single-match faul breakdown only available from GAS in v6.1; v6.3 would query match_fouls by match_id
+  ? { src: 'supabase' as SourceUsed, data: [] }  // Iter 16: per-match faul breakdown not yet aggregated from match_fouls
   : resolveSource(faulySupabase, faulySupabase.length > 0, faulyGas, faulyGas.length > 0);
 
 const scopedFaulyCount = selectedMatch
   ? (selectedMatch.penCount ?? 0)
-  : (coach?.matchLog ?? []).reduce((s, m) => s + (m.penCount ?? 0), 0);
+  : supabaseStats.matches.reduce((s, m) => s + (m.penCount ?? 0), 0);
 const scopedFaulyYds = selectedMatch
   ? (selectedMatch.penYds ?? 0)
-  : (coach?.matchLog ?? []).reduce((s, m) => s + (m.penYds ?? 0), 0);
+  : supabaseStats.matches.reduce((s, m) => s + (m.penYds ?? 0), 0);
 
 const scopedDownDistRaw = downDistRes.data;
 const scopedPlaybook: PlaybookAction[] = (playbookRes.data ?? []) as PlaybookAction[];
@@ -141,20 +121,37 @@ const showFaulyBreakdown = !isSingleMatch;
 const fauly = faulyRes.data ?? [];
 const faulyMax = fauly.length > 0 ? Math.max(1, ...fauly.map((f) => f.count)) : 1;
 
-// Source labels for UI badges
+// Source labels for UI badges (Iter 16: Supabase-only)
 const SOURCE_LABEL: Record<string, string> = {
-  gas:      `GAS · ${coach?.matchCount ?? 0} z.`,
   supabase: `Supabase · ${supabaseCoach?.matchCount ?? 0} z.`,
 };
 const sourceBadge = (src: SourceUsed) =>
   src ? SOURCE_LABEL[src] : '—';
 
-// ── Sezónní týmové metriky ────────────────────────────────
-const winPct = stats && stats.record.matches > 0
-  ? Math.round((stats.record.wins / stats.record.matches) * 100) : 0;
-const ptDiff = stats ? stats.points.for - stats.points.against : 0;
-const ptDiffPerGame = stats && stats.record.matches > 0
-  ? (ptDiff / stats.record.matches).toFixed(1) : '0';
+// ── Sezónní týmové metriky (Iter 16: from Supabase) ──────
+const seasonRecord = (() => {
+  let wins = 0, losses = 0, ties = 0, ptsFor = 0, ptsAgainst = 0;
+  for (const m of supabaseStats.matches) {
+    ptsFor += m.ourScore ?? 0;
+    ptsAgainst += m.oppScore ?? 0;
+    if (m.result === 'W') wins++;
+    else if (m.result === 'L') losses++;
+    else if (m.result === 'T') ties++;
+  }
+  const matches = supabaseStats.matches.length;
+  return {
+    wins, losses, ties, matches,
+    ptsFor, ptsAgainst,
+    forAvg: matches > 0 ? +(ptsFor / matches).toFixed(1) : 0,
+    againstAvg: matches > 0 ? +(ptsAgainst / matches).toFixed(1) : 0,
+  };
+})();
+
+const winPct = seasonRecord.matches > 0
+  ? Math.round((seasonRecord.wins / seasonRecord.matches) * 100) : 0;
+const ptDiff = seasonRecord.ptsFor - seasonRecord.ptsAgainst;
+const ptDiffPerGame = seasonRecord.matches > 0
+  ? (ptDiff / seasonRecord.matches).toFixed(1) : '0';
 // Totals filled after qbList/wrList/dbList resolution below.
 let totalQbTds = 0, totalWrTds = 0, totalSacks = 0, totalInts = 0;
 
@@ -174,20 +171,18 @@ const downs = scopedDownDistRaw ? {
 const downsTotal = downs ? (downs[1].total + downs[2].total + downs[3].total + downs[4].total) : 0;
 const downsMax = downs ? Math.max(1, downs[1].total, downs[2].total, downs[3].total, downs[4].total) : 1;
 
-// ── Drives (always season, resolved through source picker) ──
-const drivesGas = coach?.driveResults ?? {};
+// ── Drives (Iter 16: Supabase-only) ──
 const drivesSupabase = supabaseCoach?.driveResults ?? {};
-const drivesGasCount = (coach?.driveCount ?? 0);
 const drivesSupabaseCount = (supabaseCoach?.driveCount ?? 0);
 
-const drivesRes = resolveSource(
-  drivesSupabase, drivesSupabaseCount > 0,
-  drivesGas,      drivesGasCount > 0,
-);
+const drivesRes = {
+  src: (drivesSupabaseCount > 0 ? 'supabase' : null) as SourceUsed,
+  data: drivesSupabase,
+};
 const dr = drivesRes.data ?? {};
-const driveTotal = drivesRes.src === 'supabase' ? drivesSupabaseCount : drivesGasCount;
+const driveTotal = drivesSupabaseCount;
 const drOther = (dr.halftime ?? 0) + (dr.eog ?? 0) + (dr.turnover ?? 0) + (dr.other ?? 0);
-const driveCells = (coach || supabaseCoach) ? [
+const driveCells = supabaseCoach ? [
   { label: 'TD',     value: dr.td ?? 0,     accent: 'verde' },
   { label: 'Downs',  value: dr.downs ?? 0,  accent: 'graphite' },
   { label: 'INT',    value: dr.int ?? 0,    accent: 'signal' },
@@ -207,8 +202,8 @@ const playbookMaxCount = playbook.length > 0 ? Math.max(1, ...playbook.map((a) =
 
 const matchLog = mergedLog.slice().reverse();
 
-// ── Trend chart ────────────────────────────────────────────
-const trend = (stats?.recentMatches ?? []).slice().reverse();
+// ── Trend chart (Iter 16: from Supabase, last 5) ─────────
+const trend = supabaseStats.matches.slice(-5);
 const maxScore = Math.max(...trend.flatMap((g) => [g.ourScore, g.oppScore]), 50);
 const chartPoints = trend.map((g, i) => {
   const x = trend.length > 1 ? (i / (trend.length - 1)) * 600 : 300;
@@ -247,27 +242,17 @@ function photoOf(name: string, fallback?: string): string | undefined {
   return fallback;
 }
 
-// ── Player tables (season-only) — prefer GAS (truth source), Supabase fallback ──
-// GAS publicStats has the COMPLETE season aggregate from Google Sheets (truth source).
-// Supabase has only matches that have been imported / written via PWA Scorer —
-// that's a subset and underreports. So we keep GAS as primary for player tables;
-// Supabase is fallback only when GAS returns nothing (e.g. new team without GAS sheet).
-const qbListGas  = stats?.qbStats ?? [];
-const wrListGas  = stats?.wrStats ?? [];
-const dbListGas  = stats?.defenseLeaders ?? [];
+// ── Player tables (Iter 16: Supabase-only) ──
 const qbListSupa = supabaseStats.qbStats ?? [];
 const wrListSupa = supabaseStats.wrStats ?? [];
 const dbListSupa = supabaseStats.defenseLeaders ?? [];
 
-const playerSource: 'gas' | 'supabase' =
-  sourceForcedTo === 'gas' ? 'gas' :
-  sourceForcedTo === 'supabase' ? 'supabase' :
-  // auto: prefer GAS (full season truth), fall back to Supabase if GAS empty
-  (qbListGas.length + wrListGas.length + dbListGas.length > 0 ? 'gas' : 'supabase');
+// Iter 16: GAS sunset — player tables always from Supabase
+const playerSource: 'supabase' = 'supabase';
 
-const qbList = (playerSource === 'supabase' ? qbListSupa : qbListGas).slice().sort((a, b) => b.qb.td - a.qb.td);
-const wrList = (playerSource === 'supabase' ? wrListSupa : wrListGas).slice().sort((a, b) => b.wr.td - a.wr.td);
-const dbList = (playerSource === 'supabase' ? dbListSupa : dbListGas).slice().sort((a, b) => (b.db.flagPull + b.db.sack * 2 + b.db.int * 3) - (a.db.flagPull + a.db.sack * 2 + a.db.int * 3));
+const qbList = qbListSupa.slice().sort((a, b) => b.qb.td - a.qb.td);
+const wrList = wrListSupa.slice().sort((a, b) => b.wr.td - a.wr.td);
+const dbList = dbListSupa.slice().sort((a, b) => (b.db.flagPull + b.db.sack * 2 + b.db.int * 3) - (a.db.flagPull + a.db.sack * 2 + a.db.int * 3));
 
 // Aggregate totals from resolved source (so KPI tiles match the tables)
 totalQbTds = qbList.reduce((s, p) => s + p.qb.td, 0);
@@ -275,11 +260,11 @@ totalWrTds = wrList.reduce((s, p) => s + p.wr.td, 0);
 totalSacks = dbList.reduce((s, p) => s + p.db.sack, 0);
 totalInts  = dbList.reduce((s, p) => s + p.db.int, 0);
 
-// Build sezónní team-stats KPI tiles (after totals are resolved)
-const teamStats = stats ? [
-  { label: 'Win %', value: `${winPct}%`, sub: `${stats.record.wins} V z ${stats.record.matches} zápasů` },
-  { label: 'Body / zápas', value: stats.points.forAvg.toFixed(1), sub: 'Útok' },
-  { label: 'Obdržené / zápas', value: stats.points.againstAvg.toFixed(1), sub: 'Obrana' },
+// Build sezónní team-stats KPI tiles (Iter 16: from Supabase seasonRecord)
+const teamStats = seasonRecord.matches > 0 ? [
+  { label: 'Win %', value: `${winPct}%`, sub: `${seasonRecord.wins} V z ${seasonRecord.matches} zápasů` },
+  { label: 'Body / zápas', value: seasonRecord.forAvg.toFixed(1), sub: 'Útok' },
+  { label: 'Obdržené / zápas', value: seasonRecord.againstAvg.toFixed(1), sub: 'Obrana' },
   { label: 'Rozdíl skóre', value: (ptDiff > 0 ? '+' : '') + ptDiff, sub: `${ptDiff > 0 ? '+' : ''}${ptDiffPerGame} / zápas` },
   { label: 'TD passy', value: String(totalQbTds), sub: 'QB stats' },
   { label: 'TD chyty', value: String(totalWrTds), sub: 'WR stats' },
@@ -313,48 +298,18 @@ const tabs = [
     </div>
   )}
 
-  {/* Data source transparency banner */}
-  <div class="mb-6 rounded-lg border border-stone bg-mist/60 p-4 text-[12px]">
-    <div class="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-      <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <span class="inline-flex items-center gap-1.5 rounded-md bg-pearl px-2 py-1 font-semibold text-graphite">
-          <span class="h-2 w-2 rounded-full bg-slate"></span>
-          GAS: {coach?.matchCount ?? 0} zápasů
-        </span>
-        <span class="inline-flex items-center gap-1.5 rounded-md bg-pearl px-2 py-1 font-semibold text-graphite">
-          <span class="h-2 w-2 rounded-full bg-verde"></span>
-          Supabase: {supabaseStats.matches.length} zápasů
-        </span>
-        {supabaseOnlyMatches.length > 0 && (
-          <span class="inline-flex items-center gap-1.5 rounded-md bg-verde/15 px-2 py-1 font-semibold text-[#1B6E62]">
-            + {supabaseOnlyMatches.length} {supabaseOnlyMatches.length === 1 ? 'nový jen v Supabase' : 'nových jen v Supabase'}
-          </span>
-        )}
-      </div>
+  {/* Iter 16: GAS sunset — data source banner shows just Supabase summary */}
+  <div class="mb-6 rounded-lg border border-stone bg-mist/60 p-3 text-[12px]">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <span class="inline-flex items-center gap-1.5 rounded-md bg-pearl px-2 py-1 font-semibold text-graphite">
+        <span class="h-2 w-2 rounded-full bg-verde"></span>
+        Supabase: {supabaseStats.matches.length} zápasů
+      </span>
       <p class="text-slate">
-        Celkem v match logu: <strong class="text-ink tabular-nums">{mergedLog.length}</strong>
         {supabaseStats.latestDate && (
-          <> · poslední Supabase zápis: <strong class="text-ink">{supabaseStats.latestDate}</strong></>
+          <>poslední zápis: <strong class="text-ink">{supabaseStats.latestDate}</strong></>
         )}
       </p>
-    </div>
-    <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-stone/60 pt-3">
-      <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Zdroj coach sekcí:</span>
-      {(['auto', 'supabase', 'gas'] as const).map((opt) => {
-        const u = new URLSearchParams({ view, match: scopeParam });
-        if (opt !== 'auto') u.set('source', opt);
-        const isActive = sourceParam === opt;
-        return (
-          <a
-            href={'/app/stats?' + u.toString()}
-            class={`rounded-md px-2 py-1 text-[11px] font-semibold transition-colors ${
-              isActive ? 'bg-ink text-white' : 'bg-pearl text-graphite hover:bg-stone/40'
-            }`}
-          >
-            {opt === 'auto' ? 'Auto (preferuj Supabase)' : opt === 'supabase' ? 'Jen Supabase' : 'Jen GAS'}
-          </a>
-        );
-      })}
     </div>
   </div>
 
@@ -386,9 +341,6 @@ const tabs = [
         <p class="text-[12px] text-graphite">Tohle vidí fanoušci, sponzoři a federace.</p>
       </div>
     </div>
-    {gasTeamName && (
-      <a href={`https://bohuslavrom-gif.github.io/bobcats-stats/public.html?team=${encodeURIComponent(gasTeamName)}`} target="_blank" rel="noopener" class="rounded-lg bg-pearl px-4 py-2 text-[13px] font-medium text-ink hover:bg-mist">Otevřít →</a>
-    )}
   </div>
 
   {/* ═════════════════════════ TEAM VIEW ═════════════════════════ */}
@@ -443,7 +395,7 @@ const tabs = [
   )}
 
   {/* ═════════════ SHARED: Coach view header + scope picker ═════════════ */}
-  {coach && (
+  {supabaseCoach && (
     <>
       <div class="mt-10 mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -938,7 +890,7 @@ const tabs = [
     <div class="mt-6 overflow-hidden rounded-xl border border-stone bg-pearl">
       <div class="flex items-center justify-between border-b border-stone px-5 py-4">
         <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Match log</p>
-        <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{coach.matchCount} zápasů · klik přepne na ten zápas</span>
+        <span class="text-[11px] uppercase tracking-[0.1em] text-slate">{supabaseCoach?.matchCount ?? supabaseStats.matches.length} zápasů · klik přepne na ten zápas</span>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full min-w-[820px] text-left text-[13px]">
