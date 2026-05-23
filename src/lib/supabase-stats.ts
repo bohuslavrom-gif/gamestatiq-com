@@ -266,29 +266,53 @@ export async function fetchSupabaseStats(teamId: string | null): Promise<Supabas
     return { ...empty, clubId };
   }
   const matchRows = matchRowsRaw as MatchRow[];
-  const matches = matchRows.map((row, i) => rowToMatchLogEntry(row, i + 1));
 
-  if (matches.length === 0) {
+  if (matchRows.length === 0) {
     return { ...empty, clubId };
   }
 
-  // 3. Fetch player stats with player join (one round-trip)
+  // 3. Fetch player stats + plays in parallel (one round-trip total)
   const matchIds = matchRows.map((m) => m.id);
-  const { data: psRowsRaw, error: psErr } = await admin
-    .from('match_player_stats')
-    .select(`
-      match_id, player_id,
-      qb_att, qb_comp, qb_yds, qb_td, qb_int, qb_sack,
-      wr_targets, wr_rec, wr_yds, wr_td, wr_xp, wr_pts,
-      db_flag_pull, db_sack, db_brkup, db_int,
-      players ( first_name, last_name, jersey_number, photo_url )
-    `)
-    .in('match_id', matchIds);
-  if (psErr) {
+  const [psResp, playsResp] = await Promise.all([
+    admin
+      .from('match_player_stats')
+      .select(`
+        match_id, player_id,
+        qb_att, qb_comp, qb_yds, qb_td, qb_int, qb_sack,
+        wr_targets, wr_rec, wr_yds, wr_td, wr_xp, wr_pts,
+        db_flag_pull, db_sack, db_brkup, db_int,
+        players ( first_name, last_name, jersey_number, photo_url )
+      `)
+      .in('match_id', matchIds),
+    admin
+      .from('match_plays')
+      .select('match_id, side, down, yards_gained, is_td, play_name')
+      .in('match_id', matchIds),
+  ]);
+  if (psResp.error) {
     // eslint-disable-next-line no-console
-    console.warn('[supabase-stats] match_player_stats fetch failed', psErr);
+    console.warn('[supabase-stats] match_player_stats fetch failed', psResp.error);
   }
-  const psRows = (psRowsRaw ?? []) as unknown as PlayerStatsRow[];
+  const psRows = (psResp.data ?? []) as unknown as PlayerStatsRow[];
+  const plays  = (playsResp.data ?? []) as PlayRow[];
+
+  // Group plays by match_id so we can enrich each match log entry with per-match downDist + playbookAkce
+  const playsByMatch = new Map<string, PlayRow[]>();
+  for (const p of plays) {
+    const arr = playsByMatch.get(p.match_id) ?? [];
+    arr.push(p);
+    playsByMatch.set(p.match_id, arr);
+  }
+
+  const matches = matchRows.map((row, i) => {
+    const entry = rowToMatchLogEntry(row, i + 1);
+    const matchPlays = playsByMatch.get(row.id) ?? [];
+    if (matchPlays.length > 0) {
+      entry.downDist = aggregateDownDist(matchPlays);
+      entry.playbookAkce = aggregatePlaybook(matchPlays);
+    }
+    return entry;
+  });
 
   const { qbStats, wrStats, defenseLeaders } = aggregatePlayerStats(psRows);
 
