@@ -1,25 +1,27 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
-import { fetchPublicStats } from '../../lib/bobcats';
 import { fetchPlayerEnrichmentByName, enrich } from '../../lib/players';
 import { getSupabaseAdmin } from '../../lib/supabase';
+import { fetchSupabaseStats } from '../../lib/supabase-stats';
 
 export const prerender = false;
 
 const currentTeam = Astro.locals.team ?? null;
 const currentTeamId = currentTeam?.id ?? null;
 
-// Resolve club name (for header) — defensive
+// Resolve club info (for header) — defensive
 let clubName = '—';
+let clubSlug: string | null = null;
 let isClubAdmin = false;
 if (currentTeam?.club_id) {
   const admin = getSupabaseAdmin();
   const { data: c } = await admin
     .from('clubs')
-    .select('name')
+    .select('name, slug')
     .eq('id', currentTeam.club_id)
     .maybeSingle();
-  clubName = (c as { name: string } | null)?.name ?? '—';
+  clubName = (c as { name: string; slug: string } | null)?.name ?? '—';
+  clubSlug = (c as { name: string; slug: string } | null)?.slug ?? null;
   // Iter 5b: detect club admin (for league invitation approvals)
   const { data: cm } = await admin
     .from('club_members')
@@ -55,12 +57,9 @@ if (isClubAdmin && currentTeam?.club_id) {
   }
 }
 
-const gasTeamName: 'Muži' | 'Ženy' | null =
-  currentTeam?.name === 'Muži' ? 'Muži' :
-  currentTeam?.name === 'Ženy' ? 'Ženy' : null;
-
-const [stats, enrichmentMap] = await Promise.all([
-  gasTeamName ? fetchPublicStats(gasTeamName) : Promise.resolve(null),
+// Iter 16: GAS sunset — all stats from Supabase
+const [supabaseStats, enrichmentMap] = await Promise.all([
+  fetchSupabaseStats(currentTeamId),
   fetchPlayerEnrichmentByName(currentTeamId),
 ]);
 
@@ -70,24 +69,35 @@ function photoOf(name: string, fallback?: string): string | undefined {
   return fallback;
 }
 
-const winsLosses = stats ? `${stats.record.wins}-${stats.record.losses}${stats.record.ties ? '-' + stats.record.ties : ''}` : '—';
-const matches = stats?.record.matches ?? 0;
-const totalRoster = stats
-  ? new Set([
-      ...stats.qbStats.map((p) => p.name),
-      ...stats.wrStats.map((p) => p.name),
-      ...stats.defenseLeaders.map((p) => p.name),
-    ]).size
-  : 0;
+// Compute season record + points from Supabase matches
+let wins = 0, losses = 0, ties = 0, ptsFor = 0, ptsAgainst = 0;
+for (const m of supabaseStats.matches) {
+  ptsFor += m.ourScore ?? 0;
+  ptsAgainst += m.oppScore ?? 0;
+  if (m.result === 'W') wins++;
+  else if (m.result === 'L') losses++;
+  else if (m.result === 'T') ties++;
+}
+const matches = supabaseStats.matches.length;
+const forAvg = matches > 0 ? +(ptsFor / matches).toFixed(1) : 0;
+const againstAvg = matches > 0 ? +(ptsAgainst / matches).toFixed(1) : 0;
+const winsLosses = matches > 0 ? `${wins}-${losses}${ties ? '-' + ties : ''}` : '—';
+const hasStats = matches > 0;
+
+const totalRoster = new Set([
+  ...supabaseStats.qbStats.map((p) => p.name),
+  ...supabaseStats.wrStats.map((p) => p.name),
+  ...supabaseStats.defenseLeaders.map((p) => p.name),
+]).size;
 
 const kpis = [
   { label: 'Bilance', value: winsLosses, unit: 'V-P', accent: 'verde' },
-  { label: 'Bodů skórovaných', value: stats ? String(stats.points.for) : '—', unit: stats ? `${stats.points.forAvg.toFixed(1)} / zápas` : '', accent: 'signal' },
-  { label: 'Bodů obdržených', value: stats ? String(stats.points.against) : '—', unit: stats ? `${stats.points.againstAvg.toFixed(1)} / zápas` : '', accent: 'sky' },
+  { label: 'Bodů skórovaných', value: hasStats ? String(ptsFor) : '—', unit: hasStats ? `${forAvg.toFixed(1)} / zápas` : '', accent: 'signal' },
+  { label: 'Bodů obdržených', value: hasStats ? String(ptsAgainst) : '—', unit: hasStats ? `${againstAvg.toFixed(1)} / zápas` : '', accent: 'sky' },
   { label: 'Hráčů ve statistikách', value: String(totalRoster), unit: `sezóna 2026`, accent: 'plum' },
 ];
 
-const recentGames = stats?.recentMatches.slice(0, 5) ?? [];
+const recentGames = supabaseStats.matches.slice(0, 5);
 
 const accentMap: Record<string, string> = {
   signal: 'text-signal',
@@ -97,9 +107,9 @@ const accentMap: Record<string, string> = {
   plum:   'text-[#4F3878]',
 };
 
-// Best QB and WR for "coach insight" highlight
-const topQb = stats?.qbStats[0];
-const topWr = stats?.wrStats[0];
+// Best QB and WR for "coach insight" highlight (Iter 16: from Supabase)
+const topQb = supabaseStats.qbStats[0];
+const topWr = supabaseStats.wrStats[0];
 ---
 
 <AppLayout
@@ -108,11 +118,7 @@ const topWr = stats?.wrStats[0];
   pageTitle={currentTeam ? `${clubName} · ${currentTeam.name}` : 'Dashboard'}
   pageSub={currentTeam ? `Sezóna ${currentTeam.season ?? '2026'} · ${matches} ${matches === 1 ? 'odehraný zápas' : matches < 5 ? 'odehrané zápasy' : 'odehraných zápasů'}` : 'Načítám klubová data…'}
 >
-  {!stats && (
-    <div class="mb-6 rounded-lg border border-spark/30 bg-spark/5 px-4 py-3 text-[14px] text-[#A0531B]">
-      Nepodařilo se načíst live data ze Sheets. Zkuste obnovit stránku za chvíli.
-    </div>
-  )}
+  {/* Iter 16: GAS sunset — error banner odebrán. */}
 
   {/* Iter 5b: pending league invitations awaiting club admin approval */}
   {pendingLeagueInvites.length > 0 && (
@@ -168,18 +174,18 @@ const topWr = stats?.wrStats[0];
 
   <div class="mt-6 flex flex-col items-start justify-between gap-4 rounded-xl border border-stone bg-pearl p-5 lg:flex-row lg:items-center">
     <div class="flex items-center gap-4">
-      <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-signal/10 text-signal">
-        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 15 8l7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z"/></svg>
+      <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-verde/10 text-verde">
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
       </span>
       <div>
         <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Live data</p>
-        <p class="text-[17px] font-bold tracking-tight-2 text-ink">Google Sheets · {clubName} {currentTeam?.name ?? ''} stats</p>
-        <p class="text-[12px] text-graphite">Synchronizováno automaticky po každém odehraném zápase</p>
+        <p class="text-[17px] font-bold tracking-tight-2 text-ink">Supabase · {clubName} {currentTeam?.name ?? ''}</p>
+        <p class="text-[12px] text-graphite">Aktualizace po každém uložení ze Scorer PWA</p>
       </div>
     </div>
     <div class="flex gap-2">
-      {clubName === 'Bobcats' && gasTeamName && (
-        <a href={`https://bohuslavrom-gif.github.io/bobcats-stats/public.html?team=${encodeURIComponent(gasTeamName)}`} target="_blank" rel="noopener" class="rounded-lg border border-stone bg-mist px-4 py-2 text-[13px] font-medium text-graphite hover:border-stone-2 hover:bg-stone/30">Veřejná stránka</a>
+      {clubSlug && (
+        <a href={`/klub/${clubSlug}${currentTeam?.name ? `?team=${encodeURIComponent(currentTeam.name)}` : ''}`} target="_blank" rel="noopener" class="rounded-lg border border-stone bg-mist px-4 py-2 text-[13px] font-medium text-graphite hover:border-stone-2 hover:bg-stone/30">Veřejná stránka</a>
       )}
       <a href="/app/billing" class="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1A2B45]">Upgrade na Klub</a>
     </div>
@@ -246,31 +252,31 @@ const topWr = stats?.wrStats[0];
     </div>
   </div>
 
-  {stats && (
+  {hasStats && (
     <div class="mt-6 rounded-xl border border-stone bg-gradient-to-br from-ink to-[#1A2B45] p-6 text-white lg:p-8">
       <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-signal">Coach insight · sezóna</p>
       <h2 class="mt-2 text-[22px] font-bold tracking-tight-2">
-        Skórujete <span class="text-signal">{stats.points.forAvg.toFixed(1)}</span> bodů na zápas — inkasujete jen <span class="text-signal">{stats.points.againstAvg.toFixed(1)}</span>
+        Skórujete <span class="text-signal">{forAvg.toFixed(1)}</span> bodů na zápas — inkasujete jen <span class="text-signal">{againstAvg.toFixed(1)}</span>
       </h2>
       <p class="mt-3 max-w-2xl text-[14px] leading-relaxed text-white/75">
-        Rozdíl <strong class="text-white">{(stats.points.forAvg - stats.points.againstAvg).toFixed(1)}</strong> bodů na zápas vás řadí mezi top týmy ligy. Útok produkuje stabilně, obrana drží zadní vrátka.
+        Rozdíl <strong class="text-white">{(forAvg - againstAvg).toFixed(1)}</strong> bodů na zápas vás řadí mezi top týmy ligy. Útok produkuje stabilně, obrana drží zadní vrátka.
       </p>
       <div class="mt-6 grid gap-4 border-t border-white/10 pt-5 sm:grid-cols-4">
         <div>
           <p class="text-[10px] uppercase tracking-[0.08em] text-white/50">Zápasů</p>
-          <p class="text-2xl font-bold tabular-nums tracking-tight-2">{stats.record.matches}</p>
+          <p class="text-2xl font-bold tabular-nums tracking-tight-2">{matches}</p>
         </div>
         <div>
           <p class="text-[10px] uppercase tracking-[0.08em] text-white/50">Výher</p>
-          <p class="text-2xl font-bold tabular-nums tracking-tight-2">{stats.record.wins}</p>
+          <p class="text-2xl font-bold tabular-nums tracking-tight-2">{wins}</p>
         </div>
         <div>
           <p class="text-[10px] uppercase tracking-[0.08em] text-white/50">Bodů celkem</p>
-          <p class="text-2xl font-bold tabular-nums tracking-tight-2">{stats.points.for}</p>
+          <p class="text-2xl font-bold tabular-nums tracking-tight-2">{ptsFor}</p>
         </div>
         <div>
           <p class="text-[10px] uppercase tracking-[0.08em] text-white/50">Obdržených</p>
-          <p class="text-2xl font-bold tabular-nums tracking-tight-2">{stats.points.against}</p>
+          <p class="text-2xl font-bold tabular-nums tracking-tight-2">{ptsAgainst}</p>
         </div>
       </div>
     </div>

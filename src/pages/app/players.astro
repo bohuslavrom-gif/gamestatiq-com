@@ -1,7 +1,6 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import { getSupabaseAdmin } from '../../lib/supabase';
-import { fetchPublicStats } from '../../lib/bobcats';
 
 export const prerender = false;
 
@@ -38,13 +37,7 @@ const { data: playersRaw } = currentTeamId
 
 const players = playersRaw ?? [];
 
-// For Bobcats Muži team: also fetch GAS stats as historical fallback if roster empty
-const gasTeamName: 'Muži' | 'Ženy' | null =
-  currentTeam?.name === 'Muži' ? 'Muži' :
-  currentTeam?.name === 'Ženy' ? 'Ženy' : null;
-const gasStats = (clubName === 'Bobcats' && gasTeamName) ? await fetchPublicStats(gasTeamName) : null;
-const showGasFallback = players.length === 0 && gasStats !== null;
-
+// Iter 16: GAS sunset — fallback fetch odebrán
 // URL params for state
 const url = new URL(Astro.request.url);
 const savedParam = url.searchParams.get('saved');
@@ -320,11 +313,7 @@ const stCount  = players.filter((p: any) => ['ST','K','P'].includes(p.position))
                 ? (canEdit ? 'Klikni "+ Přidat hráče" výše a začněte budovat soupisku.' : 'Admin nebo trenér musí přidat hráče.')
                 : 'Zkuste jiný filtr nebo přidejte hráče s odpovídající pozicí.'}
             </p>
-            {showGasFallback && gasStats && (
-              <p class="mt-4 text-[12px] text-slate">
-                Sezónní statistiky pro {clubName} jsou k vidění ve <a href="/app/stats" class="text-signal hover:underline">Statistikách</a> (data z Google Sheets).
-              </p>
-            )}
+            {/* Iter 16: GAS sunset — fallback hint odebrán. */}
           </td></tr>
         ) : (
           filteredPlayers.map((p: any) => (
@@ -380,11 +369,7 @@ const stCount  = players.filter((p: any) => ['ST','K','P'].includes(p.position))
     </table>
   </div>
 
-  {clubName === 'Bobcats' && gasStats && (
-    <p class="mt-4 rounded-lg bg-mist p-3 text-[12px] text-graphite">
-      <strong class="text-ink">Bobcats poznámka:</strong> Sezónní statistiky pořád tečou z Google Sheets (záložka <a href="/app/stats" class="text-signal hover:underline">Statistiky</a>). Hráči v portálu (tabulka výše) jsou nezávislí — slouží jako master roster pro budoucí migraci. Až přidáte všechny hráče sem, můžeme přepnout veřejnou stránku z Sheets na portál.
-    </p>
-  )}
+  {/* Iter 16: GAS sunset — Bobcats poznámka odebrána. */}
 </AppLayout>
 
 <script is:inline>

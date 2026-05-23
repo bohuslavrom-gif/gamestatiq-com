@@ -292,11 +292,7 @@ const tabs = [
     return `${teamLabel} · sezóna ${season} · ${matchesCount} ${matchesWord}`;
   })()}
 >
-  {!stats && (
-    <div class="mb-6 rounded-lg border border-spark/30 bg-spark/5 px-4 py-3 text-[14px] text-[#A0531B]">
-      Nepodařilo se načíst live data ze Sheets.
-    </div>
-  )}
+  {/* Iter 16: GAS sunset — error banner odebrán (stats nikdy nebudou null cestou ze Sheets). */}
 
   {/* Iter 16: GAS sunset — data source banner shows just Supabase summary */}
   <div class="mb-6 rounded-lg border border-stone bg-mist/60 p-3 text-[12px]">
