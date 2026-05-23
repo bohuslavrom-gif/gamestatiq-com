@@ -482,4 +482,18 @@ const pageDesc = `${match.team.clubName} ${match.team.name} vs ${match.opponent}
             var thCol = parseInt(th.getAttribute('data-sort-col'), 10);
             if (thCol === defCol) {
               th.classList.add('is-active');
-              v
+              var icon = th.querySelector('.sort-icon');
+              if (icon) icon.textContent = defDir === 'desc' ? '▼' : '▲';
+            }
+          });
+        }
+      }
+      function init() {
+        document.querySelectorAll('table.sortable-table').forEach(initTable);
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+      else init();
+    })();
+  </script>
+
+</BaseLayout>
