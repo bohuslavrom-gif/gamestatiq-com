@@ -325,18 +325,18 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
               <div class="p-12 text-center text-[13px] text-slate">Zatím žádné QB staty.</div>
             ) : (
               <div class="overflow-x-auto">
-                <table class="w-full min-w-[800px] text-left text-[13px]">
+                <table class="sortable-table w-full min-w-[800px] text-left text-[13px]" data-accent={secondary} data-default-sort="7" data-default-dir="desc">
                   <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                     <tr>
                       <th class="px-5 py-3 w-10">#</th>
-                      <th class="py-3">Hráč</th>
-                      <th class="py-3">Tým</th>
-                      <th class="px-3 py-3 text-center tabular-nums">ATT</th>
-                      <th class="px-3 py-3 text-center tabular-nums">COMP</th>
-                      <th class="px-3 py-3 text-center tabular-nums">%</th>
-                      <th class="px-3 py-3 text-center tabular-nums">YDS</th>
-                      <th class="px-3 py-3 text-center tabular-nums">TD</th>
-                      <th class="px-3 py-3 text-center tabular-nums">INT</th>
+                      <th class="py-3" data-sort="text" data-sort-col="1">Hráč</th>
+                      <th class="py-3" data-sort="text" data-sort-col="2">Tým</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">ATT</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">COMP</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">%</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">YDS</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">TD</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="8">INT</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-stone">
@@ -344,15 +344,15 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                       const pct = p.qbAtt > 0 ? Math.round((p.qbComp / p.qbAtt) * 100) : 0;
                       return (
                         <tr>
-                          <td class="px-5 py-2.5"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
-                          <td class="py-2.5"><div class="flex items-center gap-2.5">{p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}<div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div></div></td>
-                          <td class="py-2.5 text-[12px] text-graphite">{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
-                          <td class="px-3 py-2.5 text-center tabular-nums text-graphite">{p.qbAtt}</td>
-                          <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink">{p.qbComp}</td>
-                          <td class="px-3 py-2.5 text-center tabular-nums" style={`color:${secondary}`}>{pct}%</td>
-                          <td class="px-3 py-2.5 text-center tabular-nums text-graphite">{p.qbYds}</td>
-                          <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink">{p.qbTd}</td>
-                          <td class="px-3 py-2.5 text-center tabular-nums text-graphite">{p.qbInt}</td>
+                          <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
+                          <td class="py-2.5" data-sort-value={p.name}><div class="flex items-center gap-2.5">{p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}<div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div></div></td>
+                          <td class="py-2.5 text-[12px] text-graphite" data-sort-value={`${p.clubName} ${p.teamName}`}>{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
+                          <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbAtt}>{p.qbAtt}</td>
+                          <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.qbComp}>{p.qbComp}</td>
+                          <td class="px-3 py-2.5 text-center tabular-nums" style={`color:${secondary}`} data-sort-value={pct}>{pct}%</td>
+                          <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbYds}>{p.qbYds}</td>
+                          <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.qbTd}>{p.qbTd}</td>
+                          <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbInt}>{p.qbInt}</td>
                         </tr>
                       );
                     })}
@@ -373,18 +373,18 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
               <div class="p-12 text-center text-[13px] text-slate">Zatím žádné WR staty.</div>
             ) : (
               <div class="overflow-x-auto">
-                <table class="w-full min-w-[820px] text-left text-[13px]">
+                <table class="sortable-table w-full min-w-[820px] text-left text-[13px]" data-accent={secondary} data-default-sort="7" data-default-dir="desc">
                   <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                     <tr>
                       <th class="px-5 py-3 w-10">#</th>
-                      <th class="py-3">Hráč</th>
-                      <th class="py-3">Tým</th>
-                      <th class="px-3 py-3 text-center tabular-nums">TARG</th>
-                      <th class="px-3 py-3 text-center tabular-nums">REC</th>
-                      <th class="px-3 py-3 text-center tabular-nums">%</th>
-                      <th class="px-3 py-3 text-center tabular-nums">YDS</th>
-                      <th class="px-3 py-3 text-center tabular-nums">TD</th>
-                      <th class="px-3 py-3 text-center tabular-nums">PTS</th>
+                      <th class="py-3" data-sort="text" data-sort-col="1">Hráč</th>
+                      <th class="py-3" data-sort="text" data-sort-col="2">Tým</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">TARG</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">REC</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">%</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">YDS</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">TD</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="8">PTS</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-stone">
@@ -392,15 +392,15 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                       const pct = p.wrTargets > 0 ? Math.round((p.wrRec / p.wrTargets) * 100) : 0;
                       return (
                         <tr>
-                          <td class="px-5 py-2.5"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
-                          <td class="py-2.5"><div class="flex items-center gap-2.5">{p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}<div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div></div></td>
-                          <td class="py-2.5 text-[12px] text-graphite">{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
-                          <td class="px-3 py-2.5 text-center tabular-nums text-graphite">{p.wrTargets}</td>
-                          <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink">{p.wrRec}</td>
-                          <td class="px-3 py-2.5 text-center tabular-nums" style={`color:${secondary}`}>{pct}%</td>
-                          <td class="px-3 py-2.5 text-center tabular-nums text-graphite">{p.wrYds}</td>
-                          <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink">{p.wrTd}</td>
-                          <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${secondary}`}>{p.wrPts}</td>
+                          <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
+                          <td class="py-2.5" data-sort-value={p.name}><div class="flex items-center gap-2.5">{p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}<div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div></div></td>
+                          <td class="py-2.5 text-[12px] text-graphite" data-sort-value={`${p.clubName} ${p.teamName}`}>{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
+                          <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.wrTargets}>{p.wrTargets}</td>
+                          <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.wrRec}>{p.wrRec}</td>
+                          <td class="px-3 py-2.5 text-center tabular-nums" style={`color:${secondary}`} data-sort-value={pct}>{pct}%</td>
+                          <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.wrYds}>{p.wrYds}</td>
+                          <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.wrTd}>{p.wrTd}</td>
+                          <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${secondary}`} data-sort-value={p.wrPts}>{p.wrPts}</td>
                         </tr>
                       );
                     })}
@@ -421,28 +421,28 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
               <div class="p-12 text-center text-[13px] text-slate">Zatím žádné obranné staty.</div>
             ) : (
               <div class="overflow-x-auto">
-                <table class="w-full min-w-[780px] text-left text-[13px]">
+                <table class="sortable-table w-full min-w-[780px] text-left text-[13px]" data-accent={secondary} data-default-sort="5" data-default-dir="desc">
                   <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                     <tr>
                       <th class="px-5 py-3 w-10">#</th>
-                      <th class="py-3">Hráč</th>
-                      <th class="py-3">Tým</th>
-                      <th class="px-3 py-3 text-center tabular-nums">FLAG</th>
-                      <th class="px-3 py-3 text-center tabular-nums">SACK</th>
-                      <th class="px-3 py-3 text-center tabular-nums">INT</th>
-                      <th class="px-3 py-3 text-center tabular-nums">BRKUP</th>
+                      <th class="py-3" data-sort="text" data-sort-col="1">Hráč</th>
+                      <th class="py-3" data-sort="text" data-sort-col="2">Tým</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">FLAG</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">SACK</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">INT</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">BRKUP</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-stone">
                     {players.db.map((p, i) => (
                       <tr>
-                        <td class="px-5 py-2.5"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
-                        <td class="py-2.5"><div class="flex items-center gap-2.5">{p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}<div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div></div></td>
-                        <td class="py-2.5 text-[12px] text-graphite">{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
-                        <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink">{p.dbFlagPull}</td>
-                        <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${secondary}`}>{p.dbSack}</td>
-                        <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink">{p.dbInt}</td>
-                        <td class="px-3 py-2.5 text-center tabular-nums text-graphite">{p.dbBrkup}</td>
+                        <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
+                        <td class="py-2.5" data-sort-value={p.name}><div class="flex items-center gap-2.5">{p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}<div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div></div></td>
+                        <td class="py-2.5 text-[12px] text-graphite" data-sort-value={`${p.clubName} ${p.teamName}`}>{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
+                        <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.dbFlagPull}>{p.dbFlagPull}</td>
+                        <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${secondary}`} data-sort-value={p.dbSack}>{p.dbSack}</td>
+                        <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.dbInt}>{p.dbInt}</td>
+                        <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.dbBrkup}>{p.dbBrkup}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -451,6 +451,8 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
             )}
           </div>
         )}
+
+        <p class="mt-3 text-[11px] text-stone-2">Tip: klikni na hlavičku sloupce a seřaď tabulku podle této hodnoty. Druhý klik otočí pořadí.</p>
       </div>
     )}
 
@@ -693,4 +695,148 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
       </div>
     </div>
   </section>
+
+  <!-- Sortable tables: click-to-sort script (Iter 9f) -->
+  <style is:global>
+    .sortable-table thead th[data-sort] {
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      transition: background-color 0.12s;
+    }
+    .sortable-table thead th[data-sort]:hover {
+      background-color: rgba(15, 27, 45, 0.06);
+    }
+    .sortable-table thead th[data-sort] .sort-icon {
+      display: inline-block;
+      margin-left: 4px;
+      font-size: 9px;
+      opacity: 0.85;
+    }
+    .sortable-table thead th[data-sort]:not(.is-active) .sort-icon {
+      opacity: 0.25;
+    }
+    .sortable-table thead th.is-active {
+      color: #0F1B2D;
+    }
+  </style>
+
+  <script is:inline>
+    (function () {
+      function getCellSortValue(row, colIdx, type) {
+        var cell = row.children[colIdx];
+        if (!cell) return type === 'numeric' ? 0 : '';
+        var raw = cell.getAttribute('data-sort-value');
+        if (raw === null) raw = cell.textContent || '';
+        raw = String(raw).trim();
+        if (type === 'numeric') {
+          var n = parseFloat(raw.replace(/[^\d.\-]/g, ''));
+          return isNaN(n) ? 0 : n;
+        }
+        return raw;
+      }
+
+      function applySort(table, colIdx, type, dir) {
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        var accent = table.getAttribute('data-accent') || '#E63946';
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+        rows.sort(function (a, b) {
+          var av = getCellSortValue(a, colIdx, type);
+          var bv = getCellSortValue(b, colIdx, type);
+          if (type === 'numeric') {
+            return dir === 'desc' ? bv - av : av - bv;
+          }
+          return dir === 'desc'
+            ? String(bv).localeCompare(String(av), 'cs')
+            : String(av).localeCompare(String(bv), 'cs');
+        });
+        rows.forEach(function (r, idx) {
+          tbody.appendChild(r);
+          var rankCell = r.querySelector('td.rank-cell span');
+          if (rankCell) {
+            rankCell.textContent = String(idx + 1);
+            if (idx === 0) {
+              rankCell.className = 'inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums text-white';
+              rankCell.style.backgroundColor = accent;
+            } else {
+              rankCell.className = 'inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums bg-mist text-graphite';
+              rankCell.style.backgroundColor = '';
+            }
+          }
+        });
+        // Update icons
+        var ths = table.querySelectorAll('thead th[data-sort]');
+        ths.forEach(function (th) {
+          var existing = th.querySelector('.sort-icon');
+          if (existing) existing.remove();
+          th.classList.remove('is-active');
+          var thCol = parseInt(th.getAttribute('data-sort-col'), 10);
+          var icon = document.createElement('span');
+          icon.className = 'sort-icon';
+          if (thCol === colIdx) {
+            th.classList.add('is-active');
+            icon.textContent = dir === 'desc' ? '▼' : '▲';
+          } else {
+            icon.textContent = '↕';
+          }
+          th.appendChild(icon);
+        });
+      }
+
+      function initTable(table) {
+        var ths = table.querySelectorAll('thead th[data-sort]');
+        var state = { col: null, dir: 'desc' };
+
+        // Initial idle icons
+        ths.forEach(function (th) {
+          var icon = document.createElement('span');
+          icon.className = 'sort-icon';
+          icon.textContent = '↕';
+          th.appendChild(icon);
+        });
+
+        ths.forEach(function (th) {
+          th.addEventListener('click', function () {
+            var col = parseInt(th.getAttribute('data-sort-col'), 10);
+            var type = th.getAttribute('data-sort');
+            var dir;
+            if (state.col === col) {
+              dir = state.dir === 'desc' ? 'asc' : 'desc';
+            } else {
+              // numeric defaults desc, text defaults asc
+              dir = type === 'numeric' ? 'desc' : 'asc';
+            }
+            state = { col: col, dir: dir };
+            applySort(table, col, type, dir);
+          });
+        });
+
+        // Mark default sort column as active (server-side already sorted)
+        var defCol = parseInt(table.getAttribute('data-default-sort'), 10);
+        var defDir = table.getAttribute('data-default-dir') || 'desc';
+        if (!isNaN(defCol)) {
+          state = { col: defCol, dir: defDir };
+          ths.forEach(function (th) {
+            var thCol = parseInt(th.getAttribute('data-sort-col'), 10);
+            if (thCol === defCol) {
+              th.classList.add('is-active');
+              var icon = th.querySelector('.sort-icon');
+              if (icon) icon.textContent = defDir === 'desc' ? '▼' : '▲';
+            }
+          });
+        }
+      }
+
+      function init() {
+        document.querySelectorAll('table.sortable-table').forEach(initTable);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
 </BaseLayout>
