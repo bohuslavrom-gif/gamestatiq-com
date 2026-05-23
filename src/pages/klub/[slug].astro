@@ -1,0 +1,358 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { fetchClubBySlug, fetchClubTeamStats } from '../../lib/club-public';
+
+export const prerender = false;
+
+const slug = Astro.params.slug;
+if (!slug) return Astro.redirect('/');
+
+const shell = await fetchClubBySlug(slug);
+if (!shell) return Astro.redirect('/');
+
+const { club, teams } = shell;
+
+const url = new URL(Astro.request.url);
+const teamParam = url.searchParams.get('team') ?? '';
+
+// Resolve selected team — by team.name (matches Bobcats GAS convention) or first team
+const selectedTeam = teams.find((t) => t.name === teamParam) ?? teams[0] ?? null;
+
+const stats = selectedTeam ? await fetchClubTeamStats(selectedTeam) : null;
+
+const accent = club.primaryColor || '#DC1F26';
+const accentDark = '#501313';
+
+const recordVal = stats
+  ? (stats.record.ties > 0
+      ? `${stats.record.wins}–${stats.record.losses}–${stats.record.ties}`
+      : `${stats.record.wins}–${stats.record.losses}`)
+  : '0–0';
+
+const pageTitle = `${club.name} · statistiky · GameStatiq`;
+const pageDesc = selectedTeam
+  ? `Statistiky týmu ${club.name} ${selectedTeam.name} v sezóně 2026. Skóre, hráči, zápasy.`
+  : `Statistiky klubu ${club.name}.`;
+
+function initials(name: string): string {
+  return name.split(/\s+/).map((s) => s[0] ?? '').join('').slice(0, 2).toUpperCase() || '?';
+}
+
+function formatDateCz(s: string): string {
+  if (!s) return '—';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return s;
+  return d.toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric', year: 'numeric' });
+}
+
+const tdsByPlayer = stats?.tdsByPlayer ?? [];
+const maxTd = Math.max(1, ...tdsByPlayer.map((p) => p.td));
+---
+
+<BaseLayout title={pageTitle} description={pageDesc}>
+  <main class="min-h-screen bg-[#F8F8F7] py-4 sm:py-6">
+    <div class="mx-auto max-w-[980px] px-4">
+
+      <!-- PM brand bar -->
+      <div class="mb-3 flex items-center justify-between rounded-xl bg-[#0F1B2D] px-4 py-2.5 text-white">
+        <a href="/" class="inline-flex items-center gap-2.5 hover:opacity-90">
+          <img src="/brand/gamestatiq-logo-horizontal-white.svg" alt="GameStatiq" class="h-[22px] w-auto" />
+        </a>
+        <span class="hidden text-[11px] font-medium uppercase tracking-[0.1em] text-white/60 sm:inline">Measure every play</span>
+      </div>
+
+      <!-- Hero -->
+      <header class="relative mb-4 flex flex-wrap items-center justify-between gap-4 overflow-hidden rounded-xl bg-[#1A1A1A] px-5 py-5 text-white sm:px-7 sm:py-6">
+        <div class="absolute inset-x-0 bottom-0 h-[5px]" style={`background:${accent}`}></div>
+        <div class="flex items-center gap-4">
+          <div class="h-12 w-12 flex-shrink-0 sm:h-14 sm:w-14">
+            {club.logoUrl ? (
+              <img src={club.logoUrl} alt={`${club.name} logo`} class="h-full w-full object-contain brightness-0 invert" />
+            ) : (
+              <span class="flex h-full w-full items-center justify-center rounded-lg bg-white/10 font-bold uppercase text-white">
+                {club.name.slice(0, 2)}
+              </span>
+            )}
+          </div>
+          <div>
+            <div class="font-['Bebas_Neue'] text-[32px] leading-none tracking-[0.06em] sm:text-[38px]">
+              <span style={`color:${accent}`}>{club.name.slice(0, 3).toUpperCase()}</span>{club.name.slice(3).toUpperCase()}
+            </div>
+            <div class="mt-1 text-[11px] uppercase tracking-[0.1em] text-white/65">
+              Sezóna 2026 · {selectedTeam?.name ?? 'Statistiky'}
+            </div>
+          </div>
+        </div>
+
+        {teams.length > 1 && (
+          <form method="GET" class="flex items-center">
+            <select
+              name="team"
+              onchange="this.form.submit()"
+              class="cursor-pointer appearance-none rounded-lg border border-white/20 bg-white/10 px-3 py-2 pr-8 text-[13px] font-medium text-white outline-none hover:bg-white/15"
+              style="background-image: url(&quot;data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='white' d='M0 0l5 6 5-6z'/></svg>&quot;); background-repeat: no-repeat; background-position: right 10px center;"
+            >
+              {teams.map((t) => (
+                <option value={t.name} selected={t.name === selectedTeam?.name}>{t.name}</option>
+              ))}
+            </select>
+          </form>
+        )}
+      </header>
+
+      {!stats || stats.record.matches === 0 ? (
+        <div class="rounded-xl border border-black/10 bg-white p-10 text-center text-[14px] text-[#5F5E5A]">
+          <span class="mb-2 block text-[32px] opacity-40">📊</span>
+          Pro tento tým zatím nejsou žádná data.
+        </div>
+      ) : (
+        <>
+          <!-- Metriky -->
+          <div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div class="relative overflow-hidden rounded-lg border border-black/10 bg-white px-4 py-3.5">
+              <span class="absolute left-0 top-0 bottom-0 w-[3px]" style={`background:${accent}`}></span>
+              <div class="text-[11px] uppercase tracking-[0.06em] text-[#5F5E5A]">Bilance</div>
+              <div class="mt-0.5 font-['Bebas_Neue'] text-[32px] leading-[1.05] tracking-[0.02em] tabular-nums">{recordVal}</div>
+              <div class="mt-0.5 text-[11px] text-[#888780]">W — L{stats.record.ties > 0 ? ' — T' : ''}</div>
+            </div>
+            <div class="relative overflow-hidden rounded-lg border border-black/10 bg-white px-4 py-3.5">
+              <span class="absolute left-0 top-0 bottom-0 w-[3px]" style={`background:${accent}`}></span>
+              <div class="text-[11px] uppercase tracking-[0.06em] text-[#5F5E5A]">Body skórované</div>
+              <div class="mt-0.5 font-['Bebas_Neue'] text-[32px] leading-[1.05] tracking-[0.02em] tabular-nums">{stats.points.for}</div>
+              <div class="mt-0.5 text-[11px] text-[#888780]">{stats.points.forAvg} / zápas</div>
+            </div>
+            <div class="rounded-lg border border-black/10 bg-white px-4 py-3.5">
+              <div class="text-[11px] uppercase tracking-[0.06em] text-[#5F5E5A]">Body obdržené</div>
+              <div class="mt-0.5 font-['Bebas_Neue'] text-[32px] leading-[1.05] tracking-[0.02em] tabular-nums">{stats.points.against}</div>
+              <div class="mt-0.5 text-[11px] text-[#888780]">{stats.points.againstAvg} / zápas</div>
+            </div>
+            <div class="rounded-lg border border-black/10 bg-white px-4 py-3.5">
+              <div class="text-[11px] uppercase tracking-[0.06em] text-[#5F5E5A]">Zápasů</div>
+              <div class="mt-0.5 font-['Bebas_Neue'] text-[32px] leading-[1.05] tracking-[0.02em] tabular-nums">{stats.record.matches}</div>
+              <div class="mt-0.5 text-[11px] text-[#888780]">v sezóně</div>
+            </div>
+          </div>
+
+          <!-- QB tabulka -->
+          {stats.qbStats.length > 0 && (
+            <div class="mt-4 rounded-xl border border-black/10 bg-white px-5 py-4">
+              <div class="mb-3 flex items-baseline justify-between">
+                <h3 class="m-0 font-['Bebas_Neue'] text-[22px] tracking-[0.04em]">Quarterback</h3>
+                <span class="text-[11px] uppercase tracking-[0.06em] text-[#888780]">passing stats</span>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full border-collapse text-[13px]">
+                  <thead>
+                    <tr class="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-[#888780]">
+                      <th class="border-b border-black/10 px-1.5 py-2"></th>
+                      <th class="border-b border-black/10 px-1.5 py-2">Hráč</th>
+                      <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">ATT</th>
+                      <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">COMP</th>
+                      <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">TD</th>
+                      <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">INT</th>
+                      <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">YDS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.qbStats.map((p, i) => (
+                      <tr>
+                        <td class="border-b border-black/10 px-1.5 py-2.5">
+                          <span class={`font-['Bebas_Neue'] text-[18px] ${i === 0 ? '' : 'text-[#888780]'}`} style={i === 0 ? `color:${accent}` : ''}>{i + 1}</span>
+                        </td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5">
+                          <div class="flex items-center gap-2.5">
+                            {p.photoUrl ? (
+                              <img src={p.photoUrl} alt="" class="h-8 w-8 flex-shrink-0 rounded-full object-cover" loading="lazy" />
+                            ) : (
+                              <span class={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-medium ${i % 2 === 0 ? '' : 'bg-[#1A1A1A] text-white'}`} style={i % 2 === 0 ? `background:#FCEBEB;color:${accentDark}` : ''}>
+                                {initials(p.name)}
+                              </span>
+                            )}
+                            <div>
+                              <div class="font-medium">{p.name}</div>
+                              <div class="text-[11px] text-[#888780]">QB{p.jersey != null ? ` · #${p.jersey}` : ''}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.att}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.comp}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.td}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.int}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.yds}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <!-- WR tabulka -->
+          {stats.wrStats.length > 0 && (
+            <div class="mt-4 rounded-xl border border-black/10 bg-white px-5 py-4">
+              <div class="mb-3 flex items-baseline justify-between">
+                <h3 class="m-0 font-['Bebas_Neue'] text-[22px] tracking-[0.04em]">Wide Receiver</h3>
+                <span class="text-[11px] uppercase tracking-[0.06em] text-[#888780]">receiving stats</span>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full border-collapse text-[13px]">
+                  <thead>
+                    <tr class="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-[#888780]">
+                      <th class="border-b border-black/10 px-1.5 py-2"></th>
+                      <th class="border-b border-black/10 px-1.5 py-2">Hráč</th>
+                      <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">TD</th>
+                      <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">ATT</th>
+                      <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">REC</th>
+                      <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">%</th>
+                      <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">YDS</th>
+                      <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">PTS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.wrStats.map((p, i) => {
+                      const pct = p.targets > 0 ? Math.round((p.rec / p.targets) * 100) + '%' : '—';
+                      return (
+                        <tr>
+                          <td class="border-b border-black/10 px-1.5 py-2.5">
+                            <span class={`font-['Bebas_Neue'] text-[18px] ${i === 0 ? '' : 'text-[#888780]'}`} style={i === 0 ? `color:${accent}` : ''}>{i + 1}</span>
+                          </td>
+                          <td class="border-b border-black/10 px-1.5 py-2.5">
+                            <div class="flex items-center gap-2.5">
+                              {p.photoUrl ? (
+                                <img src={p.photoUrl} alt="" class="h-8 w-8 flex-shrink-0 rounded-full object-cover" loading="lazy" />
+                              ) : (
+                                <span class={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-medium ${i % 2 === 0 ? '' : 'bg-[#1A1A1A] text-white'}`} style={i % 2 === 0 ? `background:#FCEBEB;color:${accentDark}` : ''}>
+                                  {initials(p.name)}
+                                </span>
+                              )}
+                              <div>
+                                <div class="font-medium">{p.name}</div>
+                                <div class="text-[11px] text-[#888780]">WR{p.jersey != null ? ` · #${p.jersey}` : ''}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.td}</td>
+                          <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.targets}</td>
+                          <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.rec}</td>
+                          <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{pct}</td>
+                          <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.yds}</td>
+                          <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.pts}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <!-- Grid 2: Touchdowny chart + Defense -->
+          <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            <!-- Touchdowny -->
+            <div class="rounded-xl border border-black/10 bg-white px-5 py-4">
+              <div class="mb-3 flex items-baseline justify-between">
+                <h3 class="m-0 font-['Bebas_Neue'] text-[22px] tracking-[0.04em]">Touchdowny</h3>
+                <span class="text-[11px] uppercase tracking-[0.06em] text-[#888780]">{stats.record.matches} zápasů</span>
+              </div>
+              {tdsByPlayer.length === 0 ? (
+                <div class="py-10 text-center text-[13px] text-[#5F5E5A]">Žádné touchdowny.</div>
+              ) : (
+                <div class="space-y-2.5">
+                  {tdsByPlayer.map((p) => {
+                    const widthPct = Math.round((p.td / maxTd) * 100);
+                    const firstName = p.name.split(' ')[0] ?? p.name;
+                    return (
+                      <div class="flex items-center gap-3">
+                        <div class="w-16 truncate text-[12px] text-[#5F5E5A]">{firstName}</div>
+                        <div class="relative h-6 flex-1 rounded bg-[#F1EFE8]">
+                          <div class="h-full rounded transition-all" style={`width:${widthPct}%;background:${accent}`}></div>
+                          <span class="absolute right-1.5 top-0 flex h-full items-center text-[11px] font-semibold tabular-nums text-white" style={widthPct < 15 ? 'color:#1A1A1A' : ''}>{p.td}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <!-- Defense -->
+            <div class="rounded-xl border border-black/10 bg-white px-5 py-4">
+              <div class="mb-3 flex items-baseline justify-between">
+                <h3 class="m-0 font-['Bebas_Neue'] text-[22px] tracking-[0.04em]">Defense</h3>
+                <span class="text-[11px] uppercase tracking-[0.06em] text-[#888780]">FP / SACK / BU / INT</span>
+              </div>
+              {stats.defenseLeaders.length === 0 ? (
+                <div class="py-10 text-center text-[13px] text-[#5F5E5A]">Žádné defenzivní statistiky.</div>
+              ) : (
+                <div class="overflow-x-auto">
+                  <table class="w-full border-collapse text-[13px]">
+                    <thead>
+                      <tr class="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-[#888780]">
+                        <th class="border-b border-black/10 px-1.5 py-2">Hráč</th>
+                        <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">FP</th>
+                        <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">SACK</th>
+                        <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">BU</th>
+                        <th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">INT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.defenseLeaders.map((p, i) => (
+                        <tr>
+                          <td class="border-b border-black/10 px-1.5 py-2.5">
+                            <div class="flex items-center gap-2.5">
+                              {p.photoUrl ? (
+                                <img src={p.photoUrl} alt="" class="h-7 w-7 flex-shrink-0 rounded-full object-cover" loading="lazy" />
+                              ) : (
+                                <span class={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${i % 2 === 0 ? '' : 'bg-[#1A1A1A] text-white'}`} style={i % 2 === 0 ? `background:#FCEBEB;color:${accentDark}` : ''}>
+                                  {initials(p.name)}
+                                </span>
+                              )}
+                              <span class="font-medium">{p.name}</span>
+                              <span class="ml-1 rounded bg-[#F1EFE8] px-1.5 py-px text-[10px] font-medium text-[#5F5E5A]">DB</span>
+                            </div>
+                          </td>
+                          <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.flagPull}</td>
+                          <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.sack}</td>
+                          <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.brkup}</td>
+                          <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.int}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <!-- Recent matches -->
+          {stats.recentMatches.length > 0 && (
+            <div class="mt-4 rounded-xl border border-black/10 bg-white px-5 py-4">
+              <div class="mb-3 flex items-baseline justify-between">
+                <h3 class="m-0 font-['Bebas_Neue'] text-[22px] tracking-[0.04em]">Poslední zápasy</h3>
+                <span class="text-[11px] uppercase tracking-[0.06em] text-[#888780]">posledních {stats.recentMatches.length}</span>
+              </div>
+              {stats.recentMatches.map((m, i) => (
+                <div class={`grid grid-cols-[1fr_50px_50px_80px] items-center py-2.5 text-[13px] ${i < stats.recentMatches.length - 1 ? 'border-b border-black/10' : ''}`}>
+                  <span class="truncate">{formatDateCz(m.date)} · {m.opponent}</span>
+                  <span class="text-center font-medium tabular-nums">{m.ourScore}</span>
+                  <span class="text-center font-medium tabular-nums">{m.oppScore}</span>
+                  <span class="text-right">
+                    {m.result === 'W' ? (
+                      <span class="inline-block rounded px-2 py-[3px] text-[10px] font-medium uppercase tracking-[0.06em] text-white" style={`background:${accent}`}>Výhra</span>
+                    ) : (
+                      <span class="inline-block rounded bg-[#F1EFE8] px-2 py-[3px] text-[10px] font-medium uppercase tracking-[0.06em] text-[#5F5E5A]">{m.result === 'L' ? 'Prohra' : 'Remíza'}</span>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      <footer class="mt-6 py-4 text-center text-[11px] uppercase tracking-[0.05em] text-[#888780]">
+        {club.name} stats · powered by <a href="/" class="font-semibold text-[#1A1A1A] hover:opacity-70">GameStatiq</a>
+      </footer>
+    </div>
+  </main>
+</BaseLayout>
