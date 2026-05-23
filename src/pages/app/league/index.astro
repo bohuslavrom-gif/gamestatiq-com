@@ -99,6 +99,74 @@ const statusLabel: Record<string, string> = {
     </div>
   </div>
 
+  <!-- Public stránka card -->
+  <div class="mt-6 rounded-xl border border-stone bg-pearl p-5 lg:p-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex h-7 w-7 items-center justify-center rounded-md bg-sky/15 text-sky">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          </span>
+          <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Veřejná stránka ligy</p>
+          <span class="rounded bg-verde/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#1B6E62]">Live</span>
+        </div>
+        <p class="mt-2 text-[12px] text-slate">Sdílejte tento odkaz s fanoušky, novináři a sponzory. Stránka je veřejná, bez přihlášení, vždy aktuální.</p>
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <code id="public-url-display" class="flex-1 min-w-0 truncate rounded-lg border border-stone bg-mist px-3 py-2 text-[12px] font-mono text-ink">https://gamestatiq.com/liga/{league.slug}</code>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          id="public-url-copy"
+          type="button"
+          data-url={`https://gamestatiq.com/liga/${league.slug}`}
+          class="rounded-lg border border-stone bg-pearl px-3 py-2 text-[12px] font-medium text-graphite hover:bg-mist"
+        >
+          📋 Kopírovat
+        </button>
+        <a
+          href={`/liga/${league.slug}`}
+          target="_blank"
+          rel="noopener"
+          class="rounded-lg bg-sky px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#5A9FCC]"
+        >
+          Otevřít ↗
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script is:inline>
+    (function () {
+      var btn = document.getElementById('public-url-copy');
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        var url = btn.getAttribute('data-url') || '';
+        var done = function () {
+          var orig = btn.innerHTML;
+          btn.innerHTML = '✓ Zkopírováno';
+          btn.classList.add('text-verde');
+          setTimeout(function () {
+            btn.innerHTML = orig;
+            btn.classList.remove('text-verde');
+          }, 1800);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(done).catch(function () {
+            // fallback
+            var ta = document.createElement('textarea');
+            ta.value = url;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); } catch (e) {}
+            document.body.removeChild(ta);
+            done();
+          });
+        }
+      });
+    })();
+  </script>
+
   <!-- Participating teams -->
   <div class="mt-6 rounded-xl border border-stone bg-pearl">
     <div class="flex items-center justify-between border-b border-stone px-5 py-4">
