@@ -9,6 +9,8 @@ const NUMERIC_FIELDS = [
   'off_drives', 'off_td',
   'qb_att', 'qb_comp', 'qb_td', 'qb_int', 'qb_yds',
   'xp1_att', 'xp1_ok', 'xp2_att', 'xp2_ok',
+  // Iter 24: soupeřovy XP konverze
+  'opp_xp1_att', 'opp_xp1_ok', 'opp_xp2_att', 'opp_xp2_ok',
   'def_drives', 'def_stops',
   'opp_rush_yds', 'opp_pass_yds', 'opp_total_yds',
   'pen_count', 'pen_yds',
