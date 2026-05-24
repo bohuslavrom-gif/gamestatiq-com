@@ -38,6 +38,11 @@ type MatchRow = {
   xp1_ok: number | null;
   xp2_att: number | null;
   xp2_ok: number | null;
+  // Iter 22: soupeřovy XP konverze (defense — kolik jsme ubránili)
+  opp_xp1_att: number | null;
+  opp_xp1_ok: number | null;
+  opp_xp2_att: number | null;
+  opp_xp2_ok: number | null;
   def_drives: number | null;
   def_stops: number | null;
   opp_rush_yds: number | null;
@@ -597,6 +602,11 @@ function aggregateTotals(matches: MatchRow[]): { off: OffSnapshot; def: DefSnaps
 
   const defDrives = sum('def_drives');
   const defStops  = sum('def_stops');
+  // Iter 22: soupeřovy XP konverze
+  const oppXp1Att = sum('opp_xp1_att');
+  const oppXp1Ok  = sum('opp_xp1_ok');
+  const oppXp2Att = sum('opp_xp2_att');
+  const oppXp2Ok  = sum('opp_xp2_ok');
   const def: DefSnapshot = {
     pointsAgainst: sum('opp_score'),
     pointsAvg: N > 0 ? sum('opp_score') / N : 0,
@@ -606,6 +616,11 @@ function aggregateTotals(matches: MatchRow[]): { off: OffSnapshot; def: DefSnaps
     rushYds: sum('opp_rush_yds'),
     passYds: sum('opp_pass_yds'),
     totalYds: sum('opp_total_yds'),
+    // Iter 22
+    oppXp1Att, oppXp1Ok,
+    oppXp1Pct: oppXp1Att > 0 ? oppXp1Ok / oppXp1Att : 0,
+    oppXp2Att, oppXp2Ok,
+    oppXp2Pct: oppXp2Att > 0 ? oppXp2Ok / oppXp2Att : 0,
   };
 
   const fauly = { count: sum('pen_count'), yds: sum('pen_yds') };

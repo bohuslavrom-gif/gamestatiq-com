@@ -78,6 +78,9 @@ export type DefSnapshot = {
   pointsAgainst?: number; pointsAvg?: number;
   drives?: number; stops?: number; stopPct?: number;
   rushYds?: number; passYds?: number; totalYds?: number;
+  // Iter 22: soupeřovy XP konverze (kolik jsme ubránili)
+  oppXp1Att?: number; oppXp1Ok?: number; oppXp1Pct?: number;
+  oppXp2Att?: number; oppXp2Ok?: number; oppXp2Pct?: number;
 };
 
 export type CoachStats = {

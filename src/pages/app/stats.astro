@@ -81,6 +81,48 @@ const off: OffSnapshot = selectedMatch
 type SourceUsed = 'supabase' | null;
 const sourceForcedTo: 'supabase' = 'supabase';
 
+// Iter 22: defenzivní snapshot (scope-aware — single match nebo sezóna)
+type DefSnapshotScoped = {
+  pointsAgainst: number;
+  drives: number;
+  stops: number;
+  rushYds: number;
+  passYds: number;
+  totalYds: number;
+  oppXp1Att: number;
+  oppXp1Ok: number;
+  oppXp2Att: number;
+  oppXp2Ok: number;
+};
+const def: DefSnapshotScoped = selectedMatch
+  ? {
+      pointsAgainst: selectedMatch.oppScore ?? 0,
+      drives:        (selectedMatch as any).defDrives ?? 0,
+      stops:         (selectedMatch as any).defStops ?? 0,
+      rushYds:       (selectedMatch as any).oppRushYds ?? 0,
+      passYds:       (selectedMatch as any).oppPassYds ?? 0,
+      totalYds:      (selectedMatch as any).oppTotalYds ?? 0,
+      oppXp1Att:     (selectedMatch as any).oppXp1Att ?? 0,
+      oppXp1Ok:      (selectedMatch as any).oppXp1Ok ?? 0,
+      oppXp2Att:     (selectedMatch as any).oppXp2Att ?? 0,
+      oppXp2Ok:      (selectedMatch as any).oppXp2Ok ?? 0,
+    }
+  : {
+      pointsAgainst: supabaseCoach?.totals.def?.pointsAgainst ?? 0,
+      drives:        supabaseCoach?.totals.def?.drives ?? 0,
+      stops:         supabaseCoach?.totals.def?.stops ?? 0,
+      rushYds:       supabaseCoach?.totals.def?.rushYds ?? 0,
+      passYds:       supabaseCoach?.totals.def?.passYds ?? 0,
+      totalYds:      supabaseCoach?.totals.def?.totalYds ?? 0,
+      oppXp1Att:     supabaseCoach?.totals.def?.oppXp1Att ?? 0,
+      oppXp1Ok:      supabaseCoach?.totals.def?.oppXp1Ok ?? 0,
+      oppXp2Att:     supabaseCoach?.totals.def?.oppXp2Att ?? 0,
+      oppXp2Ok:      supabaseCoach?.totals.def?.oppXp2Ok ?? 0,
+    };
+const defStopPct = def.drives > 0 ? Math.round((def.stops / def.drives) * 100) : 0;
+const oppXp1StopPct = def.oppXp1Att > 0 ? Math.round(((def.oppXp1Att - def.oppXp1Ok) / def.oppXp1Att) * 100) : 0;
+const oppXp2StopPct = def.oppXp2Att > 0 ? Math.round(((def.oppXp2Att - def.oppXp2Ok) / def.oppXp2Att) * 100) : 0;
+
 const downDistGas      = coach?.totals.downDist;
 const downDistSupabase = supabaseCoach?.totals.downDist;
 const downDistGasHas      = !!downDistGas && Object.values(downDistGas).some((d: any) => (typeof d === 'object' ? d.total : d) > 0);
@@ -494,6 +536,60 @@ const tabs = [
             <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">QB INT</p>
             <p class="mt-2 text-[32px] font-bold tabular-nums tracking-tight-3 text-ink">{off.qbINT ?? 0}</p>
             <p class="mt-1 text-[11px] text-graphite">interceptions</p>
+          </div>
+        </div>
+
+        {/* ═════════════ Iter 22: Defense KPIs ═════════════ */}
+        <div class="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="rounded-xl border-l-4 border-sky border-y border-r border-stone bg-pearl p-5">
+            <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Body obdržené</p>
+            <p class="mt-2 text-[32px] font-bold tabular-nums tracking-tight-3 text-ink">{def.pointsAgainst}</p>
+            <p class="mt-1 text-[11px] text-graphite">{isSingleMatch ? 'v zápase' : `${(def.pointsAgainst / Math.max(1, supabaseCoach?.matchCount ?? 1)).toFixed(1)} / zápas`}</p>
+          </div>
+          <div class="rounded-xl border border-stone bg-pearl p-5">
+            <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Ubráněné drives</p>
+            <div class="mt-2 flex items-baseline gap-1.5">
+              <span class="text-[32px] font-bold tabular-nums tracking-tight-3 text-ink">{def.stops}</span>
+              <span class="text-[14px] text-stone-2">/ {def.drives}</span>
+              <span class="ml-2 text-[16px] font-bold tabular-nums text-sky">{defStopPct}%</span>
+            </div>
+            <p class="mt-1 text-[11px] text-graphite">stops / total def drives</p>
+          </div>
+          <div class="rounded-xl border border-stone bg-pearl p-5">
+            <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Obdrž. pass yardů</p>
+            <p class="mt-2 text-[32px] font-bold tabular-nums tracking-tight-3 text-ink">{def.passYds}</p>
+            <p class="mt-1 text-[11px] text-graphite">soupeř přihrávkou</p>
+          </div>
+          <div class="rounded-xl border border-stone bg-pearl p-5">
+            <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Obdrž. rush yardů</p>
+            <p class="mt-2 text-[32px] font-bold tabular-nums tracking-tight-3 text-ink">{def.rushYds}</p>
+            <p class="mt-1 text-[11px] text-graphite">soupeř naběhal</p>
+          </div>
+        </div>
+
+        <div class="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div class="rounded-xl border border-stone bg-pearl p-5">
+            <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Celkem obdrž. yardů</p>
+            <p class="mt-2 text-[32px] font-bold tabular-nums tracking-tight-3 text-ink">{def.totalYds}</p>
+            <p class="mt-1 text-[11px] text-graphite">soupeřův offense</p>
+          </div>
+          <div class="rounded-xl border border-stone bg-pearl p-5">
+            <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Ubráněné 1PT</p>
+            <div class="mt-2 flex items-baseline gap-1.5">
+              <span class="text-[32px] font-bold tabular-nums tracking-tight-3 text-ink">{def.oppXp1Att - def.oppXp1Ok}</span>
+              <span class="text-[14px] text-stone-2">/ {def.oppXp1Att}</span>
+              <span class="ml-2 text-[16px] font-bold tabular-nums text-sky">{oppXp1StopPct}%</span>
+            </div>
+            <p class="mt-1 text-[11px] text-graphite">ubráněno / pokusů soupeře</p>
+          </div>
+          <div class="rounded-xl border border-stone bg-pearl p-5">
+            <p class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate">Ubráněné 2PT</p>
+            <div class="mt-2 flex items-baseline gap-1.5">
+              <span class="text-[32px] font-bold tabular-nums tracking-tight-3 text-ink">{def.oppXp2Att - def.oppXp2Ok}</span>
+              <span class="text-[14px] text-stone-2">/ {def.oppXp2Att}</span>
+              <span class="ml-2 text-[16px] font-bold tabular-nums text-sky">{oppXp2StopPct}%</span>
+            </div>
+            <p class="mt-1 text-[11px] text-graphite">ubráněno / pokusů soupeře</p>
           </div>
         </div>
       </div>
