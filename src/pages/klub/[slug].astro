@@ -124,7 +124,7 @@ const maxTd = Math.max(1, ...tdsByPlayer.map((p) => p.td));
                 style="background-image: url(&quot;data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='white' d='M0 0l5 6 5-6z'/></svg>&quot;); background-repeat: no-repeat; background-position: right 10px center;"
               >
                 {teams.map((t) => (
-                  <option value={t.name} selected={t.name === selectedTeam?.name}>{t.name}</option>
+                  <option value={t.name} selected={t.name === selectedTeam?.name} style="color:#1A1A1A;background:white">{t.name}</option>
                 ))}
               </select>
             </form>
@@ -138,9 +138,9 @@ const maxTd = Math.max(1, ...tdsByPlayer.map((p) => p.td));
                 class="cursor-pointer appearance-none rounded-lg border border-white/20 bg-white/10 px-3 py-2 pr-8 text-[13px] font-medium text-white outline-none hover:bg-white/15"
                 style="background-image: url(&quot;data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='white' d='M0 0l5 6 5-6z'/></svg>&quot;); background-repeat: no-repeat; background-position: right 10px center;"
               >
-                <option value="season" selected={!isMatchView}>Celá sezóna ({matchList.length})</option>
+                <option value="season" selected={!isMatchView} style="color:#1A1A1A;background:white">Celá sezóna ({matchList.length})</option>
                 {matchList.map((m) => (
-                  <option value={m.id} selected={m.id === matchParam}>
+                  <option value={m.id} selected={m.id === matchParam} style="color:#1A1A1A;background:white">
                     vs {shortOpponent(m.opponent)} · {formatDateCz(m.date)} · {m.ourScore}:{m.oppScore} {m.result}
                   </option>
                 ))}
