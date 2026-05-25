@@ -1,0 +1,76 @@
+---
+// Iter 34: Per-hráč stat řádek v match detail page.
+// Sdíleno mezi home tým + opp tým sekcemi (shared match v lize).
+interface Props {
+  row: any;
+  canEdit: boolean;
+  readOnly: boolean;
+}
+const { row, canEdit, readOnly } = Astro.props;
+const p = row.players ?? {};
+const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ') || '—';
+---
+
+<div id={`player-${row.player_id}`} class="px-5 py-4">
+  <!-- Header row OUTSIDE update form (remove form sits here, can't be nested) -->
+  <div class="mb-3 flex flex-wrap items-center gap-3">
+    <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-ink/5 text-[12px] font-semibold text-ink">#{p.jersey_number ?? '?'}</span>
+    <div class="min-w-0 flex-1">
+      <p class="text-[14px] font-semibold text-ink">{fullName}</p>
+      <p class="text-[11px] text-slate">{p.position ?? '—'}</p>
+    </div>
+    {canEdit && (
+      <form method="POST" action="/api/club/match/remove-player-stat" class="inline">
+        <input type="hidden" name="match_id" value={row.match_id} />
+        <input type="hidden" name="player_id" value={row.player_id} />
+        <button type="submit" class="rounded-md border border-stone bg-pearl px-2 py-1 text-[11px] font-medium text-graphite hover:border-signal/40 hover:text-signal" onclick="return confirm('Odebrat staty tohoto hráče z tohoto zápasu?')">Odebrat ze statistik</button>
+      </form>
+    )}
+  </div>
+
+  <form method="POST" action="/api/club/match/update-player-stat" class="space-y-3">
+    <input type="hidden" name="match_id" value={row.match_id} />
+    <input type="hidden" name="player_id" value={row.player_id} />
+
+    <div class="grid gap-2 sm:grid-cols-6">
+      {[
+        ['qb_att', 'QB ATT'], ['qb_comp', 'COMP'], ['qb_yds', 'YDS'],
+        ['qb_td', 'TD'], ['qb_int', 'INT'], ['qb_sack', 'SACK'],
+      ].map(([k, label]) => (
+        <label class="block">
+          <span class="text-[9px] uppercase tracking-wider text-stone-2">{label}</span>
+          <input type="number" min="0" name={k} value={row[k] ?? 0} readonly={readOnly} class="mt-0.5 block w-full rounded-md border border-stone bg-pearl px-2 py-1 text-[12px] tabular-nums" />
+        </label>
+      ))}
+    </div>
+
+    <div class="grid gap-2 sm:grid-cols-6">
+      {[
+        ['wr_targets', 'WR TARG'], ['wr_rec', 'REC'], ['wr_yds', 'YDS'],
+        ['wr_td', 'TD'], ['wr_xp', 'XP'], ['wr_pts', 'PTS'],
+      ].map(([k, label]) => (
+        <label class="block">
+          <span class="text-[9px] uppercase tracking-wider text-stone-2">{label}</span>
+          <input type="number" min="0" name={k} value={row[k] ?? 0} readonly={readOnly} class="mt-0.5 block w-full rounded-md border border-stone bg-pearl px-2 py-1 text-[12px] tabular-nums" />
+        </label>
+      ))}
+    </div>
+
+    <div class="grid gap-2 sm:grid-cols-4">
+      {[
+        ['db_flag_pull', 'FLAG'], ['db_sack', 'D SACK'],
+        ['db_int', 'INT'], ['db_brkup', 'BRKUP'],
+      ].map(([k, label]) => (
+        <label class="block">
+          <span class="text-[9px] uppercase tracking-wider text-stone-2">{label}</span>
+          <input type="number" min="0" name={k} value={row[k] ?? 0} readonly={readOnly} class="mt-0.5 block w-full rounded-md border border-stone bg-pearl px-2 py-1 text-[12px] tabular-nums" />
+        </label>
+      ))}
+      {canEdit && (
+        <div class="flex items-end">
+          <button type="submit" class="w-full rounded-md bg-signal px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#C8313D]">Uložit hráče</button>
+        </div>
+      )}
+    </div>
+  </form>
+</div>
