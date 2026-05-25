@@ -17,13 +17,24 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
 
   const admin = getSupabaseAdmin();
 
-  // Verify authorization: either league owner OR club admin can remove
+  // Verify authorization: league owner / league admin / club admin can remove
   let authorized = false;
 
   // Check league owner
   const { data: league } = await admin.from('leagues').select('owner_user_id').eq('id', leagueId).maybeSingle();
   if (league && (league as { owner_user_id: string }).owner_user_id === user.id) {
     authorized = true;
+  }
+
+  // Iter 40: league admin (přes league_members)
+  if (!authorized) {
+    const { data: lm } = await admin
+      .from('league_members')
+      .select('role')
+      .eq('league_id', leagueId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (lm && (lm as { role: string }).role === 'admin') authorized = true;
   }
 
   // Check club admin (if not already authorized)
@@ -41,7 +52,8 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
   }
 
   if (!authorized) {
-    return redirect(`/app?error=${encodeURIComponent('Bez oprávnění.')}`, 303);
+    // Vrátíme se na referrer s error (předtím šel na /app/?error= což se ztratilo)
+    return redirect(`/app/league/teams?error=${encodeURIComponent('Bez oprávnění — pro odebrání musíš být liga admin, vlastník ligy, nebo admin klubu.')}`, 303);
   }
 
   await admin
