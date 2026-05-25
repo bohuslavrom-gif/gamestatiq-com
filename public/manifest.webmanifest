@@ -1,14 +1,18 @@
 {
+  "id": "/app?utm_source=pwa",
   "name": "GameStatiq",
   "short_name": "GameStatiq",
   "description": "Sport stats platforma — měřte každou hru. Pro týmy, ligy a národní svazy.",
   "lang": "cs",
-  "start_url": "/app",
+  "dir": "ltr",
+  "start_url": "/app?utm_source=pwa",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "any",
   "background_color": "#0F1B2D",
   "theme_color": "#0F1B2D",
+  "prefer_related_applications": false,
   "categories": ["sports", "productivity"],
   "icons": [
     {
