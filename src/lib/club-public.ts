@@ -293,9 +293,13 @@ export async function fetchClubMatchList(teamId: string): Promise<ClubMatchLite[
 
 export type HeadToHeadMetric = {
   label: string;
+  /** Numeric value used for bar width (e.g. percent for ratios, raw for counts) */
   our: number;
   opp: number;
-  /** Optional formatter for display (e.g. percentage) */
+  /** Optional override display label (e.g. "5/8") — uses `our`/`opp` if not set */
+  ourDisplay?: string;
+  oppDisplay?: string;
+  /** Optional formatter for default display */
   format?: 'int' | 'yards' | 'percent';
   /** Higher value is better for us — drives color highlight */
   higherIsBetter?: boolean;
@@ -315,6 +319,9 @@ export type MatchHeadToHead = {
   ourClubName: string;
   ourLogoUrl: string | null;
   primaryColor: string;
+
+  // Iter 26: opp club's primary color (if found in clubs table, otherwise black)
+  oppColor: string;
 
   // Aggregated metrics for the diverging bar viz
   metrics: HeadToHeadMetric[];
@@ -366,7 +373,37 @@ export async function fetchClubMatchHeadToHead(
   // Compute opponent TD from score - their XP (since we don't track opp_td directly)
   const oppXp1Ok = match.opp_xp1_ok ?? 0;
   const oppXp2Ok = match.opp_xp2_ok ?? 0;
+  const oppXp1Att = match.opp_xp1_att ?? 0;
+  const oppXp2Att = match.opp_xp2_att ?? 0;
   const oppTd = Math.max(0, Math.floor((oppScore - oppXp1Ok - 2 * oppXp2Ok) / 6));
+
+  // Iter 26: lookup opponent's brand color via clubs.name match (fallback to black)
+  let oppColor = '#1A1A1A';
+  if (match.opponent) {
+    const { data: oppClub } = await admin
+      .from('clubs')
+      .select('primary_color')
+      .ilike('name', String(match.opponent).trim())
+      .maybeSingle();
+    if (oppClub && (oppClub as any).primary_color) {
+      oppColor = (oppClub as any).primary_color;
+    }
+  }
+
+  // Iter 26: helpers for ratio metrics — value used for bar width = percent (0-100)
+  const offTd = match.off_td ?? 0;
+  const offDrives = match.off_drives ?? 0;
+  const defDrives = match.def_drives ?? 0;
+  const xp1Ok = match.xp1_ok ?? 0;
+  const xp1Att = match.xp1_att ?? 0;
+  const xp2Ok = match.xp2_ok ?? 0;
+  const xp2Att = match.xp2_att ?? 0;
+
+  const pct = (ok: number, att: number) => att > 0 ? Math.round((ok / att) * 100) : 0;
+  const ratio = (ok: number, att: number) => `${ok}/${att}${att > 0 ? ` · ${Math.round((ok / att) * 100)}%` : ''}`;
+
+  const ourDrivePct = pct(offTd, offDrives);
+  const oppDrivePct = pct(oppTd, defDrives);
 
   // Build comparison metrics
   const metrics: HeadToHeadMetric[] = [
@@ -374,10 +411,28 @@ export async function fetchClubMatchHeadToHead(
     { label: 'Total yardů',      our: match.total_yds ?? 0,           opp: match.opp_total_yds ?? 0,       format: 'yards',  higherIsBetter: true },
     { label: 'Pass yardů',       our: match.pass_yds ?? 0,            opp: match.opp_pass_yds ?? 0,        format: 'yards',  higherIsBetter: true },
     { label: 'Rush yardů',       our: match.rush_yds ?? 0,            opp: match.opp_rush_yds ?? 0,        format: 'yards',  higherIsBetter: true },
-    { label: 'Touchdowny',       our: match.off_td ?? 0,              opp: oppTd,                          format: 'int',    higherIsBetter: true },
-    { label: '1PT konverze',     our: match.xp1_ok ?? 0,              opp: oppXp1Ok,                       format: 'int',    higherIsBetter: true },
-    { label: '2PT konverze',     our: match.xp2_ok ?? 0,              opp: oppXp2Ok,                       format: 'int',    higherIsBetter: true },
-    { label: 'Drives',           our: match.off_drives ?? 0,          opp: match.def_drives ?? 0,          format: 'int' },
+    { label: 'Touchdowny',       our: offTd,                          opp: oppTd,                          format: 'int',    higherIsBetter: true },
+    {
+      label: 'Úspěšnost drives',
+      our: ourDrivePct, opp: oppDrivePct,
+      ourDisplay: ratio(offTd, offDrives),
+      oppDisplay: ratio(oppTd, defDrives),
+      format: 'percent', higherIsBetter: true,
+    },
+    {
+      label: '1PT konverze',
+      our: pct(xp1Ok, xp1Att), opp: pct(oppXp1Ok, oppXp1Att),
+      ourDisplay: ratio(xp1Ok, xp1Att),
+      oppDisplay: ratio(oppXp1Ok, oppXp1Att),
+      format: 'percent', higherIsBetter: true,
+    },
+    {
+      label: '2PT konverze',
+      our: pct(xp2Ok, xp2Att), opp: pct(oppXp2Ok, oppXp2Att),
+      ourDisplay: ratio(xp2Ok, xp2Att),
+      oppDisplay: ratio(oppXp2Ok, oppXp2Att),
+      format: 'percent', higherIsBetter: true,
+    },
     { label: 'Fauly',            our: match.pen_count ?? 0,           opp: 0,                              format: 'int',    higherIsBetter: false },
     { label: 'Fauly · yardy',    our: match.pen_yds ?? 0,             opp: 0,                              format: 'yards',  higherIsBetter: false },
   ];
@@ -456,6 +511,7 @@ export async function fetchClubMatchHeadToHead(
     result: ourScore > oppScore ? 'W' : ourScore < oppScore ? 'L' : 'T',
     ourScore, oppScore,
     ourTeamName, ourClubName, ourLogoUrl, primaryColor,
+    oppColor,
     metrics,
     qbStats, wrStats, defenseLeaders,
   };

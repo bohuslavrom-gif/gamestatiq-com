@@ -169,7 +169,7 @@ const maxTd = Math.max(1, ...tdsByPlayer.map((p) => p.td));
               <div class="flex items-baseline gap-2">
                 <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight sm:text-[88px]" style={headToHead.result === 'W' ? `color:${accent}` : ''}>{headToHead.ourScore}</span>
                 <span class="text-[24px] text-white/40 sm:text-[36px]">:</span>
-                <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight text-white/70 sm:text-[88px]" style={headToHead.result === 'L' ? `color:${accent}` : ''}>{headToHead.oppScore}</span>
+                <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight text-white/70 sm:text-[88px]" style={headToHead.result === 'L' ? `color:${headToHead.oppColor}` : ''}>{headToHead.oppScore}</span>
               </div>
               <div class="flex items-center justify-end gap-3 sm:gap-4">
                 <div class="min-w-0 text-right">
@@ -195,29 +195,34 @@ const maxTd = Math.max(1, ...tdsByPlayer.map((p) => p.td));
             </div>
             <div class="space-y-3.5">
               {headToHead.metrics.map((m) => {
-                const total = Math.max(1, m.our + m.opp);
-                const ourPct = Math.round((m.our / total) * 100);
-                const oppPct = Math.round((m.opp / total) * 100);
+                // Bar width = relative share when both are counts; for percent metrics use absolute %
+                const total = m.format === 'percent' ? 100 : Math.max(1, m.our + m.opp);
+                const ourBar = m.format === 'percent' ? Math.min(100, m.our) : Math.round((m.our / total) * 100);
+                const oppBar = m.format === 'percent' ? Math.min(100, m.opp) : Math.round((m.opp / total) * 100);
                 const ourBetter = m.higherIsBetter === false ? m.our < m.opp : (m.our > m.opp && m.higherIsBetter !== false);
                 const oppBetter = m.higherIsBetter === false ? m.opp < m.our : (m.opp > m.our && m.higherIsBetter !== false);
+                const ourShown = m.ourDisplay ?? String(m.our);
+                const oppShown = m.oppDisplay ?? String(m.opp);
+                const ourYardSuffix = m.format === 'yards' && !m.ourDisplay;
+                const oppYardSuffix = m.format === 'yards' && !m.oppDisplay;
                 return (
                   <div>
-                    <div class="grid grid-cols-[80px_1fr_80px] items-center gap-3 sm:grid-cols-[100px_1fr_100px] sm:gap-4">
+                    <div class="grid grid-cols-[110px_1fr_110px] items-center gap-2 sm:grid-cols-[140px_1fr_140px] sm:gap-4">
                       <div class={`text-right tabular-nums ${ourBetter ? 'font-bold' : 'text-[#5F5E5A]'}`} style={ourBetter ? `color:${accent}` : ''}>
-                        <span class="text-[20px] sm:text-[24px]">{m.our}</span>
-                        {m.format === 'yards' && <span class="ml-1 text-[10px] text-[#888780]">yd</span>}
+                        <span class="text-[16px] sm:text-[18px]">{ourShown}</span>
+                        {ourYardSuffix && <span class="ml-1 text-[10px] text-[#888780]">yd</span>}
                       </div>
                       <div class="flex h-6 items-center overflow-hidden rounded-full bg-[#F1EFE8]">
                         <div class="flex h-full w-1/2 justify-end">
-                          <div class="h-full transition-all" style={`width:${ourPct}%;background:${ourBetter ? accent : '#888780'};opacity:${ourBetter ? 1 : 0.6}`}></div>
+                          <div class="h-full transition-all" style={`width:${ourBar}%;background:${ourBetter ? accent : '#888780'};opacity:${ourBetter ? 1 : 0.6}`}></div>
                         </div>
                         <div class="flex h-full w-1/2 justify-start">
-                          <div class="h-full transition-all" style={`width:${oppPct}%;background:${oppBetter ? '#1A1A1A' : '#888780'};opacity:${oppBetter ? 1 : 0.6}`}></div>
+                          <div class="h-full transition-all" style={`width:${oppBar}%;background:${oppBetter ? headToHead.oppColor : '#888780'};opacity:${oppBetter ? 1 : 0.6}`}></div>
                         </div>
                       </div>
-                      <div class={`text-left tabular-nums ${oppBetter ? 'font-bold text-[#1A1A1A]' : 'text-[#5F5E5A]'}`}>
-                        <span class="text-[20px] sm:text-[24px]">{m.opp}</span>
-                        {m.format === 'yards' && <span class="ml-1 text-[10px] text-[#888780]">yd</span>}
+                      <div class={`text-left tabular-nums ${oppBetter ? 'font-bold' : 'text-[#5F5E5A]'}`} style={oppBetter ? `color:${headToHead.oppColor}` : ''}>
+                        <span class="text-[16px] sm:text-[18px]">{oppShown}</span>
+                        {oppYardSuffix && <span class="ml-1 text-[10px] text-[#888780]">yd</span>}
                       </div>
                     </div>
                     <div class="mt-1 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-[#888780]">{m.label}</div>
@@ -229,7 +234,7 @@ const maxTd = Math.max(1, ...tdsByPlayer.map((p) => p.td));
               <span class="inline-block h-2 w-2 rounded-full align-middle" style={`background:${accent}`}></span>
               <span class="ml-1.5 align-middle">{headToHead.ourClubName}</span>
               <span class="mx-3 text-[#bbb]">vs</span>
-              <span class="inline-block h-2 w-2 rounded-full bg-[#1A1A1A] align-middle"></span>
+              <span class="inline-block h-2 w-2 rounded-full align-middle" style={`background:${headToHead.oppColor}`}></span>
               <span class="ml-1.5 align-middle">{headToHead.opponent}</span>
             </p>
           </div>
