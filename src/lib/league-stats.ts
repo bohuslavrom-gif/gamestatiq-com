@@ -38,7 +38,7 @@ export async function fetchLeagueRecentMatches(leagueId: string, limit = 10): Pr
   const orFilter = `team_id.in.(${teamIds.join(',')}),opp_team_id.in.(${teamIds.join(',')})`;
   const { data: matchesRaw } = await admin
     .from('matches')
-    .select('id, date, opponent, our_score, opp_score, team_id, opp_team_id, teams(name, club_id, clubs(name, logo_url)), opp_team:teams!matches_opp_team_id_fkey(name, club_id, clubs(name, logo_url))')
+    .select('id, date, opponent, our_score, opp_score, team_id, opp_team_id, teams!matches_team_id_fkey(name, club_id, clubs(name, logo_url)), opp_team:teams!matches_opp_team_id_fkey(name, club_id, clubs(name, logo_url))')
     .or(orFilter)
     .order('date', { ascending: false })
     .limit(limit);
@@ -629,7 +629,7 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
       qb_att, qb_comp, qb_td, qb_int, qb_yds,
       def_drives, def_stops,
       pen_count, pen_yds, opp_pen_count, opp_pen_yds,
-      teams(name, club_id, clubs(name)),
+      teams!matches_team_id_fkey(name, club_id, clubs(name)),
       opp_team:teams!matches_opp_team_id_fkey(name, club_id, clubs(name))
     `)
     .or(orFilter);
@@ -1098,7 +1098,7 @@ export async function fetchLeagueMatches(leagueId: string): Promise<LeagueMatchL
   const orFilter = `team_id.in.(${teamIds.join(',')}),opp_team_id.in.(${teamIds.join(',')})`;
   const { data: matchesRaw } = await admin
     .from('matches')
-    .select('id, date, opponent, our_score, opp_score, team_id, opp_team_id, teams(name, primary_color, club_id, clubs(name, logo_url)), opp_team:teams!matches_opp_team_id_fkey(name, primary_color, club_id, clubs(name, logo_url))')
+    .select('id, date, opponent, our_score, opp_score, team_id, opp_team_id, teams!matches_team_id_fkey(name, primary_color, club_id, clubs(name, logo_url)), opp_team:teams!matches_opp_team_id_fkey(name, primary_color, club_id, clubs(name, logo_url))')
     .or(orFilter)
     .order('date', { ascending: false });
 
@@ -1210,7 +1210,7 @@ export async function fetchMatchDetail(matchId: string, leagueId: string): Promi
       opp_pass_yds,
       def_drives, def_stops,
       pen_count, pen_yds,
-      teams(id, name, primary_color, club_id, clubs(name, logo_url)),
+      teams!matches_team_id_fkey(id, name, primary_color, club_id, clubs(name, logo_url)),
       opp_team:teams!matches_opp_team_id_fkey(id, name, primary_color, club_id, clubs(name, logo_url))
     `)
     .eq('id', matchId)
