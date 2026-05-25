@@ -320,8 +320,10 @@ export type MatchHeadToHead = {
   ourLogoUrl: string | null;
   primaryColor: string;
 
-  // Iter 26: opp club's primary color (if found in clubs table, otherwise black)
+  // Iter 26: opp brand color (opponents table > clubs table > default black)
   oppColor: string;
+  // Iter 27: opp logo URL (if registered in opponents or clubs table)
+  oppLogoUrl: string | null;
 
   // Aggregated metrics for the diverging bar viz
   metrics: HeadToHeadMetric[];
@@ -377,16 +379,45 @@ export async function fetchClubMatchHeadToHead(
   const oppXp2Att = match.opp_xp2_att ?? 0;
   const oppTd = Math.max(0, Math.floor((oppScore - oppXp1Ok - 2 * oppXp2Ok) / 6));
 
-  // Iter 26: lookup opponent's brand color via clubs.name match (fallback to black)
+  // Iter 27: lookup opponent's brand color + logo
+  // Priority: 1) opponents table (per-club registry), 2) clubs table (if opponent is GameStatiq user), 3) defaults
   let oppColor = '#1A1A1A';
+  let oppLogoUrl: string | null = null;
   if (match.opponent) {
-    const { data: oppClub } = await admin
-      .from('clubs')
-      .select('primary_color')
-      .ilike('name', String(match.opponent).trim())
+    const oppName = String(match.opponent).trim();
+
+    // First check this club's opponent registry
+    const ourClubIdQuery = await admin
+      .from('teams')
+      .select('club_id')
+      .eq('id', teamId)
       .maybeSingle();
-    if (oppClub && (oppClub as any).primary_color) {
-      oppColor = (oppClub as any).primary_color;
+    const ourClubId = (ourClubIdQuery.data as { club_id: string } | null)?.club_id ?? null;
+
+    if (ourClubId) {
+      const { data: registered } = await admin
+        .from('opponents')
+        .select('primary_color, logo_url')
+        .eq('club_id', ourClubId)
+        .ilike('name', oppName)
+        .maybeSingle();
+      if (registered) {
+        if ((registered as any).primary_color) oppColor = (registered as any).primary_color;
+        if ((registered as any).logo_url) oppLogoUrl = (registered as any).logo_url;
+      }
+    }
+
+    // Fallback: maybe opponent is a club in our system (Bobcats vs Vienna both have GameStatiq accounts)
+    if (oppColor === '#1A1A1A' && !oppLogoUrl) {
+      const { data: oppClub } = await admin
+        .from('clubs')
+        .select('primary_color, logo_url')
+        .ilike('name', oppName)
+        .maybeSingle();
+      if (oppClub) {
+        if ((oppClub as any).primary_color) oppColor = (oppClub as any).primary_color;
+        if ((oppClub as any).logo_url) oppLogoUrl = (oppClub as any).logo_url;
+      }
     }
   }
 
@@ -511,7 +542,7 @@ export async function fetchClubMatchHeadToHead(
     result: ourScore > oppScore ? 'W' : ourScore < oppScore ? 'L' : 'T',
     ourScore, oppScore,
     ourTeamName, ourClubName, ourLogoUrl, primaryColor,
-    oppColor,
+    oppColor, oppLogoUrl,
     metrics,
     qbStats, wrStats, defenseLeaders,
   };

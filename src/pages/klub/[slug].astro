@@ -176,7 +176,11 @@ const maxTd = Math.max(1, ...tdsByPlayer.map((p) => p.td));
                   <div class="truncate font-['Bebas_Neue'] text-[20px] leading-none tracking-[0.04em] sm:text-[26px]">{headToHead.opponent.toUpperCase()}</div>
                   <div class="mt-1 truncate text-[11px] uppercase tracking-[0.1em] text-white/65">Soupeř</div>
                 </div>
-                <span class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-white/10 font-bold sm:h-16 sm:w-16">{initials(headToHead.opponent)}</span>
+                {headToHead.oppLogoUrl ? (
+                  <img src={headToHead.oppLogoUrl} alt="" class="h-12 w-12 flex-shrink-0 rounded-lg bg-white/95 object-contain p-1 sm:h-16 sm:w-16" />
+                ) : (
+                  <span class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-white/10 font-bold sm:h-16 sm:w-16" style={`background:${headToHead.oppColor === '#1A1A1A' ? 'rgba(255,255,255,0.1)' : headToHead.oppColor}`}>{initials(headToHead.opponent)}</span>
+                )}
               </div>
             </div>
             <div class="border-t border-white/10 px-6 py-3 text-center sm:px-8">

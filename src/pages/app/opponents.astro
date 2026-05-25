@@ -1,0 +1,226 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { getSupabaseAdmin } from '../../lib/supabase';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const currentTeam = Astro.locals.team ?? null;
+if (!currentTeam) return Astro.redirect('/app');
+const clubId = currentTeam.club_id;
+
+const admin = getSupabaseAdmin();
+
+// Role check
+const { data: cm } = await admin
+  .from('club_members')
+  .select('role')
+  .eq('user_id', user.id)
+  .eq('club_id', clubId)
+  .maybeSingle();
+const role = (cm as { role: string } | null)?.role ?? 'viewer';
+const canEdit = role === 'admin' || role === 'coach';
+
+// Fetch all opponents for this club
+const { data: oppsRaw } = await admin
+  .from('opponents')
+  .select('id, name, primary_color, logo_url, updated_at')
+  .eq('club_id', clubId)
+  .order('name', { ascending: true });
+const opponents = (oppsRaw ?? []) as Array<{
+  id: string;
+  name: string;
+  primary_color: string;
+  logo_url: string | null;
+  updated_at: string;
+}>;
+
+// Distinct opponent names from matches that don't yet have a profile (suggestions)
+const { data: matchOppsRaw } = await admin
+  .from('matches')
+  .select('opponent, teams!inner(club_id)')
+  .eq('teams.club_id', clubId);
+const matchOppNames = new Set<string>(
+  ((matchOppsRaw ?? []) as any[])
+    .map((m) => String(m.opponent ?? '').trim())
+    .filter(Boolean)
+);
+const existingNames = new Set(opponents.map((o) => o.name.toLowerCase()));
+const suggestions = Array.from(matchOppNames).filter((n) => !existingNames.has(n.toLowerCase())).sort((a, b) => a.localeCompare(b, 'cs'));
+
+// URL params
+const url = new URL(Astro.request.url);
+const saved = url.searchParams.get('saved');
+const errorMsg = url.searchParams.get('error');
+const editId = url.searchParams.get('edit');
+const addMode = url.searchParams.get('add') === '1';
+const prefillName = url.searchParams.get('name') ?? '';
+
+const editingOpp = editId ? opponents.find((o) => o.id === editId) : null;
+const showForm = canEdit && (addMode || !!editingOpp);
+
+const SAVED_MSG: Record<string, string> = {
+  created: '✓ Soupeř přidán.',
+  updated: '✓ Soupeř upraven.',
+  deleted: '✓ Soupeř odebrán.',
+};
+---
+
+<AppLayout
+  title="Soupeři · GameStatiq"
+  active="opponents"
+  pageTitle="Soupeři"
+  pageSub={`${opponents.length} ${opponents.length === 1 ? 'profil' : opponents.length < 5 ? 'profily' : 'profilů'} · barva + logo se použije na public klubové stránce v head-to-head zobrazení zápasu`}
+>
+
+  {saved && SAVED_MSG[saved] && <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">{SAVED_MSG[saved]}</div>}
+  {errorMsg && <div class="mb-6 rounded-lg border border-signal/30 bg-signal/5 px-4 py-3 text-[14px] text-signal">{errorMsg}</div>}
+
+  {!canEdit && (
+    <div class="mb-6 rounded-lg border border-sky/30 bg-sky/5 px-4 py-3 text-[13px] text-[#1B5E83]">
+      Vaše role <strong>{role}</strong> umožňuje pouze prohlížení. Pro úpravy je potřeba role Admin nebo Trenér.
+    </div>
+  )}
+
+  <!-- Intro -->
+  <div class="mb-6 rounded-xl border border-plum/20 bg-gradient-to-br from-plum/5 to-signal/5 p-5">
+    <p class="text-[14px] text-graphite">
+      Když přidáš soupeři <strong class="text-ink">brand barvu + logo</strong>, automaticky se použije na public klubové stránce v head-to-head zobrazení konkrétního zápasu. Lookup je podle <strong class="text-ink">jména</strong> v zápase (musí přesně odpovídat).
+    </p>
+  </div>
+
+  <!-- Add/Edit form -->
+  {showForm && (
+    <div id="opp-form" class="mb-6 rounded-xl border border-plum/30 bg-gradient-to-br from-plum/5 to-signal/5 p-6">
+      <p class="text-[15px] font-semibold tracking-tight-2 text-ink">{editingOpp ? `Upravit soupeře: ${editingOpp.name}` : 'Přidat soupeře'}</p>
+      <p class="mt-1 text-[12px] text-graphite">Jméno musí přesně odpovídat tomu, jak je napsáno v zápasech (Scorer / match editor).</p>
+
+      <form method="POST" action="/api/club/opponent/upsert" enctype="multipart/form-data" class="mt-5 space-y-4">
+        {editingOpp && <input type="hidden" name="id" value={editingOpp.id} />}
+
+        <div class="grid gap-4 sm:grid-cols-[1fr_180px]">
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Jméno soupeře *</span>
+            <input type="text" name="name" required maxlength="80" value={editingOpp?.name ?? prefillName} placeholder="Brno Sígrs" class="mt-1.5 block w-full rounded-lg border border-stone bg-pearl px-3 py-2.5 text-[14px] text-ink focus:border-plum focus:outline-none focus:ring-2 focus:ring-plum/20" />
+          </label>
+          <label class="block">
+            <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Brand barva</span>
+            <div class="mt-1.5 flex items-center gap-2 rounded-lg border border-stone bg-pearl px-3 py-2">
+              <input type="color" value={editingOpp?.primary_color ?? '#1A1A1A'} class="h-7 w-7 cursor-pointer rounded-md border-none p-0" id="picker-opp-color" />
+              <input type="text" name="primary_color" value={editingOpp?.primary_color ?? '#1A1A1A'} pattern="#[0-9a-fA-F]{6}" class="flex-1 bg-transparent px-1 font-mono text-[13px] text-ink focus:outline-none" id="hex-opp-color" />
+            </div>
+          </label>
+        </div>
+
+        <div class="block">
+          <span class="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Logo soupeře</span>
+          <div class="mt-1.5 flex items-center gap-3">
+            {editingOpp?.logo_url && (
+              <img src={editingOpp.logo_url} alt="" class="h-12 w-12 rounded-lg border border-stone bg-pearl object-contain p-1" />
+            )}
+            <div class="flex-1 space-y-1.5">
+              <input type="file" name="logo" accept="image/svg+xml,image/png,image/jpeg,image/webp" class="block w-full text-[12px] text-graphite file:mr-2 file:rounded-md file:border-0 file:bg-plum file:px-3 file:py-1.5 file:text-[12px] file:font-semibold file:text-white hover:file:bg-[#3F2B68]" />
+              <p class="text-[10px] text-stone-2">SVG / PNG / JPG / WebP · max 5 MB · {editingOpp?.logo_url ? 'nové logo nahradí stávající' : 'volitelné'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 pt-2">
+          <button type="submit" class="rounded-lg bg-plum px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#3F2B68]">{editingOpp ? 'Uložit změny' : 'Přidat soupeře'}</button>
+          <a href="/app/opponents" class="text-[13px] font-medium text-graphite hover:text-ink">Zrušit</a>
+        </div>
+      </form>
+
+      <script is:inline>
+        // Sync color picker + hex input
+        (function () {
+          const picker = document.getElementById('picker-opp-color');
+          const hex = document.getElementById('hex-opp-color');
+          if (!picker || !hex) return;
+          picker.addEventListener('input', () => { hex.value = picker.value; });
+          hex.addEventListener('input', () => { if (/^#[0-9a-fA-F]{6}$/.test(hex.value)) picker.value = hex.value; });
+        })();
+      </script>
+    </div>
+  )}
+
+  <!-- Suggestions from matches -->
+  {canEdit && !showForm && suggestions.length > 0 && (
+    <div class="mb-6 rounded-xl border border-sky/30 bg-sky/5 p-5">
+      <p class="text-[12px] font-semibold uppercase tracking-[0.08em] text-[#1B5E83]">Soupeři ze zápasů bez profilu</p>
+      <p class="mt-1 text-[12px] text-graphite">Klikni pro rychlé vytvoření profilu (jméno bude předvyplněno):</p>
+      <div class="mt-3 flex flex-wrap gap-2">
+        {suggestions.map((n) => (
+          <a href={`/app/opponents?add=1&name=${encodeURIComponent(n)}#opp-form`} class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:border-plum hover:text-plum">+ {n}</a>
+        ))}
+      </div>
+    </div>
+  )}
+
+  <!-- Opponents list -->
+  <div class="rounded-xl border border-stone bg-pearl">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-stone px-5 py-4">
+      <div>
+        <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Profily soupeřů</p>
+        <p class="text-[12px] text-slate">{opponents.length} celkem</p>
+      </div>
+      {canEdit && !showForm && (
+        <a href="/app/opponents?add=1#opp-form" class="rounded-lg bg-plum px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#3F2B68]">+ Přidat soupeře</a>
+      )}
+    </div>
+
+    {opponents.length === 0 ? (
+      <div class="p-12 text-center">
+        <p class="text-[14px] font-semibold text-ink">Žádné profily soupeřů</p>
+        <p class="mt-1 text-[13px] text-slate">
+          {canEdit
+            ? (suggestions.length > 0
+                ? 'Klikni na jméno výše nebo "+ Přidat soupeře" a začni.'
+                : 'Klikni "+ Přidat soupeře" a začni.')
+            : 'Admin nebo trenér musí přidat soupeře.'}
+        </p>
+      </div>
+    ) : (
+      <ul class="divide-y divide-stone">
+        {opponents.map((o) => (
+          <li class="flex flex-wrap items-center gap-4 px-5 py-3.5">
+            {o.logo_url ? (
+              <img src={o.logo_url} alt="" class="h-10 w-10 flex-shrink-0 rounded-lg border border-stone bg-pearl object-contain p-1" />
+            ) : (
+              <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-[12px] font-bold uppercase text-white" style={`background:${o.primary_color}`}>
+                {o.name.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 2).toUpperCase()}
+              </span>
+            )}
+            <div class="min-w-0 flex-1">
+              <p class="text-[14px] font-semibold text-ink">{o.name}</p>
+              <p class="flex items-center gap-1.5 text-[11px] text-slate">
+                <span class="inline-block h-3 w-3 rounded border border-stone" style={`background:${o.primary_color}`}></span>
+                <span class="font-mono">{o.primary_color}</span>
+              </p>
+            </div>
+            {canEdit && (
+              <div class="flex items-center gap-2">
+                <a href={`/app/opponents?edit=${o.id}#opp-form`} class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[11px] font-medium text-graphite hover:bg-mist">Upravit</a>
+                <form method="POST" action="/api/club/opponent/remove" class="inline">
+                  <input type="hidden" name="id" value={o.id} />
+                  <button type="submit" onclick={`return confirm('Smazat profil soupeře "${o.name}"? Zápasy zůstanou, jen ztratí brand barvu/logo na public stránce.');`} class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[11px] font-medium text-graphite hover:border-signal/40 hover:text-signal">Smazat</button>
+                </form>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+
+  <p class="mt-4 text-[11px] text-stone-2">
+    Tip: Lookup soupeře probíhá podle <strong>přesného jména</strong> ze zápasu (case-insensitive). Pokud je v zápase "Brno Sígrs" a tady "Brno Sigrs", nepropojí se. Použij přesně to, co Scorer poslal.
+  </p>
+</AppLayout>
+
+<script is:inline>
+  const _qs = new URLSearchParams(location.search);
+  if (_qs.get('edit') || _qs.get('add')) {
+    document.getElementById('opp-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+</script>
