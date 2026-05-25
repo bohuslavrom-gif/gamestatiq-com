@@ -1,6 +1,12 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { fetchClubBySlug, fetchClubTeamStats } from '../../lib/club-public';
+import {
+  fetchClubBySlug,
+  fetchClubTeamStats,
+  fetchClubMatchList,
+  fetchClubMatchHeadToHead,
+  type MatchHeadToHead,
+} from '../../lib/club-public';
 
 export const prerender = false;
 
@@ -14,11 +20,29 @@ const { club, teams } = shell;
 
 const url = new URL(Astro.request.url);
 const teamParam = url.searchParams.get('team') ?? '';
+const matchParam = url.searchParams.get('match') ?? '';
 
-// Resolve selected team — by team.name (matches Bobcats GAS convention) or first team
+// Resolve selected team
 const selectedTeam = teams.find((t) => t.name === teamParam) ?? teams[0] ?? null;
 
-const stats = selectedTeam ? await fetchClubTeamStats(selectedTeam) : null;
+// Iter 25: fetch season stats + match list in parallel
+const [stats, matchList] = await Promise.all([
+  selectedTeam ? fetchClubTeamStats(selectedTeam) : Promise.resolve(null),
+  selectedTeam ? fetchClubMatchList(selectedTeam.id) : Promise.resolve([]),
+]);
+
+// Iter 25: head-to-head fetch if specific match requested
+const headToHead: MatchHeadToHead | null = (selectedTeam && matchParam && matchParam !== 'season')
+  ? await fetchClubMatchHeadToHead(
+      matchParam,
+      selectedTeam.id,
+      selectedTeam.name,
+      club.name,
+      club.logoUrl,
+      club.primaryColor,
+    )
+  : null;
+const isMatchView = !!headToHead;
 
 const accent = club.primaryColor || '#DC1F26';
 const accentDark = '#501313';
@@ -43,6 +67,10 @@ function formatDateCz(s: string): string {
   const d = new Date(s);
   if (isNaN(d.getTime())) return s;
   return d.toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric', year: 'numeric' });
+}
+
+function shortOpponent(s: string): string {
+  return s.length > 18 ? s.slice(0, 16) + '…' : s;
 }
 
 const tdsByPlayer = stats?.tdsByPlayer ?? [];
@@ -79,28 +107,227 @@ const maxTd = Math.max(1, ...tdsByPlayer.map((p) => p.td));
               <span style={`color:${accent}`}>{club.name.slice(0, 3).toUpperCase()}</span>{club.name.slice(3).toUpperCase()}
             </div>
             <div class="mt-1 text-[11px] uppercase tracking-[0.1em] text-white/65">
-              Sezóna 2026 · {selectedTeam?.name ?? 'Statistiky'}
+              {isMatchView
+                ? `vs ${headToHead!.opponent} · ${formatDateCz(headToHead!.date)} · ${headToHead!.ourScore}:${headToHead!.oppScore}`
+                : `Sezóna 2026 · ${selectedTeam?.name ?? 'Statistiky'}`}
             </div>
           </div>
         </div>
 
-        {teams.length > 1 && (
-          <form method="GET" class="flex items-center">
-            <select
-              name="team"
-              onchange="this.form.submit()"
-              class="cursor-pointer appearance-none rounded-lg border border-white/20 bg-white/10 px-3 py-2 pr-8 text-[13px] font-medium text-white outline-none hover:bg-white/15"
-              style="background-image: url(&quot;data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='white' d='M0 0l5 6 5-6z'/></svg>&quot;); background-repeat: no-repeat; background-position: right 10px center;"
-            >
-              {teams.map((t) => (
-                <option value={t.name} selected={t.name === selectedTeam?.name}>{t.name}</option>
-              ))}
-            </select>
-          </form>
-        )}
+        <div class="flex flex-wrap items-center gap-2">
+          {teams.length > 1 && (
+            <form method="GET" class="flex items-center">
+              <select
+                name="team"
+                onchange="this.form.submit()"
+                class="cursor-pointer appearance-none rounded-lg border border-white/20 bg-white/10 px-3 py-2 pr-8 text-[13px] font-medium text-white outline-none hover:bg-white/15"
+                style="background-image: url(&quot;data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='white' d='M0 0l5 6 5-6z'/></svg>&quot;); background-repeat: no-repeat; background-position: right 10px center;"
+              >
+                {teams.map((t) => (
+                  <option value={t.name} selected={t.name === selectedTeam?.name}>{t.name}</option>
+                ))}
+              </select>
+            </form>
+          )}
+          {selectedTeam && matchList.length > 0 && (
+            <form method="GET" class="flex items-center">
+              <input type="hidden" name="team" value={selectedTeam.name} />
+              <select
+                name="match"
+                onchange="this.form.submit()"
+                class="cursor-pointer appearance-none rounded-lg border border-white/20 bg-white/10 px-3 py-2 pr-8 text-[13px] font-medium text-white outline-none hover:bg-white/15"
+                style="background-image: url(&quot;data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='white' d='M0 0l5 6 5-6z'/></svg>&quot;); background-repeat: no-repeat; background-position: right 10px center;"
+              >
+                <option value="season" selected={!isMatchView}>Celá sezóna ({matchList.length})</option>
+                {matchList.map((m) => (
+                  <option value={m.id} selected={m.id === matchParam}>
+                    vs {shortOpponent(m.opponent)} · {formatDateCz(m.date)} · {m.ourScore}:{m.oppScore} {m.result}
+                  </option>
+                ))}
+              </select>
+            </form>
+          )}
+        </div>
       </header>
 
-      {!stats || stats.record.matches === 0 ? (
+      {isMatchView && headToHead ? (
+        <>
+          <!-- ═════════════ HEAD-TO-HEAD SCORE BANNER ═════════════ -->
+          <div class="mb-4 overflow-hidden rounded-xl border border-black/10 bg-[#1A1A1A] text-white">
+            <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 py-7 sm:px-8">
+              <div class="flex items-center gap-3 sm:gap-4">
+                {headToHead.ourLogoUrl ? (
+                  <img src={headToHead.ourLogoUrl} alt="" class="h-12 w-12 object-contain brightness-0 invert sm:h-16 sm:w-16" />
+                ) : (
+                  <span class="flex h-12 w-12 items-center justify-center rounded-lg bg-white/10 font-bold sm:h-16 sm:w-16">{initials(headToHead.ourClubName)}</span>
+                )}
+                <div class="min-w-0">
+                  <div class="truncate font-['Bebas_Neue'] text-[20px] leading-none tracking-[0.04em] sm:text-[26px]">{headToHead.ourClubName.toUpperCase()}</div>
+                  <div class="mt-1 truncate text-[11px] uppercase tracking-[0.1em] text-white/65">{headToHead.ourTeamName}</div>
+                </div>
+              </div>
+              <div class="flex items-baseline gap-2">
+                <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight sm:text-[88px]" style={headToHead.result === 'W' ? `color:${accent}` : ''}>{headToHead.ourScore}</span>
+                <span class="text-[24px] text-white/40 sm:text-[36px]">:</span>
+                <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight text-white/70 sm:text-[88px]" style={headToHead.result === 'L' ? `color:${accent}` : ''}>{headToHead.oppScore}</span>
+              </div>
+              <div class="flex items-center justify-end gap-3 sm:gap-4">
+                <div class="min-w-0 text-right">
+                  <div class="truncate font-['Bebas_Neue'] text-[20px] leading-none tracking-[0.04em] sm:text-[26px]">{headToHead.opponent.toUpperCase()}</div>
+                  <div class="mt-1 truncate text-[11px] uppercase tracking-[0.1em] text-white/65">Soupeř</div>
+                </div>
+                <span class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-white/10 font-bold sm:h-16 sm:w-16">{initials(headToHead.opponent)}</span>
+              </div>
+            </div>
+            <div class="border-t border-white/10 px-6 py-3 text-center sm:px-8">
+              <span class={`inline-block rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] ${headToHead.result === 'W' ? 'bg-verde text-white' : headToHead.result === 'L' ? 'bg-signal text-white' : 'bg-white/20 text-white'}`}>
+                {headToHead.result === 'W' ? 'Výhra' : headToHead.result === 'L' ? 'Prohra' : 'Remíza'}
+              </span>
+              <span class="ml-2 text-[11px] text-white/65">{formatDateCz(headToHead.date)}</span>
+            </div>
+          </div>
+
+          <!-- ═════════════ DIVERGING METRICS ═════════════ -->
+          <div class="mt-4 rounded-xl border border-black/10 bg-white px-5 py-5 sm:px-7 sm:py-6">
+            <div class="mb-4 flex items-baseline justify-between">
+              <h3 class="m-0 font-['Bebas_Neue'] text-[22px] tracking-[0.04em]">Head-to-head</h3>
+              <span class="text-[11px] uppercase tracking-[0.06em] text-[#888780]">srovnání týmů</span>
+            </div>
+            <div class="space-y-3.5">
+              {headToHead.metrics.map((m) => {
+                const total = Math.max(1, m.our + m.opp);
+                const ourPct = Math.round((m.our / total) * 100);
+                const oppPct = Math.round((m.opp / total) * 100);
+                const ourBetter = m.higherIsBetter === false ? m.our < m.opp : (m.our > m.opp && m.higherIsBetter !== false);
+                const oppBetter = m.higherIsBetter === false ? m.opp < m.our : (m.opp > m.our && m.higherIsBetter !== false);
+                return (
+                  <div>
+                    <div class="grid grid-cols-[80px_1fr_80px] items-center gap-3 sm:grid-cols-[100px_1fr_100px] sm:gap-4">
+                      <div class={`text-right tabular-nums ${ourBetter ? 'font-bold' : 'text-[#5F5E5A]'}`} style={ourBetter ? `color:${accent}` : ''}>
+                        <span class="text-[20px] sm:text-[24px]">{m.our}</span>
+                        {m.format === 'yards' && <span class="ml-1 text-[10px] text-[#888780]">yd</span>}
+                      </div>
+                      <div class="flex h-6 items-center overflow-hidden rounded-full bg-[#F1EFE8]">
+                        <div class="flex h-full w-1/2 justify-end">
+                          <div class="h-full transition-all" style={`width:${ourPct}%;background:${ourBetter ? accent : '#888780'};opacity:${ourBetter ? 1 : 0.6}`}></div>
+                        </div>
+                        <div class="flex h-full w-1/2 justify-start">
+                          <div class="h-full transition-all" style={`width:${oppPct}%;background:${oppBetter ? '#1A1A1A' : '#888780'};opacity:${oppBetter ? 1 : 0.6}`}></div>
+                        </div>
+                      </div>
+                      <div class={`text-left tabular-nums ${oppBetter ? 'font-bold text-[#1A1A1A]' : 'text-[#5F5E5A]'}`}>
+                        <span class="text-[20px] sm:text-[24px]">{m.opp}</span>
+                        {m.format === 'yards' && <span class="ml-1 text-[10px] text-[#888780]">yd</span>}
+                      </div>
+                    </div>
+                    <div class="mt-1 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-[#888780]">{m.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <p class="mt-5 text-center text-[10px] text-[#888780]">
+              <span class="inline-block h-2 w-2 rounded-full align-middle" style={`background:${accent}`}></span>
+              <span class="ml-1.5 align-middle">{headToHead.ourClubName}</span>
+              <span class="mx-3 text-[#bbb]">vs</span>
+              <span class="inline-block h-2 w-2 rounded-full bg-[#1A1A1A] align-middle"></span>
+              <span class="ml-1.5 align-middle">{headToHead.opponent}</span>
+            </p>
+          </div>
+
+          <!-- Per-match player tables -->
+          {headToHead.qbStats.length > 0 && (
+            <div class="mt-4 rounded-xl border border-black/10 bg-white px-5 py-4">
+              <div class="mb-3 flex items-baseline justify-between">
+                <h3 class="m-0 font-['Bebas_Neue'] text-[22px] tracking-[0.04em]">Quarterback</h3>
+                <span class="text-[11px] uppercase tracking-[0.06em] text-[#888780]">v tomto zápase</span>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full border-collapse text-[13px]">
+                  <thead><tr class="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-[#888780]"><th class="border-b border-black/10 px-1.5 py-2">Hráč</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">ATT</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">COMP</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">TD</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">INT</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">YDS</th></tr></thead>
+                  <tbody>
+                    {headToHead.qbStats.map((p) => (
+                      <tr>
+                        <td class="border-b border-black/10 px-1.5 py-2.5">
+                          <div class="flex items-center gap-2.5">
+                            {p.photoUrl ? <img src={p.photoUrl} alt="" class="h-7 w-7 rounded-full object-cover" /> : <span class="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-medium" style={`background:#FCEBEB;color:${accentDark}`}>{initials(p.name)}</span>}
+                            <div><div class="font-medium">{p.name}</div><div class="text-[11px] text-[#888780]">QB{p.jersey != null ? ` · #${p.jersey}` : ''}</div></div>
+                          </div>
+                        </td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.att}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.comp}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.td}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.int}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.yds}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {headToHead.wrStats.length > 0 && (
+            <div class="mt-4 rounded-xl border border-black/10 bg-white px-5 py-4">
+              <div class="mb-3 flex items-baseline justify-between">
+                <h3 class="m-0 font-['Bebas_Neue'] text-[22px] tracking-[0.04em]">Wide Receiver</h3>
+                <span class="text-[11px] uppercase tracking-[0.06em] text-[#888780]">v tomto zápase</span>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full border-collapse text-[13px]">
+                  <thead><tr class="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-[#888780]"><th class="border-b border-black/10 px-1.5 py-2">Hráč</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">TD</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">TARG</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">REC</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">YDS</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">PTS</th></tr></thead>
+                  <tbody>
+                    {headToHead.wrStats.map((p) => (
+                      <tr>
+                        <td class="border-b border-black/10 px-1.5 py-2.5">
+                          <div class="flex items-center gap-2.5">
+                            {p.photoUrl ? <img src={p.photoUrl} alt="" class="h-7 w-7 rounded-full object-cover" /> : <span class="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-medium" style={`background:#FCEBEB;color:${accentDark}`}>{initials(p.name)}</span>}
+                            <div><div class="font-medium">{p.name}</div><div class="text-[11px] text-[#888780]">WR{p.jersey != null ? ` · #${p.jersey}` : ''}</div></div>
+                          </div>
+                        </td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.td}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.targets}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.rec}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.yds}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.pts}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {headToHead.defenseLeaders.length > 0 && (
+            <div class="mt-4 rounded-xl border border-black/10 bg-white px-5 py-4">
+              <div class="mb-3 flex items-baseline justify-between">
+                <h3 class="m-0 font-['Bebas_Neue'] text-[22px] tracking-[0.04em]">Defense</h3>
+                <span class="text-[11px] uppercase tracking-[0.06em] text-[#888780]">FP / SACK / BU / INT</span>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full border-collapse text-[13px]">
+                  <thead><tr class="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-[#888780]"><th class="border-b border-black/10 px-1.5 py-2">Hráč</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">FP</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">SACK</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">BU</th><th class="border-b border-black/10 px-1.5 py-2 text-right tabular-nums">INT</th></tr></thead>
+                  <tbody>
+                    {headToHead.defenseLeaders.map((p) => (
+                      <tr>
+                        <td class="border-b border-black/10 px-1.5 py-2.5">
+                          <div class="flex items-center gap-2.5">
+                            {p.photoUrl ? <img src={p.photoUrl} alt="" class="h-7 w-7 rounded-full object-cover" /> : <span class="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-medium" style={`background:#FCEBEB;color:${accentDark}`}>{initials(p.name)}</span>}
+                            <span class="font-medium">{p.name}</span>
+                          </div>
+                        </td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.flagPull}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.sack}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.brkup}</td>
+                        <td class="border-b border-black/10 px-1.5 py-2.5 text-right tabular-nums">{p.int}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      ) : !stats || stats.record.matches === 0 ? (
         <div class="rounded-xl border border-black/10 bg-white p-10 text-center text-[14px] text-[#5F5E5A]">
           <span class="mb-2 block text-[32px] opacity-40">📊</span>
           Pro tento tým zatím nejsou žádná data.
