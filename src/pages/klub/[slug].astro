@@ -203,6 +203,7 @@ const maxTd = Math.max(1, ...tdsByPlayer.map((p) => p.td));
                 const total = m.format === 'percent' ? 100 : Math.max(1, m.our + m.opp);
                 const ourBar = m.format === 'percent' ? Math.min(100, m.our) : Math.round((m.our / total) * 100);
                 const oppBar = m.format === 'percent' ? Math.min(100, m.opp) : Math.round((m.opp / total) * 100);
+                // Iter 28: konzistentní obarvení — vítěz plně sytý, poražený má svoji barvu s opacity
                 const ourBetter = m.higherIsBetter === false ? m.our < m.opp : (m.our > m.opp && m.higherIsBetter !== false);
                 const oppBetter = m.higherIsBetter === false ? m.opp < m.our : (m.opp > m.our && m.higherIsBetter !== false);
                 const ourShown = m.ourDisplay ?? String(m.our);
@@ -212,21 +213,21 @@ const maxTd = Math.max(1, ...tdsByPlayer.map((p) => p.td));
                 return (
                   <div>
                     <div class="grid grid-cols-[110px_1fr_110px] items-center gap-2 sm:grid-cols-[140px_1fr_140px] sm:gap-4">
-                      <div class={`text-right tabular-nums ${ourBetter ? 'font-bold' : 'text-[#5F5E5A]'}`} style={ourBetter ? `color:${accent}` : ''}>
+                      <div class={`text-right tabular-nums ${ourBetter ? 'font-bold' : ''}`} style={`color:${accent};opacity:${ourBetter ? 1 : 0.5}`}>
                         <span class="text-[16px] sm:text-[18px]">{ourShown}</span>
-                        {ourYardSuffix && <span class="ml-1 text-[10px] text-[#888780]">yd</span>}
+                        {ourYardSuffix && <span class="ml-1 text-[10px] opacity-70">yd</span>}
                       </div>
                       <div class="flex h-6 items-center overflow-hidden rounded-full bg-[#F1EFE8]">
                         <div class="flex h-full w-1/2 justify-end">
-                          <div class="h-full transition-all" style={`width:${ourBar}%;background:${ourBetter ? accent : '#888780'};opacity:${ourBetter ? 1 : 0.6}`}></div>
+                          <div class="h-full transition-all" style={`width:${ourBar}%;background:${accent};opacity:${ourBetter ? 1 : 0.45}`}></div>
                         </div>
                         <div class="flex h-full w-1/2 justify-start">
-                          <div class="h-full transition-all" style={`width:${oppBar}%;background:${oppBetter ? headToHead.oppColor : '#888780'};opacity:${oppBetter ? 1 : 0.6}`}></div>
+                          <div class="h-full transition-all" style={`width:${oppBar}%;background:${headToHead.oppColor};opacity:${oppBetter ? 1 : 0.45}`}></div>
                         </div>
                       </div>
-                      <div class={`text-left tabular-nums ${oppBetter ? 'font-bold' : 'text-[#5F5E5A]'}`} style={oppBetter ? `color:${headToHead.oppColor}` : ''}>
+                      <div class={`text-left tabular-nums ${oppBetter ? 'font-bold' : ''}`} style={`color:${headToHead.oppColor};opacity:${oppBetter ? 1 : 0.5}`}>
                         <span class="text-[16px] sm:text-[18px]">{oppShown}</span>
-                        {oppYardSuffix && <span class="ml-1 text-[10px] text-[#888780]">yd</span>}
+                        {oppYardSuffix && <span class="ml-1 text-[10px] opacity-70">yd</span>}
                       </div>
                     </div>
                     <div class="mt-1 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-[#888780]">{m.label}</div>
