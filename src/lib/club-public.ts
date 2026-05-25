@@ -274,21 +274,29 @@ export async function fetchClubMatchList(teamId: string): Promise<ClubMatchLite[
   if (!teamId) return [];
   const admin = getSupabaseAdmin();
 
+  // Iter 38: zápasy kde tým je home NEBO opp_team_id (shared match v lize)
   const { data } = await admin
     .from('matches')
-    .select('id, date, opponent, our_score, opp_score')
-    .eq('team_id', teamId)
+    .select('id, date, opponent, our_score, opp_score, team_id, opp_team_id, teams(name, club_id, clubs(name))')
+    .or(`team_id.eq.${teamId},opp_team_id.eq.${teamId}`)
     .order('date', { ascending: false });
 
-  return ((data ?? []) as any[]).map((m) => ({
-    id: m.id,
-    date: m.date,
-    opponent: m.opponent,
-    ourScore: m.our_score ?? 0,
-    oppScore: m.opp_score ?? 0,
-    result: (m.our_score ?? 0) > (m.opp_score ?? 0) ? 'W'
-          : (m.our_score ?? 0) < (m.opp_score ?? 0) ? 'L' : 'T' as 'W'|'L'|'T',
-  }));
+  return ((data ?? []) as any[]).map((m) => {
+    const isOpp = m.opp_team_id === teamId;
+    const ours  = isOpp ? (m.opp_score ?? 0) : (m.our_score ?? 0);
+    const theirs = isOpp ? (m.our_score ?? 0) : (m.opp_score ?? 0);
+    const oppLabel = isOpp
+      ? (m.teams?.clubs?.name ? `${m.teams.clubs.name}${m.teams?.name ? ' ' + m.teams.name : ''}` : (m.teams?.name || m.opponent || '—'))
+      : m.opponent;
+    return {
+      id: m.id,
+      date: m.date,
+      opponent: oppLabel,
+      ourScore: ours,
+      oppScore: theirs,
+      result: (ours > theirs ? 'W' : ours < theirs ? 'L' : 'T') as 'W'|'L'|'T',
+    };
+  });
 }
 
 export type HeadToHeadMetric = {
@@ -352,39 +360,47 @@ export async function fetchClubMatchHeadToHead(
   const { data: m } = await admin
     .from('matches')
     .select(`
-      id, team_id, date, opponent,
+      id, team_id, opp_team_id, date, opponent,
       our_score, opp_score,
       rush_yds, pass_yds, total_yds,
       opp_rush_yds, opp_pass_yds, opp_total_yds,
-      off_td, off_drives,
+      off_td, off_drives, opp_off_td, opp_off_drives,
       qb_att, qb_comp, qb_td, qb_int, qb_yds,
       xp1_att, xp1_ok, xp2_att, xp2_ok,
       opp_xp1_att, opp_xp1_ok, opp_xp2_att, opp_xp2_ok,
       def_drives, def_stops,
-      pen_count, pen_yds
+      pen_count, pen_yds, opp_pen_count, opp_pen_yds,
+      teams(name, club_id, clubs(name))
     `)
     .eq('id', matchId)
     .maybeSingle();
   if (!m) return null;
   const match = m as any;
-  if (match.team_id !== teamId) return null;
+  // Iter 38: match dostupný pokud team_id NEBO opp_team_id = teamId
+  const isOppPerspective = match.opp_team_id === teamId;
+  if (match.team_id !== teamId && !isOppPerspective) return null;
 
-  const ourScore = match.our_score ?? 0;
-  const oppScore = match.opp_score ?? 0;
+  // Iter 38: v opp perspektivě se naše/jejich pole prohazují.
+  const ourScore = isOppPerspective ? (match.opp_score ?? 0) : (match.our_score ?? 0);
+  const oppScore = isOppPerspective ? (match.our_score ?? 0) : (match.opp_score ?? 0);
 
-  // Compute opponent TD from score - their XP (since we don't track opp_td directly)
-  const oppXp1Ok = match.opp_xp1_ok ?? 0;
-  const oppXp2Ok = match.opp_xp2_ok ?? 0;
-  const oppXp1Att = match.opp_xp1_att ?? 0;
-  const oppXp2Att = match.opp_xp2_att ?? 0;
+  // Iter 38: XP konverze — v opp perspective se naše vs jejich prohazují
+  const oppXp1Ok  = isOppPerspective ? (match.xp1_ok  ?? 0) : (match.opp_xp1_ok ?? 0);
+  const oppXp2Ok  = isOppPerspective ? (match.xp2_ok  ?? 0) : (match.opp_xp2_ok ?? 0);
+  const oppXp1Att = isOppPerspective ? (match.xp1_att ?? 0) : (match.opp_xp1_att ?? 0);
+  const oppXp2Att = isOppPerspective ? (match.xp2_att ?? 0) : (match.opp_xp2_att ?? 0);
   const oppTd = Math.max(0, Math.floor((oppScore - oppXp1Ok - 2 * oppXp2Ok) / 6));
 
   // Iter 27: lookup opponent's brand color + logo
   // Priority: 1) opponents table (per-club registry), 2) clubs table (if opponent is GameStatiq user), 3) defaults
   let oppColor = '#1A1A1A';
   let oppLogoUrl: string | null = null;
-  if (match.opponent) {
-    const oppName = String(match.opponent).trim();
+  // Iter 38: v opp perspective je "soupeř" původní home tým — použijeme jeho jméno
+  const opponentName = isOppPerspective
+    ? (match.teams?.clubs?.name ? `${match.teams.clubs.name}${match.teams?.name ? ' ' + match.teams.name : ''}` : (match.teams?.name || match.opponent || ''))
+    : match.opponent;
+  if (opponentName) {
+    const oppName = String(opponentName).trim();
 
     // First check this club's opponent registry
     const ourClubIdQuery = await admin
@@ -421,14 +437,17 @@ export async function fetchClubMatchHeadToHead(
     }
   }
 
-  // Iter 26: helpers for ratio metrics — value used for bar width = percent (0-100)
-  const offTd = match.off_td ?? 0;
-  const offDrives = match.off_drives ?? 0;
-  const defDrives = match.def_drives ?? 0;
-  const xp1Ok = match.xp1_ok ?? 0;
-  const xp1Att = match.xp1_att ?? 0;
-  const xp2Ok = match.xp2_ok ?? 0;
-  const xp2Att = match.xp2_att ?? 0;
+  // Iter 26+39: helpers for ratio metrics — value used for bar width = percent (0-100)
+  // Iter 39: pokud máme opp_off_td v DB (Scorer Iter 39+), použijeme; jinak fallback dopočet.
+  const offTd = isOppPerspective
+    ? (match.opp_off_td ?? Math.max(0, Math.floor((ourScore - (match.opp_xp1_ok ?? 0) - 2 * (match.opp_xp2_ok ?? 0)) / 6)))
+    : (match.off_td ?? 0);
+  const offDrives = isOppPerspective ? (match.opp_off_drives ?? match.def_drives ?? 0) : (match.off_drives ?? 0);
+  const defDrives = isOppPerspective ? (match.off_drives ?? 0) : (match.def_drives ?? 0);
+  const xp1Ok  = isOppPerspective ? (match.opp_xp1_ok  ?? 0) : (match.xp1_ok  ?? 0);
+  const xp1Att = isOppPerspective ? (match.opp_xp1_att ?? 0) : (match.xp1_att ?? 0);
+  const xp2Ok  = isOppPerspective ? (match.opp_xp2_ok  ?? 0) : (match.xp2_ok  ?? 0);
+  const xp2Att = isOppPerspective ? (match.opp_xp2_att ?? 0) : (match.xp2_att ?? 0);
 
   const pct = (ok: number, att: number) => att > 0 ? Math.round((ok / att) * 100) : 0;
   const ratio = (ok: number, att: number) => `${ok}/${att}${att > 0 ? ` · ${Math.round((ok / att) * 100)}%` : ''}`;
@@ -436,12 +455,18 @@ export async function fetchClubMatchHeadToHead(
   const ourDrivePct = pct(offTd, offDrives);
   const oppDrivePct = pct(oppTd, defDrives);
 
-  // Build comparison metrics
+  // Build comparison metrics — Iter 38: zrcadlí se podle isOppPerspective
+  const ourTotal = isOppPerspective ? (match.opp_total_yds ?? 0) : (match.total_yds ?? 0);
+  const oppTotal = isOppPerspective ? (match.total_yds ?? 0)     : (match.opp_total_yds ?? 0);
+  const ourPass  = isOppPerspective ? (match.opp_pass_yds ?? 0)  : (match.pass_yds ?? 0);
+  const oppPass  = isOppPerspective ? (match.pass_yds ?? 0)      : (match.opp_pass_yds ?? 0);
+  const ourRush  = isOppPerspective ? (match.opp_rush_yds ?? 0)  : (match.rush_yds ?? 0);
+  const oppRush  = isOppPerspective ? (match.rush_yds ?? 0)      : (match.opp_rush_yds ?? 0);
   const metrics: HeadToHeadMetric[] = [
     { label: 'Skóre',            our: ourScore,                       opp: oppScore,                       format: 'int',    higherIsBetter: true },
-    { label: 'Total yardů',      our: match.total_yds ?? 0,           opp: match.opp_total_yds ?? 0,       format: 'yards',  higherIsBetter: true },
-    { label: 'Pass yardů',       our: match.pass_yds ?? 0,            opp: match.opp_pass_yds ?? 0,        format: 'yards',  higherIsBetter: true },
-    { label: 'Rush yardů',       our: match.rush_yds ?? 0,            opp: match.opp_rush_yds ?? 0,        format: 'yards',  higherIsBetter: true },
+    { label: 'Total yardů',      our: ourTotal,                       opp: oppTotal,                       format: 'yards',  higherIsBetter: true },
+    { label: 'Pass yardů',       our: ourPass,                        opp: oppPass,                        format: 'yards',  higherIsBetter: true },
+    { label: 'Rush yardů',       our: ourRush,                        opp: oppRush,                        format: 'yards',  higherIsBetter: true },
     { label: 'Touchdowny',       our: offTd,                          opp: oppTd,                          format: 'int',    higherIsBetter: true },
     {
       label: 'Úspěšnost drives',
@@ -464,11 +489,21 @@ export async function fetchClubMatchHeadToHead(
       oppDisplay: ratio(oppXp2Ok, oppXp2Att),
       format: 'percent', higherIsBetter: true,
     },
-    { label: 'Fauly',            our: match.pen_count ?? 0,           opp: 0,                              format: 'int',    higherIsBetter: false },
-    { label: 'Fauly · yardy',    our: match.pen_yds ?? 0,             opp: 0,                              format: 'yards',  higherIsBetter: false },
+    {
+      label: 'Fauly',
+      our: isOppPerspective ? (match.opp_pen_count ?? 0) : (match.pen_count ?? 0),
+      opp: isOppPerspective ? (match.pen_count ?? 0)     : (match.opp_pen_count ?? 0),
+      format: 'int', higherIsBetter: false,
+    },
+    {
+      label: 'Fauly · yardy',
+      our: isOppPerspective ? (match.opp_pen_yds ?? 0) : (match.pen_yds ?? 0),
+      opp: isOppPerspective ? (match.pen_yds ?? 0)     : (match.opp_pen_yds ?? 0),
+      format: 'yards', higherIsBetter: false,
+    },
   ];
 
-  // Player stats for this match
+  // Player stats for this match — Iter 38: + players.team_id pro filtrování per current team
   const { data: psRaw } = await admin
     .from('match_player_stats')
     .select(`
@@ -476,10 +511,11 @@ export async function fetchClubMatchHeadToHead(
       qb_att, qb_comp, qb_yds, qb_td, qb_int,
       wr_targets, wr_rec, wr_yds, wr_td, wr_pts,
       db_flag_pull, db_sack, db_brkup, db_int,
-      players ( first_name, last_name, jersey_number, photo_url )
+      players ( first_name, last_name, jersey_number, photo_url, team_id )
     `)
     .eq('match_id', matchId);
-  const psRows = (psRaw ?? []) as any[];
+  // Iter 38: zobrazujeme jen hráče current teamu (z perspektivy které nahlížíme)
+  const psRows = ((psRaw ?? []) as any[]).filter((r) => r.players?.team_id === teamId);
 
   type Bucket = {
     playerId: string;
@@ -538,7 +574,8 @@ export async function fetchClubMatchHeadToHead(
   return {
     id: match.id,
     date: match.date,
-    opponent: match.opponent,
+    // Iter 38: v opp perspective je "soupeř" původní home tým
+    opponent: opponentName || match.opponent,
     result: ourScore > oppScore ? 'W' : ourScore < oppScore ? 'L' : 'T',
     ourScore, oppScore,
     ourTeamName, ourClubName, ourLogoUrl, primaryColor,

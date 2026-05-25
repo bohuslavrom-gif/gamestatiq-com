@@ -440,18 +440,19 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
   const teamIds = ltRows.map((r) => r.team_id);
   const teamIdSet = new Set(teamIds);
 
-  // Iter 36: matches kde alespoň jedna strana v lize (vč. shared matches)
+  // Iter 36+39: matches kde alespoň jedna strana v lize + opp_* agregáty pro shared
   const orFilter = `team_id.in.(${teamIds.join(',')}),opp_team_id.in.(${teamIds.join(',')})`;
   const { data: matchesRaw } = await admin
     .from('matches')
     .select(`
       id, team_id, opp_team_id,
       our_score, opp_score,
-      off_td,
+      off_td, opp_off_td,
       qb_att, qb_comp, qb_td, qb_int, qb_yds,
       xp1_att, xp1_ok, xp2_att, xp2_ok,
+      opp_xp1_att, opp_xp1_ok, opp_xp2_att, opp_xp2_ok,
       opp_pass_yds,
-      pen_count, pen_yds
+      pen_count, pen_yds, opp_pen_count, opp_pen_yds
     `)
     .or(orFilter);
   const matches = (matchesRaw ?? []) as any[];
@@ -520,13 +521,18 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
         row.penYds += m.pen_yds ?? 0;
       }
     }
-    // Iter 36: opp perspektiva — shared match v lize (jen score a games; ostatní matches sloupce jsou home-centric)
+    // Iter 36+39: opp perspektiva — shared match v lize (s opp_* agregáty)
     if (m.opp_team_id && teamIdSet.has(m.opp_team_id)) {
       const row = byTeam.get(m.opp_team_id);
       if (row) {
         row.games += 1;
+        row.offTd += m.opp_off_td ?? 0;
+        row.xp1Ok += m.opp_xp1_ok ?? 0; row.xp1Att += m.opp_xp1_att ?? 0;
+        row.xp2Ok += m.opp_xp2_ok ?? 0; row.xp2Att += m.opp_xp2_att ?? 0;
         row.pointsFor += m.opp_score ?? 0;
         row.pointsAgainst += m.our_score ?? 0;
+        row.penCount += m.opp_pen_count ?? 0;
+        row.penYds += m.opp_pen_yds ?? 0;
       }
     }
   }
@@ -611,18 +617,22 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
     teamMeta.set(r.team_id, { teamName: r.teams?.name ?? '—', clubName: r.teams?.clubs?.name ?? '—' });
   }
 
-  // All matches across teams
+  // Iter 37+39: shared matches incl. + opp_* aggregates
+  const teamIdSet = new Set(teamIds);
+  const orFilter = `team_id.in.(${teamIds.join(',')}),opp_team_id.in.(${teamIds.join(',')})`;
   const { data: matchesRaw } = await admin
     .from('matches')
     .select(`
-      id, team_id, date, opponent,
-      our_score, opp_score, off_td,
+      id, team_id, opp_team_id, date, opponent,
+      our_score, opp_score, off_td, opp_off_td,
       rush_yds, pass_yds, total_yds,
       qb_att, qb_comp, qb_td, qb_int, qb_yds,
       def_drives, def_stops,
-      pen_count, pen_yds
+      pen_count, pen_yds, opp_pen_count, opp_pen_yds,
+      teams(name, club_id, clubs(name)),
+      opp_team:teams!matches_opp_team_id_fkey(name, club_id, clubs(name))
     `)
-    .in('team_id', teamIds);
+    .or(orFilter);
   const matches = (matchesRaw ?? []) as any[];
   if (matches.length === 0) return empty;
 
@@ -630,7 +640,7 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
   for (const m of matches) matchById.set(m.id, m);
   const matchIds = matches.map((m) => m.id);
 
-  // Player stats per match (with player metadata)
+  // Iter 37: + players.team_id; attribute per player team
   const { data: psRaw } = await admin
     .from('match_player_stats')
     .select(`
@@ -638,15 +648,22 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
       qb_att, qb_comp, qb_yds, qb_td, qb_int,
       wr_targets, wr_rec, wr_yds, wr_td, wr_pts,
       db_flag_pull, db_sack, db_brkup, db_int,
-      players ( first_name, last_name, jersey_number, photo_url )
+      players ( first_name, last_name, jersey_number, photo_url, team_id )
     `)
     .in('match_id', matchIds);
   const psRows = (psRaw ?? []) as any[];
 
   const formatDate = (s: string) => new Date(s).toLocaleDateString('cs-CZ');
+  const matchCtxFor = (match: any, perspectiveTeamId: string) => {
+    if (match.team_id === perspectiveTeamId) return `vs ${match.opponent} · ${formatDate(match.date)}`;
+    const oppLabel = match.teams?.clubs?.name
+      ? `${match.teams.clubs.name}${match.teams?.name ? ' ' + match.teams.name : ''}`
+      : (match.teams?.name || match.opponent || '—');
+    return `vs ${oppLabel} · ${formatDate(match.date)}`;
+  };
   const matchCtx = (match: any) => `vs ${match.opponent} · ${formatDate(match.date)}`;
 
-  // ── Player season totals: aggregate per player ──
+  // ── Player season totals — Iter 37: per player.team_id ──
   type PlayerAgg = {
     playerId: string; playerName: string; jersey: number | null; photoUrl: string | null;
     teamName: string; clubName: string;
@@ -658,9 +675,11 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
   for (const r of psRows) {
     const p = r.players ?? {};
     const id = r.player_id;
+    const playerTeamId = p.team_id;
+    if (!playerTeamId || !teamIdSet.has(playerTeamId)) continue;
     const m = matchById.get(r.match_id);
     if (!m) continue;
-    const meta = teamMeta.get(m.team_id) ?? { teamName: '—', clubName: '—' };
+    const meta = teamMeta.get(playerTeamId) ?? { teamName: '—', clubName: '—' };
     let b = playerAgg.get(id);
     if (!b) {
       b = {
@@ -738,14 +757,17 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
     if (candidates.length === 0) return null;
     candidates.sort((a, b) => b.value - a.value);
     const top = candidates[0];
-    const meta = teamMeta.get(top.match.team_id) ?? { teamName: '—', clubName: '—' };
+    // Iter 37: attribute per player.team_id
+    const ptid = top.player.team_id;
+    if (!ptid || !teamIdSet.has(ptid)) return null;
+    const meta = teamMeta.get(ptid) ?? { teamName: '—', clubName: '—' };
     return {
       category, value: top.value,
       playerName: `${top.player.first_name ?? ''} ${top.player.last_name ?? ''}`.trim() || '—',
       jersey: top.player.jersey_number ?? null,
       photoUrl: top.player.photo_url ?? null,
       teamName: meta.teamName, clubName: meta.clubName,
-      matchContext: matchCtx(top.match), season,
+      matchContext: matchCtxFor(top.match, ptid), season,
     };
   };
 
@@ -786,22 +808,44 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
     });
   }
   for (const m of matches) {
-    const ta = teamAgg.get(m.team_id); if (!ta) continue;
-    ta.games += 1;
-    ta.pointsFor += m.our_score ?? 0;
-    ta.pointsAgainst += m.opp_score ?? 0;
-    ta.totalYds += m.total_yds ?? 0;
-    ta.offTd += m.off_td ?? 0;
-    ta.penCount += m.pen_count ?? 0;
-    ta.penYds += m.pen_yds ?? 0;
-    if      (m.our_score >  m.opp_score) ta.wins   += 1;
-    else if (m.our_score <  m.opp_score) ta.losses += 1;
-    else                                  ta.ties   += 1;
+    // Home perspektiva
+    if (teamIdSet.has(m.team_id)) {
+      const ta = teamAgg.get(m.team_id);
+      if (ta) {
+        ta.games += 1;
+        ta.pointsFor += m.our_score ?? 0;
+        ta.pointsAgainst += m.opp_score ?? 0;
+        ta.totalYds += m.total_yds ?? 0;
+        ta.offTd += m.off_td ?? 0;
+        ta.penCount += m.pen_count ?? 0;
+        ta.penYds += m.pen_yds ?? 0;
+        if      (m.our_score >  m.opp_score) ta.wins   += 1;
+        else if (m.our_score <  m.opp_score) ta.losses += 1;
+        else                                  ta.ties   += 1;
+      }
+    }
+    // Iter 37+39: opp perspektiva
+    if (m.opp_team_id && teamIdSet.has(m.opp_team_id)) {
+      const ta = teamAgg.get(m.opp_team_id);
+      if (ta) {
+        ta.games += 1;
+        ta.pointsFor += m.opp_score ?? 0;
+        ta.pointsAgainst += m.our_score ?? 0;
+        ta.offTd += m.opp_off_td ?? 0;
+        ta.penCount += m.opp_pen_count ?? 0;
+        ta.penYds += m.opp_pen_yds ?? 0;
+        if      (m.opp_score >  m.our_score) ta.wins   += 1;
+        else if (m.opp_score <  m.our_score) ta.losses += 1;
+        else                                  ta.ties   += 1;
+      }
+    }
   }
-  // Add defense aggregates from psRows
+  // Defense aggregates per player.team_id
   for (const r of psRows) {
-    const m = matchById.get(r.match_id); if (!m) continue;
-    const ta = teamAgg.get(m.team_id); if (!ta) continue;
+    const pt = r.players?.team_id;
+    if (!pt || !teamIdSet.has(pt)) continue;
+    const ta = teamAgg.get(pt);
+    if (!ta) continue;
     ta.defInts  += r.db_int  ?? 0;
     ta.defSacks += r.db_sack ?? 0;
   }
@@ -847,48 +891,83 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
     topWinPct(),
   ].filter((x): x is RecordEntry => x !== null);
 
-  // ── Team single-game peaks ──
+  // ── Team single-game peaks — Iter 37: dual perspective ──
+  type MatchPerspective = { m: any; teamId: string; ourScore: number; oppScore: number; isHomePerspective: boolean };
+  const perspectives: MatchPerspective[] = [];
+  for (const m of matches) {
+    if (teamIdSet.has(m.team_id)) {
+      perspectives.push({ m, teamId: m.team_id, ourScore: m.our_score ?? 0, oppScore: m.opp_score ?? 0, isHomePerspective: true });
+    }
+    if (m.opp_team_id && teamIdSet.has(m.opp_team_id)) {
+      perspectives.push({ m, teamId: m.opp_team_id, ourScore: m.opp_score ?? 0, oppScore: m.our_score ?? 0, isHomePerspective: false });
+    }
+  }
+
   const topMatchStat = (
     field: string,
     category: string,
     extract?: (m: any) => number,
+    oppField?: string,  // Iter 39: pole pro opp perspective
   ): RecordEntry | null => {
-    const candidates = matches.map((m) => ({
-      m, value: extract ? extract(m) : (m[field] as number) ?? 0,
-    })).filter((c) => c.value > 0);
+    const candidates = perspectives.map((pv) => {
+      let value: number;
+      if (extract) value = extract(pv.m);
+      else if (pv.isHomePerspective) value = (pv.m[field] as number) ?? 0;
+      else if (oppField) value = (pv.m[oppField] as number) ?? 0;
+      else value = 0;
+      return { m: pv.m, teamId: pv.teamId, value };
+    }).filter((c) => c.value > 0);
     if (candidates.length === 0) return null;
     candidates.sort((a, b) => b.value - a.value);
     const top = candidates[0];
-    const meta = teamMeta.get(top.m.team_id) ?? { teamName: '—', clubName: '—' };
+    const meta = teamMeta.get(top.teamId) ?? { teamName: '—', clubName: '—' };
     return {
       category, value: top.value,
       teamName: meta.teamName, clubName: meta.clubName,
-      matchContext: matchCtx(top.m), season,
+      matchContext: matchCtxFor(top.m, top.teamId), season,
+    };
+  };
+
+  const topPointsFor = (): RecordEntry | null => {
+    const candidates = perspectives.map((pv) => ({ m: pv.m, teamId: pv.teamId, value: pv.ourScore })).filter((c) => c.value > 0);
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => b.value - a.value);
+    const top = candidates[0];
+    const meta = teamMeta.get(top.teamId) ?? { teamName: '—', clubName: '—' };
+    return {
+      category: 'Nejvíc bodů skórovaných v zápase',
+      value: top.value,
+      teamName: meta.teamName, clubName: meta.clubName,
+      matchContext: matchCtxFor(top.m, top.teamId), season,
     };
   };
 
   const topMargin = (): RecordEntry | null => {
-    const candidates = matches
-      .map((m) => ({ m, value: (m.our_score ?? 0) - (m.opp_score ?? 0) }))
+    const candidates = perspectives
+      .map((pv) => ({ m: pv.m, teamId: pv.teamId, value: pv.ourScore - pv.oppScore, ourScore: pv.ourScore, oppScore: pv.oppScore }))
       .filter((c) => c.value > 0);
     if (candidates.length === 0) return null;
     candidates.sort((a, b) => b.value - a.value);
     const top = candidates[0];
-    const meta = teamMeta.get(top.m.team_id) ?? { teamName: '—', clubName: '—' };
+    const meta = teamMeta.get(top.teamId) ?? { teamName: '—', clubName: '—' };
+    const isHome = top.m.team_id === top.teamId;
+    const oppLabel = isHome
+      ? top.m.opponent
+      : (top.m.teams?.clubs?.name ? `${top.m.teams.clubs.name}${top.m.teams?.name ? ' ' + top.m.teams.name : ''}` : (top.m.teams?.name || top.m.opponent || '—'));
     return {
       category: 'Nejvyšší rozdíl skóre v zápase',
       value: top.value,
       formattedValue: `+${top.value}`,
       teamName: meta.teamName, clubName: meta.clubName,
-      matchContext: `${top.m.our_score}–${top.m.opp_score} vs ${top.m.opponent} · ${formatDate(top.m.date)}`,
+      matchContext: `${top.ourScore}–${top.oppScore} vs ${oppLabel} · ${formatDate(top.m.date)}`,
       season,
     };
   };
 
   const teamGame = [
-    topMatchStat('our_score', 'Nejvíc bodů skórovaných v zápase'),
+    topPointsFor(),
     topMatchStat('total_yds', 'Nejvíc total yardů v zápase'),
-    topMatchStat('off_td',    'Nejvíc TD v zápase'),
+    topMatchStat('off_td',    'Nejvíc TD v zápase', undefined, 'opp_off_td'),
     topMargin(),
   ].filter((x): x is RecordEntry => x !== null);
 
@@ -1015,25 +1094,54 @@ export async function fetchLeagueMatches(leagueId: string): Promise<LeagueMatchL
   const teamIds = ((ltRaw ?? []) as { team_id: string }[]).map((r) => r.team_id);
   if (teamIds.length === 0) return [];
 
+  // Iter 37: shared matches incl.
+  const orFilter = `team_id.in.(${teamIds.join(',')}),opp_team_id.in.(${teamIds.join(',')})`;
   const { data: matchesRaw } = await admin
     .from('matches')
-    .select('id, date, opponent, our_score, opp_score, team_id, teams(name, primary_color, club_id, clubs(name, logo_url))')
-    .in('team_id', teamIds)
+    .select('id, date, opponent, our_score, opp_score, team_id, opp_team_id, teams(name, primary_color, club_id, clubs(name, logo_url)), opp_team:teams!matches_opp_team_id_fkey(name, primary_color, club_id, clubs(name, logo_url))')
+    .or(orFilter)
     .order('date', { ascending: false });
 
-  return ((matchesRaw ?? []) as any[]).map((m) => ({
-    id: m.id,
-    date: m.date,
-    opponent: m.opponent,
-    ourScore: m.our_score,
-    oppScore: m.opp_score,
-    result: m.our_score > m.opp_score ? 'W' : m.our_score < m.opp_score ? 'L' : 'T',
-    teamId: m.team_id,
-    teamName: m.teams?.name ?? '—',
-    clubName: m.teams?.clubs?.name ?? '—',
-    clubLogoUrl: m.teams?.clubs?.logo_url ?? null,
-    primaryColor: m.teams?.primary_color ?? '#0F1B2D',
-  })) as LeagueMatchListRow[];
+  const teamIdSet = new Set(teamIds);
+  const out: LeagueMatchListRow[] = [];
+  for (const m of (matchesRaw ?? []) as any[]) {
+    const homeInLeague = teamIdSet.has(m.team_id);
+    const oppInLeague  = m.opp_team_id && teamIdSet.has(m.opp_team_id);
+    if (homeInLeague) {
+      out.push({
+        id: m.id,
+        date: m.date,
+        opponent: m.opponent,
+        ourScore: m.our_score,
+        oppScore: m.opp_score,
+        result: m.our_score > m.opp_score ? 'W' : m.our_score < m.opp_score ? 'L' : 'T',
+        teamId: m.team_id,
+        teamName: m.teams?.name ?? '—',
+        clubName: m.teams?.clubs?.name ?? '—',
+        clubLogoUrl: m.teams?.clubs?.logo_url ?? null,
+        primaryColor: m.teams?.primary_color ?? '#0F1B2D',
+      });
+    }
+    if (oppInLeague) {
+      const oppLabel = m.teams?.clubs?.name
+        ? `${m.teams.clubs.name}${m.teams?.name ? ' ' + m.teams.name : ''}`
+        : (m.teams?.name || m.opponent || '—');
+      out.push({
+        id: m.id,
+        date: m.date,
+        opponent: oppLabel,
+        ourScore: m.opp_score,
+        oppScore: m.our_score,
+        result: m.opp_score > m.our_score ? 'W' : m.opp_score < m.our_score ? 'L' : 'T',
+        teamId: m.opp_team_id,
+        teamName: m.opp_team?.name ?? '—',
+        clubName: m.opp_team?.clubs?.name ?? '—',
+        clubLogoUrl: m.opp_team?.clubs?.logo_url ?? null,
+        primaryColor: m.opp_team?.primary_color ?? '#0F1B2D',
+      });
+    }
+  }
+  return out;
 }
 
 export type MatchPlayerStat = {
@@ -1094,7 +1202,7 @@ export async function fetchMatchDetail(matchId: string, leagueId: string): Promi
   const { data: m } = await admin
     .from('matches')
     .select(`
-      id, team_id, date, opponent,
+      id, team_id, opp_team_id, date, opponent,
       our_score, opp_score, off_td,
       xp1_att, xp1_ok, xp2_att, xp2_ok,
       qb_att, qb_comp, qb_td, qb_int, qb_yds,
@@ -1102,14 +1210,18 @@ export async function fetchMatchDetail(matchId: string, leagueId: string): Promi
       opp_pass_yds,
       def_drives, def_stops,
       pen_count, pen_yds,
-      teams(id, name, primary_color, club_id, clubs(name, logo_url))
+      teams(id, name, primary_color, club_id, clubs(name, logo_url)),
+      opp_team:teams!matches_opp_team_id_fkey(id, name, primary_color, club_id, clubs(name, logo_url))
     `)
     .eq('id', matchId)
     .maybeSingle();
 
   if (!m) return null;
   const match = m as any;
-  if (!allowedTeams.has(match.team_id)) return null;
+  // Iter 37: dostupný pokud home tým NEBO opp tým v lize
+  const homeInLeague = allowedTeams.has(match.team_id);
+  const oppInLeague  = match.opp_team_id && allowedTeams.has(match.opp_team_id);
+  if (!homeInLeague && !oppInLeague) return null;
 
   // League metadata (resolved later by caller; supplied as null here)
   const team = match.teams ?? {};
