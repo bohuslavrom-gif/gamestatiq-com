@@ -34,26 +34,39 @@ export async function fetchLeagueRecentMatches(leagueId: string, limit = 10): Pr
   const teamIds = ((ltRaw ?? []) as { team_id: string }[]).map((r) => r.team_id);
   if (teamIds.length === 0) return [];
 
-  // Latest matches across those teams
+  // Iter 35: zahrnout i shared matches (kde je opp_team_id v lize)
+  const orFilter = `team_id.in.(${teamIds.join(',')}),opp_team_id.in.(${teamIds.join(',')})`;
   const { data: matchesRaw } = await admin
     .from('matches')
-    .select('id, date, opponent, our_score, opp_score, team_id, teams(name, club_id, clubs(name, logo_url))')
-    .in('team_id', teamIds)
+    .select('id, date, opponent, our_score, opp_score, team_id, opp_team_id, teams(name, club_id, clubs(name, logo_url)), opp_team:teams!matches_opp_team_id_fkey(name, club_id, clubs(name, logo_url))')
+    .or(orFilter)
     .order('date', { ascending: false })
     .limit(limit);
 
-  return ((matchesRaw ?? []) as any[]).map((m) => ({
-    id: m.id,
-    date: m.date,
-    opponent: m.opponent,
-    ourScore: m.our_score,
-    oppScore: m.opp_score,
-    result: m.our_score > m.opp_score ? 'W' : m.our_score < m.opp_score ? 'L' : 'T',
-    teamId: m.team_id,
-    teamName: m.teams?.name ?? '—',
-    clubName: m.teams?.clubs?.name ?? '—',
-    clubLogoUrl: m.teams?.clubs?.logo_url ?? null,
-  })) as LeagueMatchRow[];
+  const teamIdSet = new Set(teamIds);
+  return ((matchesRaw ?? []) as any[]).map((m) => {
+    const homeInLeague = teamIdSet.has(m.team_id);
+    const oppInLeague = m.opp_team_id && teamIdSet.has(m.opp_team_id);
+    const showAsOpp = !homeInLeague && oppInLeague;
+    const ours = showAsOpp ? m.opp_score : m.our_score;
+    const theirs = showAsOpp ? m.our_score : m.opp_score;
+    const myTeam = showAsOpp ? m.opp_team : m.teams;
+    const oppLabel = showAsOpp
+      ? (m.teams?.clubs?.name ? `${m.teams.clubs.name}${m.teams?.name ? ' ' + m.teams.name : ''}` : (m.teams?.name || m.opponent || '—'))
+      : m.opponent;
+    return {
+      id: m.id,
+      date: m.date,
+      opponent: oppLabel,
+      ourScore: ours,
+      oppScore: theirs,
+      result: ours > theirs ? 'W' : ours < theirs ? 'L' : 'T',
+      teamId: showAsOpp ? m.opp_team_id : m.team_id,
+      teamName: myTeam?.name ?? '—',
+      clubName: myTeam?.clubs?.name ?? '—',
+      clubLogoUrl: myTeam?.clubs?.logo_url ?? null,
+    };
+  }) as LeagueMatchRow[];
 }
 
 // ── Standings ────────────────────────────────────────────────────
@@ -89,14 +102,22 @@ export async function fetchLeagueStandings(leagueId: string): Promise<StandingsR
   if (ltRows.length === 0) return [];
 
   const teamIds = ltRows.map((r) => r.team_id);
+  const teamIdSet = new Set(teamIds);
 
-  // 2. All matches for those teams, ordered chronologically
+  // 2. Iter 35: matches kde alespoň jedna strana (home NEBO opp) je v lize.
+  const orFilter = `team_id.in.(${teamIds.join(',')}),opp_team_id.in.(${teamIds.join(',')})`;
   const { data: matchesRaw } = await admin
     .from('matches')
-    .select('team_id, date, our_score, opp_score')
-    .in('team_id', teamIds)
+    .select('team_id, opp_team_id, date, our_score, opp_score')
+    .or(orFilter)
     .order('date', { ascending: true });
-  const matches = (matchesRaw ?? []) as { team_id: string; date: string; our_score: number; opp_score: number }[];
+  const matches = (matchesRaw ?? []) as {
+    team_id: string;
+    opp_team_id: string | null;
+    date: string;
+    our_score: number;
+    opp_score: number;
+  }[];
 
   // 3. Aggregate per team
   const byTeam = new Map<string, StandingsRow>();
@@ -116,14 +137,30 @@ export async function fetchLeagueStandings(leagueId: string): Promise<StandingsR
   }
 
   for (const m of matches) {
-    const row = byTeam.get(m.team_id);
-    if (!row) continue;
-    row.played += 1;
-    row.ptsFor += m.our_score;
-    row.ptsAgainst += m.opp_score;
-    if (m.our_score > m.opp_score)      { row.wins += 1; row.lastResult = 'W'; }
-    else if (m.our_score < m.opp_score) { row.losses += 1; row.lastResult = 'L'; }
-    else                                 { row.ties += 1; row.lastResult = 'T'; }
+    // Home perspektiva
+    if (teamIdSet.has(m.team_id)) {
+      const row = byTeam.get(m.team_id);
+      if (row) {
+        row.played += 1;
+        row.ptsFor += m.our_score;
+        row.ptsAgainst += m.opp_score;
+        if (m.our_score > m.opp_score)      { row.wins += 1; row.lastResult = 'W'; }
+        else if (m.our_score < m.opp_score) { row.losses += 1; row.lastResult = 'L'; }
+        else                                 { row.ties += 1; row.lastResult = 'T'; }
+      }
+    }
+    // Iter 35: opp perspektiva — shared match v lize
+    if (m.opp_team_id && teamIdSet.has(m.opp_team_id)) {
+      const row = byTeam.get(m.opp_team_id);
+      if (row) {
+        row.played += 1;
+        row.ptsFor += m.opp_score;
+        row.ptsAgainst += m.our_score;
+        if (m.opp_score > m.our_score)      { row.wins += 1; row.lastResult = 'W'; }
+        else if (m.opp_score < m.our_score) { row.losses += 1; row.lastResult = 'L'; }
+        else                                 { row.ties += 1; row.lastResult = 'T'; }
+      }
+    }
   }
 
   for (const row of byTeam.values()) {
@@ -182,17 +219,14 @@ export async function fetchLeagueLeaders(leagueId: string): Promise<{
     });
   }
 
-  // Step 2: matches for those teams (just need ids to filter match_player_stats)
+  // Step 2: Iter 35 — matches incl. shared (alespoň jedna strana v lize)
+  const orFilter = `team_id.in.(${teamIds.join(',')}),opp_team_id.in.(${teamIds.join(',')})`;
   const { data: matchesRaw } = await admin
     .from('matches')
-    .select('id, team_id')
-    .in('team_id', teamIds);
-  const matches = (matchesRaw ?? []) as { id: string; team_id: string }[];
+    .select('id, team_id, opp_team_id')
+    .or(orFilter);
+  const matches = (matchesRaw ?? []) as { id: string; team_id: string; opp_team_id: string | null }[];
   if (matches.length === 0) return { qb: [], wr: [], db: [] };
-
-  // Map match_id → team_id (so we can attribute a player's stat to the team that earned it)
-  const matchToTeam = new Map<string, string>();
-  for (const m of matches) matchToTeam.set(m.id, m.team_id);
   const matchIds = matches.map((m) => m.id);
 
   // Step 3: all match_player_stats for those matches + player metadata
@@ -208,16 +242,15 @@ export async function fetchLeagueLeaders(leagueId: string): Promise<{
     .in('match_id', matchIds);
   const psRows = (psRaw ?? []) as any[];
 
-  // Step 4: aggregate per player
+  // Step 4: Iter 35 — attribute per player.team_id; jen hráče jejichž tým je v lize
+  const teamIdSet = new Set(teamIds);
   const buckets = new Map<string, LeaderRow>();
   for (const r of psRows) {
     const p = r.players ?? {};
     const id = r.player_id;
-    // Team attribution: use the team that played the match (matchToTeam),
-    // not p.team_id (player could have been on a different roster at the time).
-    const playMatchTeam = matchToTeam.get(r.match_id);
-    if (!playMatchTeam) continue;
-    const meta = teamMeta.get(playMatchTeam);
+    const playerTeamId = p.team_id;
+    if (!playerTeamId || !teamIdSet.has(playerTeamId)) continue;
+    const meta = teamMeta.get(playerTeamId);
 
     let b = buckets.get(id);
     if (!b) {
@@ -288,15 +321,14 @@ export async function fetchLeagueAllPlayers(leagueId: string): Promise<{
     });
   }
 
+  // Iter 35: shared matches incl.
+  const orFilter = `team_id.in.(${teamIds.join(',')}),opp_team_id.in.(${teamIds.join(',')})`;
   const { data: matchesRaw } = await admin
     .from('matches')
-    .select('id, team_id')
-    .in('team_id', teamIds);
-  const matches = (matchesRaw ?? []) as { id: string; team_id: string }[];
+    .select('id, team_id, opp_team_id')
+    .or(orFilter);
+  const matches = (matchesRaw ?? []) as { id: string; team_id: string; opp_team_id: string | null }[];
   if (matches.length === 0) return { qb: [], wr: [], db: [] };
-
-  const matchToTeam = new Map<string, string>();
-  for (const m of matches) matchToTeam.set(m.id, m.team_id);
   const matchIds = matches.map((m) => m.id);
 
   const { data: psRaw } = await admin
@@ -306,16 +338,19 @@ export async function fetchLeagueAllPlayers(leagueId: string): Promise<{
       qb_att, qb_comp, qb_yds, qb_td, qb_int,
       wr_targets, wr_rec, wr_yds, wr_td, wr_pts,
       db_flag_pull, db_sack, db_brkup, db_int,
-      players ( first_name, last_name, jersey_number, photo_url )
+      players ( first_name, last_name, jersey_number, photo_url, team_id )
     `)
     .in('match_id', matchIds);
   const psRows = (psRaw ?? []) as any[];
 
+  const teamIdSet = new Set(teamIds);
   const buckets = new Map<string, LeaderRow>();
   for (const r of psRows) {
     const p = r.players ?? {};
     const id = r.player_id;
-    const meta = teamMeta.get(matchToTeam.get(r.match_id) ?? '');
+    const playerTeamId = p.team_id;
+    if (!playerTeamId || !teamIdSet.has(playerTeamId)) continue;
+    const meta = teamMeta.get(playerTeamId);
     let b = buckets.get(id);
     if (!b) {
       b = {
