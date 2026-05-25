@@ -1,5 +1,6 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
+import ScorerInstall from '../../components/ScorerInstall.astro';
 import { getSupabaseAdmin } from '../../lib/supabase';
 
 export const prerender = false;
@@ -57,6 +58,11 @@ const SAVED_MSG: Record<string, string> = {
       Vaše role <strong>{role ?? '—'}</strong> nedovoluje úpravy. Pro korekce statistik je potřeba role Admin, Trenér, nebo Statistik.
     </div>
   )}
+
+  <!-- Iter 30: Stáhnout Scorer app (compact) -->
+  <div class="mb-6">
+    <ScorerInstall compact={true} />
+  </div>
 
   {matches.length === 0 ? (
     <div class="rounded-xl border border-stone bg-pearl p-12 text-center">

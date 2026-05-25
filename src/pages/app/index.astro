@@ -1,5 +1,6 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
+import ScorerInstall from '../../components/ScorerInstall.astro';
 import { fetchPlayerEnrichmentByName, enrich } from '../../lib/players';
 import { getSupabaseAdmin } from '../../lib/supabase';
 import { fetchSupabaseStats } from '../../lib/supabase-stats';
@@ -189,6 +190,11 @@ const topWr = supabaseStats.wrStats[0];
       )}
       <a href="/app/billing" class="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1A2B45]">Upgrade na Klub</a>
     </div>
+  </div>
+
+  <!-- Iter 30: Stáhnout Scorer app -->
+  <div class="mt-6">
+    <ScorerInstall />
   </div>
 
   <div class="mt-6 grid gap-5 lg:grid-cols-[1.3fr_1fr]">

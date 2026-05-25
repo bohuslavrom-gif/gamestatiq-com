@@ -1,0 +1,97 @@
+---
+// Iter 30: Stáhnout Scorer app card
+// Reusable card pro instalaci Scorer PWA na phone.
+// Generuje QR code přes Google Charts API (server-side embed).
+
+interface Props {
+  /** Compact variant — kratší text, pro postranní panely */
+  compact?: boolean;
+}
+const { compact = false } = Astro.props;
+
+const SCORER_URL = 'https://scorer.gamestatiq.com';
+// QR code generated via free api (no API key needed)
+const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(SCORER_URL)}&qzone=2&color=0F1B2D&bgcolor=ffffff`;
+---
+
+<div class={compact
+  ? "rounded-xl border border-stone bg-gradient-to-br from-ink to-[#1A2B45] p-5 text-white"
+  : "rounded-xl border border-stone bg-gradient-to-br from-ink to-[#1A2B45] p-6 text-white lg:p-8"}>
+  <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:gap-8">
+    <!-- Left: copy + buttons -->
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center gap-2">
+        <span class="inline-flex h-7 w-7 items-center justify-center rounded-md bg-signal/20 text-signal">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5"/><line x1="12" y1="18" x2="12" y2="18"/></svg>
+        </span>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-signal">Měření zápasu</p>
+      </div>
+      <h3 class="mt-2 font-bold tracking-tight-2 text-white" class:list={[compact ? 'text-[17px]' : 'text-[22px]']}>
+        Stáhnout Scorer app na mobil
+      </h3>
+      <p class="mt-2 text-[13px] leading-relaxed text-white/75" class:list={[compact ? 'max-w-none' : 'max-w-xl']}>
+        {compact
+          ? 'Tap-to-score zápasový zápis přímo z telefonu. Funguje offline, synchronizuje se s portálem.'
+          : 'Tap-to-score zápasový zápis přímo z telefonu — žádné papíry, žádný Excel po zápase. Funguje offline u hřiště, synchronizuje se do portálu hned jak je signál. Soupiska a playbook akce ze stránek Soupiska + Playbook se načtou automaticky.'}
+      </p>
+
+      <div class="mt-4 flex flex-wrap items-center gap-2.5">
+        <a
+          href={SCORER_URL}
+          target="_blank"
+          rel="noopener"
+          class="inline-flex items-center gap-2 rounded-lg bg-signal px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#C8313D]"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Otevřít Scorer
+        </a>
+        <a
+          href={SCORER_URL}
+          target="_blank"
+          rel="noopener"
+          class="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-2.5 text-[13px] font-medium text-white hover:bg-white/15"
+        >
+          {SCORER_URL.replace('https://', '')}
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7 M7 7h10v10"/></svg>
+        </a>
+      </div>
+
+      {!compact && (
+        <div class="mt-5 grid gap-3 sm:grid-cols-2">
+          <div class="rounded-lg border border-white/10 bg-white/5 p-3">
+            <p class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-signal">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 12.5c0-2.7 2.2-4 2.3-4-1.3-1.8-3.2-2.1-3.9-2.1-1.7-.2-3.2 1-4.1 1-.9 0-2.2-1-3.6-1-1.8 0-3.6 1.1-4.5 2.7-2 3.4-.5 8.5 1.4 11.3.9 1.4 2 2.9 3.4 2.8 1.4-.1 1.9-.9 3.5-.9 1.7 0 2.1.9 3.6.9 1.5 0 2.4-1.4 3.3-2.7.8-1.1 1.2-2.2 1.6-3.4-3.9-1.4-4-5.5-4-5.6 m-3.5-9c.7-.9 1.3-2 1.1-3.2-1 .1-2.3.7-3 1.6-.7.7-1.3 1.9-1.2 3 1.2.1 2.3-.6 3.1-1.4"/></svg>
+              iPhone (Safari)
+            </p>
+            <ol class="mt-2 space-y-0.5 text-[11px] leading-relaxed text-white/75">
+              <li>1. Otevři odkaz ve Safari</li>
+              <li>2. Tap Share (čtvereček se šipkou)</li>
+              <li>3. Tap "Přidat na plochu"</li>
+            </ol>
+          </div>
+          <div class="rounded-lg border border-white/10 bg-white/5 p-3">
+            <p class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-verde">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M5.9 20.7c0 .9.7 1.6 1.6 1.6h1.1V25h2.7v-2.7h1.6V25h2.7v-2.7H17c.9 0 1.6-.7 1.6-1.6V9.4H5.9v11.3M2.5 9.7C1.6 9.7.9 10.4.9 11.3v6.5c0 .9.7 1.6 1.6 1.6.9 0 1.6-.7 1.6-1.6v-6.5c0-.9-.7-1.6-1.6-1.6m18.9 0c-.9 0-1.6.7-1.6 1.6v6.5c0 .9.7 1.6 1.6 1.6.9 0 1.6-.7 1.6-1.6v-6.5c0-.9-.7-1.6-1.6-1.6M16.5 4.3l1.1-1.6c.1-.2 0-.4-.1-.4-.2-.1-.4 0-.4.1l-1.1 1.6c-1-.4-2-.6-3.1-.6-1.1 0-2.1.2-3.1.6L8.6 2.5c-.1-.1-.3-.2-.4-.1-.2.1-.2.3-.1.4l1.1 1.6c-2.1 1.1-3.5 3.1-3.5 5.5h12.5c0-2.4-1.4-4.4-3.7-5.6m-6.5 3.1c-.3 0-.6-.3-.6-.6 0-.3.3-.6.6-.6.3 0 .6.3.6.6 0 .3-.3.6-.6.6m5 0c-.3 0-.6-.3-.6-.6 0-.3.3-.6.6-.6.3 0 .6.3.6.6 0 .3-.3.6-.6.6"/></svg>
+              Android (Chrome)
+            </p>
+            <ol class="mt-2 space-y-0.5 text-[11px] leading-relaxed text-white/75">
+              <li>1. Otevři odkaz v Chrome</li>
+              <li>2. Tap menu (⋮)</li>
+              <li>3. Tap "Install app"</li>
+            </ol>
+          </div>
+        </div>
+      )}
+    </div>
+
+    {!compact && (
+      <!-- Right: QR code -->
+      <div class="flex flex-col items-center gap-2 lg:flex-shrink-0">
+        <div class="rounded-xl bg-white p-3">
+          <img src={qrUrl} alt="QR kód pro instalaci Scoreru" class="h-32 w-32 sm:h-36 sm:w-36" />
+        </div>
+        <p class="text-[10px] uppercase tracking-[0.1em] text-white/60">Naskenuj telefonem</p>
+      </div>
+    )}
+  </div>
+</div>
