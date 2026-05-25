@@ -438,12 +438,14 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
   if (ltRows.length === 0) return [];
 
   const teamIds = ltRows.map((r) => r.team_id);
+  const teamIdSet = new Set(teamIds);
 
-  // Matches with team-level aggregates
+  // Iter 36: matches kde alespoň jedna strana v lize (vč. shared matches)
+  const orFilter = `team_id.in.(${teamIds.join(',')}),opp_team_id.in.(${teamIds.join(',')})`;
   const { data: matchesRaw } = await admin
     .from('matches')
     .select(`
-      id, team_id,
+      id, team_id, opp_team_id,
       our_score, opp_score,
       off_td,
       qb_att, qb_comp, qb_td, qb_int, qb_yds,
@@ -451,28 +453,34 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
       opp_pass_yds,
       pen_count, pen_yds
     `)
-    .in('team_id', teamIds);
+    .or(orFilter);
   const matches = (matchesRaw ?? []) as any[];
 
-  // Defensive INTs + Sacks from match_player_stats
-  const matchToTeam = new Map<string, string>();
-  for (const m of matches) matchToTeam.set(m.id, m.team_id);
+  // Iter 36: QB + Def stats per player.team_id z match_player_stats — funguje pro home i opp
   const matchIds = matches.map((m) => m.id);
   const { data: psRaw } = matchIds.length > 0
     ? await admin
         .from('match_player_stats')
-        .select('match_id, db_int, db_sack')
+        .select('match_id, qb_att, qb_comp, qb_yds, qb_td, qb_int, db_int, db_sack, players(team_id)')
         .in('match_id', matchIds)
     : { data: [] as any[] };
   const psRows = (psRaw ?? []) as any[];
+  const qbAggByTeam = new Map<string, { att: number; comp: number; yds: number; td: number; int: number }>();
   const defAggByTeam = new Map<string, { ints: number; sacks: number }>();
   for (const r of psRows) {
-    const t = matchToTeam.get(r.match_id);
-    if (!t) continue;
-    let agg = defAggByTeam.get(t);
-    if (!agg) { agg = { ints: 0, sacks: 0 }; defAggByTeam.set(t, agg); }
-    agg.ints  += r.db_int  ?? 0;
-    agg.sacks += r.db_sack ?? 0;
+    const pt = r.players?.team_id;
+    if (!pt || !teamIdSet.has(pt)) continue;
+    let qb = qbAggByTeam.get(pt);
+    if (!qb) { qb = { att: 0, comp: 0, yds: 0, td: 0, int: 0 }; qbAggByTeam.set(pt, qb); }
+    qb.att  += r.qb_att  ?? 0;
+    qb.comp += r.qb_comp ?? 0;
+    qb.yds  += r.qb_yds  ?? 0;
+    qb.td   += r.qb_td   ?? 0;
+    qb.int  += r.qb_int  ?? 0;
+    let d = defAggByTeam.get(pt);
+    if (!d) { d = { ints: 0, sacks: 0 }; defAggByTeam.set(pt, d); }
+    d.ints  += r.db_int  ?? 0;
+    d.sacks += r.db_sack ?? 0;
   }
 
   // Aggregate per team
@@ -497,23 +505,39 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
   }
 
   for (const m of matches) {
-    const row = byTeam.get(m.team_id);
-    if (!row) continue;
-    row.games += 1;
-    row.offTd += m.off_td ?? 0;
-    row.xp1Ok += m.xp1_ok ?? 0; row.xp1Att += m.xp1_att ?? 0;
-    row.xp2Ok += m.xp2_ok ?? 0; row.xp2Att += m.xp2_att ?? 0;
-    row.pointsFor += m.our_score ?? 0;
-    row.pointsAgainst += m.opp_score ?? 0;
-    row.qbAtt += m.qb_att ?? 0; row.qbComp += m.qb_comp ?? 0;
-    row.qbTd  += m.qb_td  ?? 0; row.qbInt  += m.qb_int  ?? 0;
-    row.qbYds += m.qb_yds ?? 0;
-    row.oppPassYds += m.opp_pass_yds ?? 0;
-    row.penCount += m.pen_count ?? 0;
-    row.penYds += m.pen_yds ?? 0;
+    // Home perspektiva
+    if (teamIdSet.has(m.team_id)) {
+      const row = byTeam.get(m.team_id);
+      if (row) {
+        row.games += 1;
+        row.offTd += m.off_td ?? 0;
+        row.xp1Ok += m.xp1_ok ?? 0; row.xp1Att += m.xp1_att ?? 0;
+        row.xp2Ok += m.xp2_ok ?? 0; row.xp2Att += m.xp2_att ?? 0;
+        row.pointsFor += m.our_score ?? 0;
+        row.pointsAgainst += m.opp_score ?? 0;
+        row.oppPassYds += m.opp_pass_yds ?? 0;
+        row.penCount += m.pen_count ?? 0;
+        row.penYds += m.pen_yds ?? 0;
+      }
+    }
+    // Iter 36: opp perspektiva — shared match v lize (jen score a games; ostatní matches sloupce jsou home-centric)
+    if (m.opp_team_id && teamIdSet.has(m.opp_team_id)) {
+      const row = byTeam.get(m.opp_team_id);
+      if (row) {
+        row.games += 1;
+        row.pointsFor += m.opp_score ?? 0;
+        row.pointsAgainst += m.our_score ?? 0;
+      }
+    }
   }
 
+  // Iter 36: QB stats + def INT/Sack z player_stats per team_id
   for (const row of byTeam.values()) {
+    const qb = qbAggByTeam.get(row.teamId);
+    if (qb) {
+      row.qbAtt = qb.att; row.qbComp = qb.comp;
+      row.qbYds = qb.yds; row.qbTd = qb.td; row.qbInt = qb.int;
+    }
     if (row.games > 0) {
       row.pointsForAvg     = +(row.pointsFor     / row.games).toFixed(1);
       row.pointsAgainstAvg = +(row.pointsAgainst / row.games).toFixed(1);
