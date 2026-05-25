@@ -1,0 +1,57 @@
+{
+  "name": "GameStatiq",
+  "short_name": "GameStatiq",
+  "description": "Sport stats platforma — měřte každou hru. Pro týmy, ligy a národní svazy.",
+  "lang": "cs",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0F1B2D",
+  "theme_color": "#0F1B2D",
+  "categories": ["sports", "productivity"],
+  "icons": [
+    {
+      "src": "/brand/gamestatiq-app-icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/gamestatiq-app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/gamestatiq-app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/gamestatiq-app-icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/brand/gamestatiq-app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Statistiky",
+      "url": "/app/stats",
+      "description": "Týmové statistiky a Coach view"
+    },
+    {
+      "name": "Zápasy",
+      "url": "/app/matches",
+      "description": "Seznam zápasů s editorem"
+    }
+  ]
+}

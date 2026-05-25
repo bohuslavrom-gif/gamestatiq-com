@@ -33,8 +33,17 @@ const altLinks = (Object.keys(languages) as Lang[]).map((l) => ({
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
     <link rel="icon" type="image/svg+xml" href="/brand/gamestatiq-favicon.svg" />
-    <link rel="apple-touch-icon" href="/brand/gamestatiq-app-icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/brand/gamestatiq-app-icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/brand/gamestatiq-app-icon-180.png" />
     <meta name="theme-color" content="#0F1B2D" />
+
+    {/* Iter 29: PWA support — Add to Home Screen → fullscreen standalone app */}
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="GameStatiq" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="GameStatiq" />
 
     <link rel="canonical" href={canonicalURL} />
     {altLinks.map((l) => (
