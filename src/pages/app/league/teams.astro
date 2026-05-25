@@ -13,9 +13,10 @@ if (role !== 'admin') return Astro.redirect('/app/league');
 const admin = getSupabaseAdmin();
 
 // All league_teams (approved + pending) with team + club info
+// Iter 41: + primary_color, secondary_color, logo_url pro per-tým branding editor
 const { data: rowsRaw } = await admin
   .from('league_teams')
-  .select('team_id, invited_at, approved_at, invited_by, approved_by, teams(id, name, sport, is_archived, club_id, clubs(name, logo_url))')
+  .select('team_id, invited_at, approved_at, invited_by, approved_by, teams(id, name, sport, is_archived, primary_color, secondary_color, logo_url, club_id, clubs(name, logo_url))')
   .eq('league_id', league.id)
   .order('invited_at', { ascending: false });
 const rows = (rowsRaw ?? []) as any[];
@@ -43,6 +44,9 @@ const teamParam = url.searchParams.get('team');
 const SAVED_MSG: Record<string, string> = {
   invited:  teamParam ? `✓ Tým "${teamParam}" pozván do ligy. Čeká na schválení klubového admina.` : '✓ Tým pozván.',
   removed:  '✓ Tým odebrán z ligy.',
+  branding: '✓ Branding týmu uložen.',
+  logo:     '✓ Logo týmu nahráno.',
+  logo_removed: '✓ Logo týmu odstraněno.',
 };
 ---
 
@@ -107,23 +111,85 @@ const SAVED_MSG: Record<string, string> = {
           const t = row.teams;
           const club = t?.clubs;
           const abbr = (t?.name ?? '').replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || '?';
+          const primary   = t?.primary_color   ?? '#0F1B2D';
+          const secondary = t?.secondary_color ?? '#E63946';
+          const teamLogoUrl = t?.logo_url ?? null;
           return (
-            <li class="flex flex-wrap items-center gap-4 px-5 py-4">
-              {club?.logo_url ? (
-                <img src={club.logo_url} alt="" class="h-10 w-10 rounded-lg bg-mist object-contain" />
-              ) : (
-                <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-ink text-[12px] font-bold text-white">{abbr}</span>
-              )}
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-[14px] font-semibold text-ink">{t?.name ?? '—'}</p>
-                <p class="truncate text-[12px] text-slate">{club?.name ?? '—'} · schváleno {new Date(row.approved_at).toLocaleDateString('cs-CZ')}</p>
+            <li class="px-5 py-4">
+              <div class="flex flex-wrap items-center gap-4">
+                {teamLogoUrl ? (
+                  <img src={teamLogoUrl} alt="" class="h-10 w-10 rounded-lg bg-mist object-contain" loading="lazy" />
+                ) : club?.logo_url ? (
+                  <img src={club.logo_url} alt="" class="h-10 w-10 rounded-lg bg-mist object-contain" loading="lazy" />
+                ) : (
+                  <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-[12px] font-bold text-white" style={`background-color:${primary}`}>{abbr}</span>
+                )}
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-[14px] font-semibold text-ink">{t?.name ?? '—'}</p>
+                  <p class="truncate text-[12px] text-slate">{club?.name ?? '—'} · schváleno {new Date(row.approved_at).toLocaleDateString('cs-CZ')}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist"
+                    onclick={`document.getElementById('branding-${row.team_id}').classList.toggle('hidden')`}
+                  >Branding</button>
+                  <form method="POST" action="/api/league/team/remove" class="inline">
+                    <input type="hidden" name="league_id" value={league.id} />
+                    <input type="hidden" name="team_id" value={row.team_id} />
+                    <input type="hidden" name="source" value="league" />
+                    <button type="submit" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist" onclick="return confirm('Odebrat tým z ligy? Statistiky zůstávají v týmu, jen přestane být součástí ligových přehledů.')">Odebrat</button>
+                  </form>
+                </div>
               </div>
-              <form method="POST" action="/api/league/team/remove" class="inline">
-                <input type="hidden" name="league_id" value={league.id} />
-                <input type="hidden" name="team_id" value={row.team_id} />
-                <input type="hidden" name="source" value="league" />
-                <button type="submit" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist" onclick="return confirm('Odebrat tým z ligy? Statistiky zůstávají v týmu, jen přestane být součástí ligových přehledů.')">Odebrat</button>
-              </form>
+
+              {/* Iter 41: Branding panel — skrytý dokud user neklikne "Branding" */}
+              <div id={`branding-${row.team_id}`} class="mt-4 hidden rounded-lg border border-stone bg-mist/40 p-4">
+                <p class="mb-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate">Branding týmu — barvy & logo</p>
+                <div class="grid gap-4 md:grid-cols-2">
+                  <form method="POST" action="/api/league/team/branding" class="space-y-3">
+                    <input type="hidden" name="league_id" value={league.id} />
+                    <input type="hidden" name="team_id" value={row.team_id} />
+                    <div class="grid grid-cols-2 gap-3">
+                      <label class="block">
+                        <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Primární</span>
+                        <div class="mt-1 flex items-center gap-2">
+                          <input type="color" name="primary" value={primary} class="h-9 w-12 cursor-pointer rounded border border-stone bg-pearl" oninput={`this.nextElementSibling.value = this.value`} />
+                          <input type="text" value={primary} readonly class="block w-full rounded-md border border-stone bg-pearl px-2 py-1.5 text-[12px] font-mono tabular-nums text-graphite" />
+                        </div>
+                      </label>
+                      <label class="block">
+                        <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Sekundární</span>
+                        <div class="mt-1 flex items-center gap-2">
+                          <input type="color" name="secondary" value={secondary} class="h-9 w-12 cursor-pointer rounded border border-stone bg-pearl" oninput={`this.nextElementSibling.value = this.value`} />
+                          <input type="text" value={secondary} readonly class="block w-full rounded-md border border-stone bg-pearl px-2 py-1.5 text-[12px] font-mono tabular-nums text-graphite" />
+                        </div>
+                      </label>
+                    </div>
+                    <button type="submit" class="rounded-md bg-signal px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#C8313D]">Uložit barvy</button>
+                  </form>
+
+                  <div class="space-y-3">
+                    <form method="POST" action="/api/league/team/logo" enctype="multipart/form-data" class="space-y-2">
+                      <input type="hidden" name="league_id" value={league.id} />
+                      <input type="hidden" name="team_id" value={row.team_id} />
+                      <label class="block">
+                        <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Logo (SVG/PNG/JPG/WebP, max 5 MB)</span>
+                        <input type="file" name="logo" accept="image/svg+xml,image/png,image/jpeg,image/webp" required class="mt-1 block w-full text-[12px] text-graphite file:mr-3 file:rounded-md file:border file:border-stone file:bg-pearl file:px-3 file:py-1 file:text-[12px] file:font-medium file:text-graphite hover:file:bg-mist" />
+                      </label>
+                      <button type="submit" class="rounded-md bg-signal px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#C8313D]">Nahrát logo</button>
+                    </form>
+                    {teamLogoUrl && (
+                      <form method="POST" action="/api/league/team/logo" class="inline">
+                        <input type="hidden" name="league_id" value={league.id} />
+                        <input type="hidden" name="team_id" value={row.team_id} />
+                        <input type="hidden" name="action" value="remove" />
+                        <button type="submit" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[12px] font-medium text-graphite hover:bg-mist" onclick="return confirm('Odstranit logo týmu?')">Odstranit logo</button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              </div>
             </li>
           );
         })}
