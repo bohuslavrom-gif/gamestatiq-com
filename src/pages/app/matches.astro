@@ -25,15 +25,31 @@ if (currentTeam?.club_id) {
 const canEdit = role === 'admin' || role === 'coach' || role === 'stats';
 const canDelete = role === 'admin';
 
-// Matches for the current team
+// Iter 33: zápasy kde jsme team_id (naše) NEBO opp_team_id (shared match v lize, my=soupeř)
 const { data: matchesRaw } = currentTeamId
   ? await admin
       .from('matches')
-      .select('id, date, opponent, our_score, opp_score, off_drives, qb_td')
-      .eq('team_id', currentTeamId)
+      .select('id, date, opponent, our_score, opp_score, off_drives, qb_td, team_id, opp_team_id, teams:teams!matches_team_id_fkey(name, clubs(name))')
+      .or(`team_id.eq.${currentTeamId},opp_team_id.eq.${currentTeamId}`)
       .order('date', { ascending: false })
   : { data: [] as any[] };
-const matches = (matchesRaw ?? []) as any[];
+
+// Iter 33: když je current team v roli opp_team_id, prohodit skóre + soupeř = původní team's club
+const matches = ((matchesRaw ?? []) as any[]).map((m: any) => {
+  const isOpp = m.opp_team_id === currentTeamId;
+  if (!isOpp) return { ...m, isOpp: false };
+  // We are opp_team — mirror scores and replace "opponent" with the original team's club name
+  const origTeamLabel = m.teams?.clubs?.name
+    ? `${m.teams.clubs.name}${m.teams?.name ? ' ' + m.teams.name : ''}`
+    : (m.teams?.name || m.opponent || '—');
+  return {
+    ...m,
+    isOpp: true,
+    opponent: origTeamLabel,
+    our_score: m.opp_score,
+    opp_score: m.our_score,
+  };
+});
 
 const url = new URL(Astro.request.url);
 const saved = url.searchParams.get('saved');
@@ -90,12 +106,19 @@ const SAVED_MSG: Record<string, string> = {
             {matches.map((m: any) => (
               <tr class="transition-colors hover:bg-mist/60">
                 <td class="px-5 py-3 text-graphite">{new Date(m.date).toLocaleDateString('cs-CZ')}</td>
-                <td class="px-3 py-3 font-semibold text-ink">{m.opponent}</td>
+                <td class="px-3 py-3 font-semibold text-ink">
+                  {m.opponent}
+                  {m.isOpp && (
+                    <span class="ml-2 inline-flex items-center rounded-full bg-sky/15 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-[#1B5E83]" title="Zápas zapsal soupeř — pouze ke čtení">
+                      Sdílený
+                    </span>
+                  )}
+                </td>
                 <td class="px-3 py-3 text-center font-bold tabular-nums text-ink">{m.our_score}–{m.opp_score}</td>
-                <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.qb_td ?? 0}</td>
-                <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.off_drives ?? 0}</td>
+                <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.isOpp ? '—' : (m.qb_td ?? 0)}</td>
+                <td class="px-3 py-3 text-center tabular-nums text-graphite">{m.isOpp ? '—' : (m.off_drives ?? 0)}</td>
                 <td class="px-5 py-3 text-right">
-                  <a href={`/app/matches/${m.id}`} class="text-[12px] font-semibold text-signal hover:underline">{canEdit ? 'Upravit →' : 'Detail →'}</a>
+                  <a href={`/app/matches/${m.id}`} class="text-[12px] font-semibold text-signal hover:underline">{(canEdit && !m.isOpp) ? 'Upravit →' : 'Detail →'}</a>
                 </td>
               </tr>
             ))}

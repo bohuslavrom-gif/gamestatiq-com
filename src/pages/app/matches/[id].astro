@@ -12,26 +12,53 @@ const admin = getSupabaseAdmin();
 
 const { data: match } = await admin
   .from('matches')
-  .select('*, teams(id, name, club_id, clubs(name))')
+  .select('*, teams(id, name, club_id, clubs(name)), opp_team:teams!matches_opp_team_id_fkey(id, name, club_id, clubs(name))')
   .eq('id', id)
   .maybeSingle();
 if (!match) return Astro.redirect('/app/matches');
 
 const team = (match as any).teams;
 const club = team?.clubs;
+const oppTeam = (match as any).opp_team;
+const oppClub = oppTeam?.clubs;
 
-// Verify user has access to this club + resolve role
-const { data: cm } = await admin
-  .from('club_members')
-  .select('role')
-  .eq('club_id', (match as any).club_id)
-  .eq('user_id', user.id)
-  .maybeSingle();
-const role = (cm as { role: string } | null)?.role ?? null;
+// Iter 33: user může být buď v klubu home teamu (full access), nebo opp teamu (read-only shared view)
+const currentTeam = Astro.locals.team ?? null;
+const currentTeamId = currentTeam?.id ?? null;
+const isOppView = !!(oppTeam && currentTeamId && oppTeam.id === currentTeamId);
+
+// Verify user has access — try home team's club first, then opp team's club
+let role: string | null = null;
+let accessClubId: string | null = null;
+{
+  const { data: cm } = await admin
+    .from('club_members')
+    .select('role')
+    .eq('club_id', (match as any).club_id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (cm?.role) {
+    role = cm.role;
+    accessClubId = (match as any).club_id;
+  }
+}
+if (!role && oppTeam?.club_id) {
+  const { data: cm2 } = await admin
+    .from('club_members')
+    .select('role')
+    .eq('club_id', oppTeam.club_id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (cm2?.role) {
+    role = cm2.role;
+    accessClubId = oppTeam.club_id;
+  }
+}
 if (!role) return Astro.redirect('/app/matches');
 
-const canEdit   = role === 'admin' || role === 'coach' || role === 'stats';
-const canDelete = role === 'admin';
+// V opp view je vždy read-only (zápas patří jinému klubu)
+const canEdit   = !isOppView && (role === 'admin' || role === 'coach' || role === 'stats');
+const canDelete = !isOppView && (role === 'admin');
 const readOnly  = !canEdit;
 
 // Per-match player stats with player metadata
@@ -67,13 +94,19 @@ const SAVED_MSG: Record<string, string> = {
 };
 
 const roleLabel: Record<string, string> = { admin: 'Admin', coach: 'Trenér', stats: 'Statistik', viewer: 'Pozorovatel' };
+
+// Iter 33: v opp view zobrazujeme zápas z pohledu soupeře — zrcadlové skóre + odpovídající soupeř
+const homeLabel = team?.clubs?.name ? `${team.clubs.name}${team?.name ? ' ' + team.name : ''}` : (team?.name || '—');
+const displayOpponent = isOppView ? homeLabel : match.opponent;
+const displayOur = isOppView ? match.opp_score : match.our_score;
+const displayOpp = isOppView ? match.our_score : match.opp_score;
 ---
 
 <AppLayout
-  title={`vs ${match.opponent} · ${team?.name ?? ''}`}
+  title={`vs ${displayOpponent} · ${currentTeam?.name ?? team?.name ?? ''}`}
   active="matches"
-  pageTitle={`vs ${match.opponent}`}
-  pageSub={`${new Date(match.date).toLocaleDateString('cs-CZ')} · ${team?.name ?? '—'} · skóre ${match.our_score}–${match.opp_score} · vy: ${roleLabel[role] ?? role}`}
+  pageTitle={`vs ${displayOpponent}`}
+  pageSub={`${new Date(match.date).toLocaleDateString('cs-CZ')} · ${currentTeam?.name ?? team?.name ?? '—'} · skóre ${displayOur}–${displayOpp} · vy: ${roleLabel[role] ?? role}${isOppView ? ' · sdílený zápas' : ''}`}
 >
 
   {saved && SAVED_MSG[saved] && <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">{SAVED_MSG[saved]}</div>}
@@ -83,7 +116,12 @@ const roleLabel: Record<string, string> = { admin: 'Admin', coach: 'Trenér', st
     <a href="/app/matches" class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">← Všechny zápasy</a>
   </div>
 
-  {readOnly && (
+  {isOppView && (
+    <div class="mb-6 rounded-lg border border-sky/30 bg-sky/5 px-4 py-3 text-[13px] text-[#1B5E83]">
+      <strong>Sdílený zápas v lize</strong> — zapsal {team?.clubs?.name ?? '—'} {team?.name ?? ''}. Pro vás je tento záznam pouze ke čtení; statistiky a hráče zobrazené níže patří hostujícímu týmu.
+    </div>
+  )}
+  {readOnly && !isOppView && (
     <div class="mb-6 rounded-lg border border-sky/30 bg-sky/5 px-4 py-3 text-[13px] text-[#1B5E83]">
       Vaše role <strong>{roleLabel[role] ?? role}</strong> umožňuje pouze prohlížení. Pro úpravy je potřeba role Admin, Trenér, nebo Statistik.
     </div>
