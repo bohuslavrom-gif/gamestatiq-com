@@ -188,6 +188,9 @@ export type LeaderRow = {
   photoUrl: string | null;
   teamName: string;
   clubName: string;
+  // Iter 44: team brand pro mini logo + barvy
+  teamLogoUrl: string | null;
+  primaryColor: string;
   // QB
   qbAtt: number; qbComp: number; qbYds: number; qbTd: number; qbInt: number;
   // WR
@@ -202,22 +205,24 @@ export async function fetchLeagueLeaders(leagueId: string): Promise<{
   if (!leagueId) return { qb: [], wr: [], db: [] };
   const admin = getSupabaseAdmin();
 
-  // Step 1: approved team_ids
+  // Step 1: approved team_ids — Iter 44: + branding
   const { data: ltRaw } = await admin
     .from('league_teams')
-    .select('team_id, teams(name, club_id, clubs(name))')
+    .select('team_id, teams(name, primary_color, logo_url, club_id, clubs(name, logo_url))')
     .eq('league_id', leagueId)
     .not('approved_at', 'is', null);
   const lt = (ltRaw ?? []) as any[];
   if (lt.length === 0) return { qb: [], wr: [], db: [] };
   const teamIds = lt.map((r) => r.team_id);
 
-  // Map team_id → team/club display metadata
-  const teamMeta = new Map<string, { teamName: string; clubName: string }>();
+  // Iter 44: Map team_id → team/club display metadata + branding
+  const teamMeta = new Map<string, { teamName: string; clubName: string; teamLogoUrl: string | null; primaryColor: string }>();
   for (const r of lt) {
     teamMeta.set(r.team_id, {
       teamName: r.teams?.name ?? '—',
       clubName: r.teams?.clubs?.name ?? '—',
+      teamLogoUrl: r.teams?.logo_url ?? r.teams?.clubs?.logo_url ?? null,
+      primaryColor: r.teams?.primary_color ?? '#0F1B2D',
     });
   }
 
@@ -264,6 +269,8 @@ export async function fetchLeagueLeaders(leagueId: string): Promise<{
         photoUrl: p.photo_url ?? null,
         teamName: meta?.teamName ?? '—',
         clubName: meta?.clubName ?? '—',
+        teamLogoUrl: meta?.teamLogoUrl ?? null,
+        primaryColor: meta?.primaryColor ?? '#0F1B2D',
         qbAtt: 0, qbComp: 0, qbYds: 0, qbTd: 0, qbInt: 0,
         wrTargets: 0, wrRec: 0, wrYds: 0, wrTd: 0, wrPts: 0,
         dbFlagPull: 0, dbSack: 0, dbInt: 0, dbBrkup: 0,
@@ -306,20 +313,23 @@ export async function fetchLeagueAllPlayers(leagueId: string): Promise<{
   if (!leagueId) return { qb: [], wr: [], db: [] };
   const admin = getSupabaseAdmin();
 
+  // Iter 44: + branding
   const { data: ltRaw } = await admin
     .from('league_teams')
-    .select('team_id, teams(name, club_id, clubs(name))')
+    .select('team_id, teams(name, primary_color, logo_url, club_id, clubs(name, logo_url))')
     .eq('league_id', leagueId)
     .not('approved_at', 'is', null);
   const lt = (ltRaw ?? []) as any[];
   if (lt.length === 0) return { qb: [], wr: [], db: [] };
   const teamIds = lt.map((r) => r.team_id);
 
-  const teamMeta = new Map<string, { teamName: string; clubName: string }>();
+  const teamMeta = new Map<string, { teamName: string; clubName: string; teamLogoUrl: string | null; primaryColor: string }>();
   for (const r of lt) {
     teamMeta.set(r.team_id, {
       teamName: r.teams?.name ?? '—',
       clubName: r.teams?.clubs?.name ?? '—',
+      teamLogoUrl: r.teams?.logo_url ?? r.teams?.clubs?.logo_url ?? null,
+      primaryColor: r.teams?.primary_color ?? '#0F1B2D',
     });
   }
 
@@ -362,6 +372,8 @@ export async function fetchLeagueAllPlayers(leagueId: string): Promise<{
         photoUrl: p.photo_url ?? null,
         teamName: meta?.teamName ?? '—',
         clubName: meta?.clubName ?? '—',
+        teamLogoUrl: meta?.teamLogoUrl ?? null,
+        primaryColor: meta?.primaryColor ?? '#0F1B2D',
         qbAtt: 0, qbComp: 0, qbYds: 0, qbTd: 0, qbInt: 0,
         wrTargets: 0, wrRec: 0, wrYds: 0, wrTd: 0, wrPts: 0,
         dbFlagPull: 0, dbSack: 0, dbInt: 0, dbBrkup: 0,

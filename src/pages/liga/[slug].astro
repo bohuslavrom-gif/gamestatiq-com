@@ -205,16 +205,31 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-stone">
-                  {standings.map((row, i) => (
+                  {standings.map((row, i) => {
+                    const abbr = (row.teamName ?? '').replace(/[^A-Za-zÀ-ɏ]/g, '').slice(0, 2).toUpperCase() || '?';
+                    return (
                     <tr>
                       <td class="px-5 py-2.5 text-center"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
-                      <td class="py-2.5"><p class="text-[13px] font-semibold text-ink">{row.teamName}</p><p class="text-[10px] text-slate">{row.clubName}</p></td>
+                      <td class="py-2.5">
+                        <div class="flex items-center gap-2.5">
+                          {row.clubLogoUrl ? (
+                            <img src={row.clubLogoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-md object-contain" />
+                          ) : (
+                            <span class="inline-flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white" style={`background-color:${row.primaryColor}`}>{abbr}</span>
+                          )}
+                          <div class="min-w-0">
+                            <p class="text-[13px] font-semibold text-ink">{row.teamName}</p>
+                            <p class="text-[10px] text-slate">{row.clubName}</p>
+                          </div>
+                        </div>
+                      </td>
                       <td class="px-3 py-2.5 text-center tabular-nums text-graphite">{row.played}</td>
                       <td class="px-3 py-2.5 text-center tabular-nums text-graphite">{row.wins}-{row.losses}{row.ties ? `-${row.ties}` : ''}</td>
                       <td class="px-3 py-2.5 text-center tabular-nums text-graphite">{row.ptsFor}-{row.ptsAgainst}</td>
                       <td class="px-3 py-2.5 text-center font-bold tabular-nums" style={`color:${secondary}`}>{row.winPct}%</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -358,7 +373,19 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                       return (
                         <tr>
                           <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
-                          <td class="py-2.5" data-sort-value={p.name}><div class="flex items-center gap-2.5">{p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}<div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div></div></td>
+                          <td class="py-2.5" data-sort-value={p.name}>
+                            <div class="flex items-center gap-2.5">
+                              <div class="relative h-7 w-7 shrink-0">
+                                {p.photoUrl
+                                  ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" />
+                                  : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                                {p.teamLogoUrl && (
+                                  <img src={p.teamLogoUrl} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
+                                )}
+                              </div>
+                              <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
+                            </div>
+                          </td>
                           <td class="py-2.5 text-[12px] text-graphite" data-sort-value={`${p.clubName} ${p.teamName}`}>{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
                           <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbAtt}>{p.qbAtt}</td>
                           <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.qbComp}>{p.qbComp}</td>
@@ -406,7 +433,19 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                       return (
                         <tr>
                           <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
-                          <td class="py-2.5" data-sort-value={p.name}><div class="flex items-center gap-2.5">{p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}<div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div></div></td>
+                          <td class="py-2.5" data-sort-value={p.name}>
+                            <div class="flex items-center gap-2.5">
+                              <div class="relative h-7 w-7 shrink-0">
+                                {p.photoUrl
+                                  ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" />
+                                  : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                                {p.teamLogoUrl && (
+                                  <img src={p.teamLogoUrl} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
+                                )}
+                              </div>
+                              <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
+                            </div>
+                          </td>
                           <td class="py-2.5 text-[12px] text-graphite" data-sort-value={`${p.clubName} ${p.teamName}`}>{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
                           <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.wrTargets}>{p.wrTargets}</td>
                           <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.wrRec}>{p.wrRec}</td>
@@ -450,7 +489,19 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                     {players.db.map((p, i) => (
                       <tr>
                         <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
-                        <td class="py-2.5" data-sort-value={p.name}><div class="flex items-center gap-2.5">{p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}<div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div></div></td>
+                        <td class="py-2.5" data-sort-value={p.name}>
+                          <div class="flex items-center gap-2.5">
+                            <div class="relative h-7 w-7 shrink-0">
+                              {p.photoUrl
+                                ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" />
+                                : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                              {p.teamLogoUrl && (
+                                <img src={p.teamLogoUrl} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
+                              )}
+                            </div>
+                            <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
+                          </div>
+                        </td>
                         <td class="py-2.5 text-[12px] text-graphite" data-sort-value={`${p.clubName} ${p.teamName}`}>{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
                         <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.dbFlagPull}>{p.dbFlagPull}</td>
                         <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${secondary}`} data-sort-value={p.dbSack}>{p.dbSack}</td>
