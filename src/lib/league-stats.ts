@@ -38,7 +38,7 @@ export async function fetchLeagueRecentMatches(leagueId: string, limit = 10): Pr
   const orFilter = `team_id.in.(${teamIds.join(',')}),opp_team_id.in.(${teamIds.join(',')})`;
   const { data: matchesRaw } = await admin
     .from('matches')
-    .select('id, date, opponent, our_score, opp_score, team_id, opp_team_id, teams!matches_team_id_fkey(name, club_id, clubs(name, logo_url)), opp_team:teams!matches_opp_team_id_fkey(name, club_id, clubs(name, logo_url))')
+    .select('id, date, opponent, our_score, opp_score, team_id, opp_team_id, teams!matches_team_id_fkey(name, logo_url, club_id, clubs(name, logo_url)), opp_team:teams!matches_opp_team_id_fkey(name, logo_url, club_id, clubs(name, logo_url))')
     .or(orFilter)
     .order('date', { ascending: false })
     .limit(limit);
@@ -64,7 +64,8 @@ export async function fetchLeagueRecentMatches(leagueId: string, limit = 10): Pr
       teamId: showAsOpp ? m.opp_team_id : m.team_id,
       teamName: myTeam?.name ?? '—',
       clubName: myTeam?.clubs?.name ?? '—',
-      clubLogoUrl: myTeam?.clubs?.logo_url ?? null,
+      // Iter 43: prefer team.logo_url
+      clubLogoUrl: myTeam?.logo_url ?? myTeam?.clubs?.logo_url ?? null,
     };
   }) as LeagueMatchRow[];
 }
@@ -95,7 +96,7 @@ export async function fetchLeagueStandings(leagueId: string): Promise<StandingsR
   // 1. Approved league_teams join with teams + clubs (for display metadata)
   const { data: ltRowsRaw } = await admin
     .from('league_teams')
-    .select('team_id, teams(id, name, primary_color, club_id, clubs(name, logo_url))')
+    .select('team_id, teams(id, name, primary_color, logo_url, club_id, clubs(name, logo_url))')
     .eq('league_id', leagueId)
     .not('approved_at', 'is', null);
   const ltRows = (ltRowsRaw ?? []) as any[];
@@ -128,7 +129,8 @@ export async function fetchLeagueStandings(leagueId: string): Promise<StandingsR
       teamId: r.team_id,
       teamName: t.name ?? '—',
       clubName: c.name ?? '—',
-      clubLogoUrl: c.logo_url ?? null,
+      // Iter 43: prefer team.logo_url (per-tým branding), fallback club.logo_url
+      clubLogoUrl: t.logo_url ?? c.logo_url ?? null,
       primaryColor: t.primary_color ?? '#0F1B2D',
       played: 0, wins: 0, losses: 0, ties: 0,
       ptsFor: 0, ptsAgainst: 0, ptsDiff: 0,
@@ -431,7 +433,7 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
 
   const { data: ltRaw } = await admin
     .from('league_teams')
-    .select('team_id, teams(id, name, primary_color, club_id, clubs(name, logo_url))')
+    .select('team_id, teams(id, name, primary_color, logo_url, club_id, clubs(name, logo_url))')
     .eq('league_id', leagueId)
     .not('approved_at', 'is', null);
   const ltRows = (ltRaw ?? []) as any[];
@@ -493,7 +495,8 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
       teamId: r.team_id,
       teamName: t.name ?? '—',
       clubName: c.name ?? '—',
-      clubLogoUrl: c.logo_url ?? null,
+      // Iter 43: prefer team.logo_url
+      clubLogoUrl: t.logo_url ?? c.logo_url ?? null,
       primaryColor: t.primary_color ?? '#0F1B2D',
       games: 0, offTd: 0, xp1Ok: 0, xp1Att: 0, xp2Ok: 0, xp2Att: 0,
       pointsFor: 0, pointsForAvg: 0,
@@ -1098,7 +1101,7 @@ export async function fetchLeagueMatches(leagueId: string): Promise<LeagueMatchL
   const orFilter = `team_id.in.(${teamIds.join(',')}),opp_team_id.in.(${teamIds.join(',')})`;
   const { data: matchesRaw } = await admin
     .from('matches')
-    .select('id, date, opponent, our_score, opp_score, team_id, opp_team_id, teams!matches_team_id_fkey(name, primary_color, club_id, clubs(name, logo_url)), opp_team:teams!matches_opp_team_id_fkey(name, primary_color, club_id, clubs(name, logo_url))')
+    .select('id, date, opponent, our_score, opp_score, team_id, opp_team_id, teams!matches_team_id_fkey(name, primary_color, logo_url, club_id, clubs(name, logo_url)), opp_team:teams!matches_opp_team_id_fkey(name, primary_color, logo_url, club_id, clubs(name, logo_url))')
     .or(orFilter)
     .order('date', { ascending: false });
 
@@ -1118,7 +1121,8 @@ export async function fetchLeagueMatches(leagueId: string): Promise<LeagueMatchL
         teamId: m.team_id,
         teamName: m.teams?.name ?? '—',
         clubName: m.teams?.clubs?.name ?? '—',
-        clubLogoUrl: m.teams?.clubs?.logo_url ?? null,
+        // Iter 43: prefer team.logo_url
+        clubLogoUrl: m.teams?.logo_url ?? m.teams?.clubs?.logo_url ?? null,
         primaryColor: m.teams?.primary_color ?? '#0F1B2D',
       });
     }
@@ -1136,7 +1140,8 @@ export async function fetchLeagueMatches(leagueId: string): Promise<LeagueMatchL
         teamId: m.opp_team_id,
         teamName: m.opp_team?.name ?? '—',
         clubName: m.opp_team?.clubs?.name ?? '—',
-        clubLogoUrl: m.opp_team?.clubs?.logo_url ?? null,
+        // Iter 43: prefer opp_team.logo_url
+        clubLogoUrl: m.opp_team?.logo_url ?? m.opp_team?.clubs?.logo_url ?? null,
         primaryColor: m.opp_team?.primary_color ?? '#0F1B2D',
       });
     }
@@ -1210,8 +1215,8 @@ export async function fetchMatchDetail(matchId: string, leagueId: string): Promi
       opp_pass_yds,
       def_drives, def_stops,
       pen_count, pen_yds,
-      teams!matches_team_id_fkey(id, name, primary_color, club_id, clubs(name, logo_url)),
-      opp_team:teams!matches_opp_team_id_fkey(id, name, primary_color, club_id, clubs(name, logo_url))
+      teams!matches_team_id_fkey(id, name, primary_color, logo_url, club_id, clubs(name, logo_url)),
+      opp_team:teams!matches_opp_team_id_fkey(id, name, primary_color, logo_url, club_id, clubs(name, logo_url))
     `)
     .eq('id', matchId)
     .maybeSingle();
