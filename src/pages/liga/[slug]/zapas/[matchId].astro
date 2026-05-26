@@ -1,7 +1,9 @@
 ---
+// Iter 46: public liga match detail = sjednocený look s /klub/{slug} head-to-head.
+// Používá fetchClubMatchHeadToHead z home perspektivy + diverging bars + player tables.
 import BaseLayout from '../../../../layouts/BaseLayout.astro';
 import { getSupabaseAdmin } from '../../../../lib/supabase';
-import { fetchMatchDetail } from '../../../../lib/league-stats';
+import { fetchClubMatchHeadToHead } from '../../../../lib/club-public';
 import { getLangFromUrl, useTranslations, localizedPath } from '../../../../i18n/utils';
 
 const lang = getLangFromUrl(Astro.url);
@@ -22,308 +24,290 @@ const { data: league } = await admin
   .maybeSingle();
 if (!league) return Astro.redirect('/');
 
-const match = await fetchMatchDetail(matchId, league.id);
-if (!match) return Astro.redirect(localizedPath(`/liga/${slug}?tab=matches`, lang));
+// Najdi match a ověř že home_team patří do ligy (allowlist)
+const { data: matchRow } = await admin
+  .from('matches')
+  .select('id, team_id, opp_team_id, teams!matches_team_id_fkey(id, name, primary_color, logo_url, club_id, clubs(name, logo_url))')
+  .eq('id', matchId)
+  .maybeSingle();
+if (!matchRow) return Astro.redirect(localizedPath(`/liga/${slug}?tab=matches`, lang));
+
+// Allowlist: home tým nebo opp tým musí být v lize
+const { data: ltRaw } = await admin
+  .from('league_teams')
+  .select('team_id')
+  .eq('league_id', league.id)
+  .not('approved_at', 'is', null);
+const allowedTeams = new Set(((ltRaw ?? []) as { team_id: string }[]).map((r) => r.team_id));
+const m = matchRow as any;
+const homeInLeague = allowedTeams.has(m.team_id);
+const oppInLeague = m.opp_team_id && allowedTeams.has(m.opp_team_id);
+if (!homeInLeague && !oppInLeague) return Astro.redirect(localizedPath(`/liga/${slug}?tab=matches`, lang));
+
+// Perspective: pokud je home v lize → home perspective; jinak opp perspective
+const perspectiveTeamId = homeInLeague ? m.team_id : m.opp_team_id;
+const homeTeam = m.teams ?? {};
+const homeClub = homeTeam.clubs ?? {};
+
+// Pokud zobrazujeme z opp perspektivy, potřebujeme opp tým metadata pro fetchClubMatchHeadToHead
+let perspectiveTeamName = '—';
+let perspectiveClubName = '—';
+let perspectiveLogoUrl: string | null = null;
+let perspectivePrimaryColor = '#0F1B2D';
+if (homeInLeague) {
+  perspectiveTeamName = homeTeam.name ?? '—';
+  perspectiveClubName = homeClub.name ?? '—';
+  perspectiveLogoUrl = homeTeam.logo_url ?? homeClub.logo_url ?? null;
+  perspectivePrimaryColor = homeTeam.primary_color ?? '#0F1B2D';
+} else if (m.opp_team_id) {
+  const { data: oppRow } = await admin
+    .from('teams')
+    .select('id, name, primary_color, logo_url, club_id, clubs(name, logo_url)')
+    .eq('id', m.opp_team_id)
+    .maybeSingle();
+  if (oppRow) {
+    const o = oppRow as any;
+    perspectiveTeamName = o.name ?? '—';
+    perspectiveClubName = o.clubs?.name ?? '—';
+    perspectiveLogoUrl = o.logo_url ?? o.clubs?.logo_url ?? null;
+    perspectivePrimaryColor = o.primary_color ?? '#0F1B2D';
+  }
+}
+
+const headToHead = await fetchClubMatchHeadToHead(
+  matchId,
+  perspectiveTeamId,
+  perspectiveTeamName,
+  perspectiveClubName,
+  perspectiveLogoUrl,
+  perspectivePrimaryColor,
+);
+if (!headToHead) return Astro.redirect(localizedPath(`/liga/${slug}?tab=matches`, lang));
 
 const primary = league.primary_color || '#0F1B2D';
 const secondary = league.secondary_color || '#E63946';
+const accent = perspectivePrimaryColor || secondary;
 
 const dateLocale = lang === 'cs' ? 'cs-CZ' : lang === 'de' ? 'de-DE' : 'en-US';
-const dateStr = new Date(match.date).toLocaleDateString(dateLocale, { day: 'numeric', month: 'long', year: 'numeric' });
+const dateStr = new Date(headToHead.date).toLocaleDateString(dateLocale, { day: 'numeric', month: 'long', year: 'numeric' });
 
-// Score percentages
-const compPct = match.qbAtt > 0 ? Math.round((match.qbComp / match.qbAtt) * 100) : 0;
-const xp1Pct = match.xp1Att > 0 ? Math.round((match.xp1Ok / match.xp1Att) * 100) : 0;
-const xp2Pct = match.xp2Att > 0 ? Math.round((match.xp2Ok / match.xp2Att) * 100) : 0;
-const defStopPct = match.defDrives > 0 ? Math.round((match.defStops / match.defDrives) * 100) : 0;
+function initials(name: string): string {
+  return (name ?? '').replace(/[^A-Za-zÀ-ɏ]/g, '').slice(0, 3).toUpperCase() || '—';
+}
 
 const sportText = (t as any)(`pliga.sport.${league.sport}`) ?? league.sport;
 
-const resultColor: Record<string, string> = {
-  W: 'bg-verde text-white',
-  L: 'bg-signal text-white',
-  T: 'bg-stone-2 text-white',
-};
-const resultLabel: Record<string, string> = {
+const resultLabelMap: Record<string, string> = {
   W: t('pmatch.result.W'),
   L: t('pmatch.result.L'),
   T: t('pmatch.result.T'),
 };
 
-const qbPlayers = match.players.filter((p) => p.qbAtt > 0).sort((a, b) => b.qbTd - a.qbTd || b.qbYds - a.qbYds);
-const wrPlayers = match.players.filter((p) => p.wrTargets > 0 || p.wrTd > 0).sort((a, b) => b.wrTd - a.wrTd || b.wrPts - a.wrPts);
-const dbPlayers = match.players.filter((p) => p.dbFlagPull > 0 || p.dbSack > 0 || p.dbInt > 0 || p.dbBrkup > 0)
-  .sort((a, b) => (b.dbInt * 3 + b.dbSack * 2 + b.dbFlagPull) - (a.dbInt * 3 + a.dbSack * 2 + a.dbFlagPull));
-
-const pageTitle = `${match.team.clubName} ${match.team.name} vs ${match.opponent} · ${dateStr} · ${league.name}`;
-const pageDesc = `${match.team.clubName} ${match.team.name} vs ${match.opponent} (${dateStr}) · ${match.ourScore}–${match.oppScore}`;
+const pageTitle = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headToHead.opponent} · ${dateStr} · ${league.name}`;
+const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headToHead.opponent} (${dateStr}) · ${headToHead.ourScore}–${headToHead.oppScore}`;
 ---
 
 <BaseLayout title={pageTitle} description={pageDesc}>
 
-  <!-- Hero -->
+  <!-- Liga gradient header (small, breadcrumb only) -->
   <section class="border-b border-stone" style={`background: linear-gradient(135deg, ${primary} 0%, ${secondary} 100%)`}>
-    <div class="mx-auto max-w-7xl px-5 py-8 lg:px-8 lg:py-10">
-      <!-- Breadcrumb -->
-      <div class="mb-4 flex flex-wrap items-center gap-2 text-[12px] text-white/85">
+    <div class="mx-auto max-w-6xl px-5 py-5 lg:px-8 lg:py-6">
+      <div class="flex flex-wrap items-center gap-2 text-[12px] text-white/90">
         <a href={localizedPath(`/liga/${league.slug}`, lang)} class="hover:text-white">← {league.name}</a>
         <span class="text-white/40">/</span>
         <a href={localizedPath(`/liga/${league.slug}?tab=matches`, lang)} class="hover:text-white">{t('pmatch.breadcrumb.matches')}</a>
         <span class="text-white/40">/</span>
-        <span class="text-white/60">{dateStr}</span>
+        <span class="text-white/65">{dateStr}</span>
       </div>
+    </div>
+  </section>
 
-      <div class="grid items-center gap-6 lg:grid-cols-[1fr_auto_1fr]">
-        <!-- Home -->
-        <div class="flex items-center gap-4">
-          {match.team.clubLogoUrl ? (
-            <img src={match.team.clubLogoUrl} alt="" class="h-16 w-16 rounded-xl bg-white/95 object-contain p-1.5 shadow-lg" />
+  <main class="mx-auto max-w-6xl px-5 py-6 lg:px-8 lg:py-8">
+
+    <!-- ═════════════ SCORE BANNER (same look as /klub/{slug}) ═════════════ -->
+    <div class="mb-4 overflow-hidden rounded-xl border border-black/10 bg-[#1A1A1A] text-white">
+      <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 py-7 sm:px-8">
+        <div class="flex items-center gap-3 sm:gap-4">
+          {headToHead.ourLogoUrl ? (
+            <img src={headToHead.ourLogoUrl} alt="" class="h-12 w-12 object-contain sm:h-16 sm:w-16" />
           ) : (
-            <span class="inline-flex h-16 w-16 items-center justify-center rounded-xl bg-white/15 text-xl font-bold text-white backdrop-blur-sm">
-              {match.team.clubName.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase()}
-            </span>
+            <span class="flex h-12 w-12 items-center justify-center rounded-lg bg-white/10 font-bold sm:h-16 sm:w-16">{initials(headToHead.ourClubName)}</span>
           )}
           <div class="min-w-0">
-            <p class="text-[18px] font-bold text-white">{match.team.clubName}</p>
-            <p class="text-[12px] text-white/75">{match.team.name}</p>
+            <div class="truncate font-['Bebas_Neue'] text-[20px] leading-none tracking-[0.04em] sm:text-[26px]">{(headToHead.ourClubName ?? '').toUpperCase()}</div>
+            <div class="mt-1 truncate text-[11px] uppercase tracking-[0.1em] text-white/65">{headToHead.ourTeamName}</div>
           </div>
         </div>
-
-        <!-- Score -->
-        <div class="flex items-center gap-4 self-center justify-self-center">
-          <span class="text-[56px] font-bold tabular-nums tracking-tight-3 text-white">{match.ourScore}</span>
-          <span class="text-[24px] font-medium text-white/60">–</span>
-          <span class="text-[56px] font-bold tabular-nums tracking-tight-3 text-white">{match.oppScore}</span>
+        <div class="flex items-baseline gap-2">
+          <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight sm:text-[88px]" style={headToHead.result === 'W' ? `color:${accent}` : ''}>{headToHead.ourScore}</span>
+          <span class="text-[24px] text-white/40 sm:text-[36px]">:</span>
+          <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight text-white/70 sm:text-[88px]" style={headToHead.result === 'L' ? `color:${headToHead.oppColor}` : ''}>{headToHead.oppScore}</span>
         </div>
-
-        <!-- Away -->
-        <div class="flex items-center justify-end gap-4">
+        <div class="flex items-center justify-end gap-3 sm:gap-4">
           <div class="min-w-0 text-right">
-            <p class="text-[18px] font-bold text-white">{match.opponent}</p>
-            <p class="text-[12px] text-white/75">{t('pmatch.opponent')}</p>
+            <div class="truncate font-['Bebas_Neue'] text-[20px] leading-none tracking-[0.04em] sm:text-[26px]">{(headToHead.opponent ?? '').toUpperCase()}</div>
+            <div class="mt-1 truncate text-[11px] uppercase tracking-[0.1em] text-white/65">{t('pmatch.opponent')}</div>
           </div>
-          <span class="inline-flex h-16 w-16 items-center justify-center rounded-xl bg-white/15 text-xl font-bold text-white backdrop-blur-sm">
-            {match.opponent.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || '—'}
-          </span>
+          {headToHead.oppLogoUrl ? (
+            <img src={headToHead.oppLogoUrl} alt="" class="h-12 w-12 flex-shrink-0 rounded-lg bg-white/95 object-contain p-1 sm:h-16 sm:w-16" />
+          ) : (
+            <span class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg font-bold sm:h-16 sm:w-16" style={`background:${headToHead.oppColor === '#1A1A1A' ? 'rgba(255,255,255,0.1)' : headToHead.oppColor}`}>{initials(headToHead.opponent)}</span>
+          )}
         </div>
       </div>
-
-      <div class="mt-6 flex flex-wrap items-center gap-3">
-        <span class={`rounded-md px-3 py-1 text-[11px] font-bold uppercase tracking-wider ${resultColor[match.result]}`}>{resultLabel[match.result]}</span>
-        <span class="text-[12px] text-white/85">{dateStr}</span>
-        <span class="text-[12px] text-white/60">·</span>
-        <span class="text-[12px] text-white/85">{sportText}</span>
+      <div class="border-t border-white/10 px-6 py-3 text-center sm:px-8">
+        <span class={`inline-block rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] ${headToHead.result === 'W' ? 'bg-verde text-white' : headToHead.result === 'L' ? 'bg-signal text-white' : 'bg-white/20 text-white'}`}>
+          {resultLabelMap[headToHead.result] ?? headToHead.result}
+        </span>
+        <span class="ml-2 text-[11px] text-white/65">{dateStr}</span>
+        <span class="ml-2 text-[11px] text-white/40">·</span>
+        <span class="ml-2 text-[11px] text-white/65">{sportText}</span>
       </div>
     </div>
-  </section>
 
-  <!-- KPI tiles -->
-  <section class="mx-auto max-w-7xl px-5 py-8 lg:px-8 lg:py-10">
-    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <div class="rounded-xl border border-stone bg-pearl p-5">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">{t('pmatch.kpi.total_yds')}</p>
-        <p class="mt-1 text-[28px] font-bold tabular-nums tracking-tight-3" style={`color:${secondary}`}>{match.totalYds}</p>
-        <p class="mt-1 text-[11px] text-graphite">{match.passYds} pass · {match.rushYds} rush</p>
+    <!-- ═════════════ DIVERGING METRICS ═════════════ -->
+    <div class="mt-4 rounded-xl border border-black/10 bg-white px-5 py-5 sm:px-7 sm:py-6">
+      <div class="mb-4 flex items-baseline justify-between">
+        <h3 class="m-0 font-['Bebas_Neue'] text-[22px] tracking-[0.04em]">Head-to-head</h3>
+        <span class="text-[11px] uppercase tracking-[0.06em] text-[#888780]">srovnání týmů</span>
       </div>
-      <div class="rounded-xl border border-stone bg-pearl p-5">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">{t('pmatch.kpi.off_td')}</p>
-        <p class="mt-1 text-[28px] font-bold tabular-nums tracking-tight-3" style={`color:${secondary}`}>{match.offTd}</p>
-        <p class="mt-1 text-[11px] text-graphite">{match.xp1Ok}/{match.xp1Att} 1XP · {match.xp2Ok}/{match.xp2Att} 2XP</p>
+      <div class="space-y-3.5">
+        {headToHead.metrics.map((mtr) => {
+          const total = mtr.format === 'percent' ? 100 : Math.max(1, mtr.our + mtr.opp);
+          const ourBar = mtr.format === 'percent' ? Math.min(100, mtr.our) : Math.round((mtr.our / total) * 100);
+          const oppBar = mtr.format === 'percent' ? Math.min(100, mtr.opp) : Math.round((mtr.opp / total) * 100);
+          const ourBetter = mtr.higherIsBetter === false ? mtr.our < mtr.opp : (mtr.our > mtr.opp && mtr.higherIsBetter !== false);
+          const oppBetter = mtr.higherIsBetter === false ? mtr.opp < mtr.our : (mtr.opp > mtr.our && mtr.higherIsBetter !== false);
+          const ourShown = mtr.ourDisplay ?? String(mtr.our);
+          const oppShown = mtr.oppDisplay ?? String(mtr.opp);
+          const ourYardSuffix = mtr.format === 'yards' && !mtr.ourDisplay;
+          const oppYardSuffix = mtr.format === 'yards' && !mtr.oppDisplay;
+          return (
+            <div>
+              <div class="grid grid-cols-[110px_1fr_110px] items-center gap-2 sm:grid-cols-[140px_1fr_140px] sm:gap-4">
+                <div class={`text-right tabular-nums ${ourBetter ? 'font-bold' : ''}`} style={`color:${accent};opacity:${ourBetter ? 1 : 0.5}`}>
+                  <span class="text-[16px] sm:text-[18px]">{ourShown}</span>
+                  {ourYardSuffix && <span class="ml-1 text-[10px] opacity-70">yd</span>}
+                </div>
+                <div class="flex h-6 items-center overflow-hidden rounded-full bg-[#F1EFE8]">
+                  <div class="flex h-full w-1/2 justify-end">
+                    <div class="h-full transition-all" style={`width:${ourBar}%;background:${accent};opacity:${ourBetter ? 1 : 0.45}`}></div>
+                  </div>
+                  <div class="flex h-full w-1/2 justify-start">
+                    <div class="h-full transition-all" style={`width:${oppBar}%;background:${headToHead.oppColor};opacity:${oppBetter ? 1 : 0.45}`}></div>
+                  </div>
+                </div>
+                <div class={`text-left tabular-nums ${oppBetter ? 'font-bold' : ''}`} style={`color:${headToHead.oppColor};opacity:${oppBetter ? 1 : 0.5}`}>
+                  <span class="text-[16px] sm:text-[18px]">{oppShown}</span>
+                  {oppYardSuffix && <span class="ml-1 text-[10px] opacity-70">yd</span>}
+                </div>
+              </div>
+              <div class="mt-1 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-[#888780]">{mtr.label}</div>
+            </div>
+          );
+        })}
       </div>
-      <div class="rounded-xl border border-stone bg-pearl p-5">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">{t('pmatch.kpi.pass_eff')}</p>
-        <p class="mt-1 text-[28px] font-bold tabular-nums tracking-tight-3" style={`color:${secondary}`}>{match.passEfficiency}</p>
-        <p class="mt-1 text-[11px] text-graphite">{match.qbComp}/{match.qbAtt} ({compPct}%) · {match.qbTd} TD · {match.qbInt} INT</p>
-      </div>
-      <div class="rounded-xl border border-stone bg-pearl p-5">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate">{t('pmatch.kpi.penalties')}</p>
-        <p class="mt-1 text-[28px] font-bold tabular-nums tracking-tight-3" style={`color:${secondary}`}>{match.penCount}</p>
-        <p class="mt-1 text-[11px] text-graphite">{match.penYds} {t('pmatch.kpi.yds_unit')}</p>
-      </div>
+      <p class="mt-5 text-center text-[10px] text-[#888780]">
+        <span class="inline-block h-2 w-2 rounded-full align-middle" style={`background:${accent}`}></span>
+        <span class="mx-1.5 align-middle">{headToHead.ourClubName} {headToHead.ourTeamName}</span>
+        <span class="text-[#bbb8ad]">·</span>
+        <span class="inline-block h-2 w-2 rounded-full align-middle ml-1.5" style={`background:${headToHead.oppColor}`}></span>
+        <span class="ml-1.5 align-middle">{headToHead.opponent}</span>
+      </p>
     </div>
-  </section>
 
-  <!-- Team stats detail -->
-  <section class="mx-auto max-w-7xl px-5 pb-8 lg:px-8">
-    <h2 class="mb-4 text-[20px] font-bold tracking-tight-2 text-ink">{t('pmatch.team.title')}</h2>
-    <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
-      <table class="w-full text-[13px]">
-        <tbody class="divide-y divide-stone">
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate w-1/2">{t('pmatch.team.score')}</td>
-            <td class="px-5 py-3 text-right font-bold tabular-nums text-ink">{match.ourScore}–{match.oppScore}</td>
-          </tr>
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">{t('pmatch.team.off_td')}</td>
-            <td class="px-5 py-3 text-right font-bold tabular-nums text-ink">{match.offTd}</td>
-          </tr>
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">{t('pmatch.team.xp1')}</td>
-            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.xp1Ok}/{match.xp1Att} <span class="text-stone-2">({xp1Pct}%)</span></td>
-          </tr>
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">{t('pmatch.team.xp2')}</td>
-            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.xp2Ok}/{match.xp2Att} <span class="text-stone-2">({xp2Pct}%)</span></td>
-          </tr>
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">{t('pmatch.team.pass_yds')}</td>
-            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.passYds}</td>
-          </tr>
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">{t('pmatch.team.rush_yds')}</td>
-            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.rushYds}</td>
-          </tr>
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">{t('pmatch.team.total_yds')}</td>
-            <td class="px-5 py-3 text-right font-bold tabular-nums text-ink">{match.totalYds}</td>
-          </tr>
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">{t('pmatch.team.qb_acint')}</td>
-            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.qbAtt}/{match.qbComp}/{match.qbInt} <span class="text-stone-2">({compPct}% {t('pmatch.team.comp_label')})</span></td>
-          </tr>
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">{t('pmatch.team.qb_td')}</td>
-            <td class="px-5 py-3 text-right font-bold tabular-nums text-ink">{match.qbTd}</td>
-          </tr>
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">{t('pmatch.team.qb_yds')}</td>
-            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.qbYds}</td>
-          </tr>
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">{t('pmatch.team.pass_eff')}</td>
-            <td class="px-5 py-3 text-right font-bold tabular-nums" style={`color:${secondary}`}>{match.passEfficiency}</td>
-          </tr>
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">{t('pmatch.team.opp_pass')}</td>
-            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.oppPassYds}</td>
-          </tr>
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">{t('pmatch.team.def_drives')}</td>
-            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.defStops}/{match.defDrives} <span class="text-stone-2">({defStopPct}%)</span></td>
-          </tr>
-          <tr>
-            <td class="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate">{t('pmatch.team.fouls')}</td>
-            <td class="px-5 py-3 text-right tabular-nums text-graphite">{match.penCount} · {match.penYds}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- Player stats -->
-  <section class="mx-auto max-w-7xl px-5 pb-12 lg:px-8">
-    <h2 class="mb-4 text-[20px] font-bold tracking-tight-2 text-ink">{t('pmatch.players.title')}</h2>
-
-    {match.players.length === 0 ? (
-      <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
-        <p class="text-[14px] font-semibold text-ink">{t('pmatch.players.empty.title')}</p>
-        <p class="mt-1 text-[12px] text-slate">{t('pmatch.players.empty.lead')}</p>
-      </div>
-    ) : (
-      <div class="space-y-8">
-
-        <!-- QB -->
-        {qbPlayers.length > 0 && (
+    <!-- ═════════════ PLAYER TABLES (sortable) ═════════════ -->
+    {(headToHead.qbStats.length > 0 || headToHead.wrStats.length > 0 || headToHead.defenseLeaders.length > 0) && (
+      <div class="mt-6 space-y-6">
+        {headToHead.qbStats.length > 0 && (
           <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
             <div class="border-b border-stone px-5 py-3">
-              <p class="text-[14px] font-semibold text-ink">{t('pliga.pos.qb')} ({qbPlayers.length})</p>
+              <p class="text-[14px] font-semibold text-ink">{t('pliga.pos.qb')} ({headToHead.qbStats.length})</p>
             </div>
             <div class="overflow-x-auto">
-              <table class="sortable-table w-full min-w-[700px] text-left text-[13px]" data-accent={secondary} data-default-sort="6" data-default-dir="desc">
+              <table class="sortable-table w-full min-w-[640px] text-left text-[13px]" data-accent={accent} data-default-sort="5" data-default-dir="desc">
                 <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                   <tr>
                     <th class="px-5 py-3 w-10">#</th>
                     <th class="py-3" data-sort="text" data-sort-col="1">{t('pliga.players.col.player')}</th>
                     <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="2">ATT</th>
                     <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">COMP</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">%</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">YDS</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">TD</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">INT</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">YDS</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">TD</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">INT</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-stone">
-                  {qbPlayers.map((p, i) => {
-                    const pct = p.qbAtt > 0 ? Math.round((p.qbComp / p.qbAtt) * 100) : 0;
-                    return (
-                      <tr>
-                        <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
-                        <td class="py-2.5" data-sort-value={p.name}>
-                          <div class="flex items-center gap-2.5">
-                            {p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2)}</span>}
-                            <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
-                          </div>
-                        </td>
-                        <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbAtt}>{p.qbAtt}</td>
-                        <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.qbComp}>{p.qbComp}</td>
-                        <td class="px-3 py-2.5 text-center tabular-nums" style={`color:${secondary}`} data-sort-value={pct}>{pct}%</td>
-                        <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbYds}>{p.qbYds}</td>
-                        <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.qbTd}>{p.qbTd}</td>
-                        <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbInt}>{p.qbInt}</td>
-                      </tr>
-                    );
-                  })}
+                  {headToHead.qbStats.map((p, i) => (
+                    <tr>
+                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${accent}` : ''}>{i + 1}</span></td>
+                      <td class="py-2.5" data-sort-value={p.name}>
+                        <div class="flex items-center gap-2.5">
+                          {p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                          <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
+                        </div>
+                      </td>
+                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.att}>{p.att}</td>
+                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.comp}>{p.comp}</td>
+                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.yds}>{p.yds}</td>
+                      <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.td}>{p.td}</td>
+                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.int}>{p.int}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        <!-- WR -->
-        {wrPlayers.length > 0 && (
+        {headToHead.wrStats.length > 0 && (
           <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
             <div class="border-b border-stone px-5 py-3">
-              <p class="text-[14px] font-semibold text-ink">{t('pliga.pos.wr')} ({wrPlayers.length})</p>
+              <p class="text-[14px] font-semibold text-ink">{t('pliga.pos.wr')} ({headToHead.wrStats.length})</p>
             </div>
             <div class="overflow-x-auto">
-              <table class="sortable-table w-full min-w-[700px] text-left text-[13px]" data-accent={secondary} data-default-sort="6" data-default-dir="desc">
+              <table class="sortable-table w-full min-w-[640px] text-left text-[13px]" data-accent={accent} data-default-sort="5" data-default-dir="desc">
                 <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                   <tr>
                     <th class="px-5 py-3 w-10">#</th>
                     <th class="py-3" data-sort="text" data-sort-col="1">{t('pliga.players.col.player')}</th>
                     <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="2">TARG</th>
                     <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">REC</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">%</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">YDS</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">TD</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">PTS</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">YDS</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">TD</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">PTS</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-stone">
-                  {wrPlayers.map((p, i) => {
-                    const pct = p.wrTargets > 0 ? Math.round((p.wrRec / p.wrTargets) * 100) : 0;
-                    return (
-                      <tr>
-                        <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
-                        <td class="py-2.5" data-sort-value={p.name}>
-                          <div class="flex items-center gap-2.5">
-                            {p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2)}</span>}
-                            <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
-                          </div>
-                        </td>
-                        <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.wrTargets}>{p.wrTargets}</td>
-                        <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.wrRec}>{p.wrRec}</td>
-                        <td class="px-3 py-2.5 text-center tabular-nums" style={`color:${secondary}`} data-sort-value={pct}>{pct}%</td>
-                        <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.wrYds}>{p.wrYds}</td>
-                        <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.wrTd}>{p.wrTd}</td>
-                        <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${secondary}`} data-sort-value={p.wrPts}>{p.wrPts}</td>
-                      </tr>
-                    );
-                  })}
+                  {headToHead.wrStats.map((p, i) => (
+                    <tr>
+                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${accent}` : ''}>{i + 1}</span></td>
+                      <td class="py-2.5" data-sort-value={p.name}>
+                        <div class="flex items-center gap-2.5">
+                          {p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                          <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
+                        </div>
+                      </td>
+                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.targets}>{p.targets}</td>
+                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.rec}>{p.rec}</td>
+                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.yds}>{p.yds}</td>
+                      <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.td}>{p.td}</td>
+                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${accent}`} data-sort-value={p.pts}>{p.pts}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        <!-- DB -->
-        {dbPlayers.length > 0 && (
+        {headToHead.defenseLeaders.length > 0 && (
           <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
             <div class="border-b border-stone px-5 py-3">
-              <p class="text-[14px] font-semibold text-ink">{t('pliga.pos.db')} ({dbPlayers.length})</p>
+              <p class="text-[14px] font-semibold text-ink">{t('pliga.pos.db')} ({headToHead.defenseLeaders.length})</p>
             </div>
             <div class="overflow-x-auto">
-              <table class="sortable-table w-full min-w-[640px] text-left text-[13px]" data-accent={secondary} data-default-sort="5" data-default-dir="desc">
+              <table class="sortable-table w-full min-w-[560px] text-left text-[13px]" data-accent={accent} data-default-sort="4" data-default-dir="desc">
                 <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                   <tr>
                     <th class="px-5 py-3 w-10">#</th>
@@ -335,19 +319,19 @@ const pageDesc = `${match.team.clubName} ${match.team.name} vs ${match.opponent}
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-stone">
-                  {dbPlayers.map((p, i) => (
+                  {headToHead.defenseLeaders.map((p, i) => (
                     <tr>
-                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${secondary}` : ''}>{i + 1}</span></td>
+                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${accent}` : ''}>{i + 1}</span></td>
                       <td class="py-2.5" data-sort-value={p.name}>
                         <div class="flex items-center gap-2.5">
-                          {p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                          {p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
                           <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
                         </div>
                       </td>
-                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.dbFlagPull}>{p.dbFlagPull}</td>
-                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${secondary}`} data-sort-value={p.dbSack}>{p.dbSack}</td>
-                      <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.dbInt}>{p.dbInt}</td>
-                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.dbBrkup}>{p.dbBrkup}</td>
+                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.flagPull}>{p.flagPull}</td>
+                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${accent}`} data-sort-value={p.sack}>{p.sack}</td>
+                      <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.int}>{p.int}</td>
+                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.brkup}>{p.brkup}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -355,45 +339,22 @@ const pageDesc = `${match.team.clubName} ${match.team.name} vs ${match.opponent}
             </div>
           </div>
         )}
-
-        <p class="text-[11px] text-stone-2">{t('pliga.sort.tip')}</p>
       </div>
     )}
-  </section>
 
-  <!-- Footer link back -->
-  <section class="border-t border-stone bg-pearl">
-    <div class="mx-auto max-w-7xl px-5 py-6 lg:px-8">
-      <div class="flex flex-wrap items-center justify-between gap-3 text-[12px] text-slate">
-        <a href={localizedPath(`/liga/${league.slug}?tab=matches`, lang)} class="font-semibold text-ink hover:text-signal">{t('pmatch.players.back')}</a>
-        <p class="text-[11px] text-stone-2">{t('pliga.footer.poweredby')} <a href={localizedPath('/', lang)} class="font-semibold text-ink hover:text-signal">GameStatiq</a></p>
-      </div>
+    <!-- Back link -->
+    <div class="mt-8 border-t border-stone pt-4 text-[12px] text-slate">
+      <a href={localizedPath(`/liga/${league.slug}?tab=matches`, lang)} class="font-semibold text-ink hover:text-signal">{t('pmatch.players.back')}</a>
     </div>
-  </section>
+  </main>
 
-  <!-- Sortable tables script (shared with /liga/[slug]) -->
+  <!-- Sortable tables (sdílený script s ostatními liga stránkami) -->
   <style is:global>
-    .sortable-table thead th[data-sort] {
-      cursor: pointer;
-      user-select: none;
-      position: relative;
-      transition: background-color 0.12s;
-    }
-    .sortable-table thead th[data-sort]:hover {
-      background-color: rgba(15, 27, 45, 0.06);
-    }
-    .sortable-table thead th[data-sort] .sort-icon {
-      display: inline-block;
-      margin-left: 4px;
-      font-size: 9px;
-      opacity: 0.85;
-    }
-    .sortable-table thead th[data-sort]:not(.is-active) .sort-icon {
-      opacity: 0.25;
-    }
-    .sortable-table thead th.is-active {
-      color: #0F1B2D;
-    }
+    .sortable-table thead th[data-sort] { cursor: pointer; user-select: none; position: relative; transition: background-color 0.12s; }
+    .sortable-table thead th[data-sort]:hover { background-color: rgba(15, 27, 45, 0.06); }
+    .sortable-table thead th[data-sort] .sort-icon { display: inline-block; margin-left: 4px; font-size: 9px; opacity: 0.85; }
+    .sortable-table thead th[data-sort]:not(.is-active) .sort-icon { opacity: 0.25; }
+    .sortable-table thead th.is-active { color: #0F1B2D; }
   </style>
 
   <script is:inline>
@@ -445,12 +406,8 @@ const pageDesc = `${match.team.clubName} ${match.team.name} vs ${match.opponent}
           var thCol = parseInt(th.getAttribute('data-sort-col'), 10);
           var icon = document.createElement('span');
           icon.className = 'sort-icon';
-          if (thCol === colIdx) {
-            th.classList.add('is-active');
-            icon.textContent = dir === 'desc' ? '▼' : '▲';
-          } else {
-            icon.textContent = '↕';
-          }
+          if (thCol === colIdx) { th.classList.add('is-active'); icon.textContent = dir === 'desc' ? '▼' : '▲'; }
+          else { icon.textContent = '↕'; }
           th.appendChild(icon);
         });
       }
@@ -458,10 +415,7 @@ const pageDesc = `${match.team.clubName} ${match.team.name} vs ${match.opponent}
         var ths = table.querySelectorAll('thead th[data-sort]');
         var state = { col: null, dir: 'desc' };
         ths.forEach(function (th) {
-          var icon = document.createElement('span');
-          icon.className = 'sort-icon';
-          icon.textContent = '↕';
-          th.appendChild(icon);
+          var icon = document.createElement('span'); icon.className = 'sort-icon'; icon.textContent = '↕'; th.appendChild(icon);
         });
         ths.forEach(function (th) {
           th.addEventListener('click', function () {
@@ -488,9 +442,7 @@ const pageDesc = `${match.team.clubName} ${match.team.name} vs ${match.opponent}
           });
         }
       }
-      function init() {
-        document.querySelectorAll('table.sortable-table').forEach(initTable);
-      }
+      function init() { document.querySelectorAll('table.sortable-table').forEach(initTable); }
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
       else init();
     })();
