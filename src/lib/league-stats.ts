@@ -1083,7 +1083,7 @@ export async function fetchLeagueCareerRecords(leagueId: string): Promise<Manual
 export type LeagueMatchListRow = {
   id: string;
   date: string;
-  opponent: string;
+  opponent: string;           // textový fallback (Scorer free-text nebo strukturované jméno)
   ourScore: number;
   oppScore: number;
   result: 'W' | 'L' | 'T';
@@ -1092,6 +1092,12 @@ export type LeagueMatchListRow = {
   clubName: string;
   clubLogoUrl: string | null;
   primaryColor: string;
+  // Iter 45: strukturované opp údaje (pokud opp je tým v GameStatiq systému)
+  opponentTeamId: string | null;
+  opponentTeamName: string | null;
+  opponentClubName: string | null;
+  opponentLogoUrl: string | null;
+  opponentPrimaryColor: string | null;
 };
 
 /**
@@ -1123,6 +1129,8 @@ export async function fetchLeagueMatches(leagueId: string): Promise<LeagueMatchL
     const homeInLeague = teamIdSet.has(m.team_id);
     const oppInLeague  = m.opp_team_id && teamIdSet.has(m.opp_team_id);
     if (homeInLeague) {
+      // Iter 45: structured opp data pokud opp je v systému
+      const hasOppTeam = !!m.opp_team_id && !!m.opp_team;
       out.push({
         id: m.id,
         date: m.date,
@@ -1133,12 +1141,17 @@ export async function fetchLeagueMatches(leagueId: string): Promise<LeagueMatchL
         teamId: m.team_id,
         teamName: m.teams?.name ?? '—',
         clubName: m.teams?.clubs?.name ?? '—',
-        // Iter 43: prefer team.logo_url
         clubLogoUrl: m.teams?.logo_url ?? m.teams?.clubs?.logo_url ?? null,
         primaryColor: m.teams?.primary_color ?? '#0F1B2D',
+        opponentTeamId:   hasOppTeam ? m.opp_team_id : null,
+        opponentTeamName: hasOppTeam ? (m.opp_team?.name ?? null) : null,
+        opponentClubName: hasOppTeam ? (m.opp_team?.clubs?.name ?? null) : null,
+        opponentLogoUrl:  hasOppTeam ? (m.opp_team?.logo_url ?? m.opp_team?.clubs?.logo_url ?? null) : null,
+        opponentPrimaryColor: hasOppTeam ? (m.opp_team?.primary_color ?? null) : null,
       });
     }
     if (oppInLeague) {
+      // Iter 45: opp perspective — soupeř je home tým (m.teams)
       const oppLabel = m.teams?.clubs?.name
         ? `${m.teams.clubs.name}${m.teams?.name ? ' ' + m.teams.name : ''}`
         : (m.teams?.name || m.opponent || '—');
@@ -1152,9 +1165,13 @@ export async function fetchLeagueMatches(leagueId: string): Promise<LeagueMatchL
         teamId: m.opp_team_id,
         teamName: m.opp_team?.name ?? '—',
         clubName: m.opp_team?.clubs?.name ?? '—',
-        // Iter 43: prefer opp_team.logo_url
         clubLogoUrl: m.opp_team?.logo_url ?? m.opp_team?.clubs?.logo_url ?? null,
         primaryColor: m.opp_team?.primary_color ?? '#0F1B2D',
+        opponentTeamId:   m.team_id,
+        opponentTeamName: m.teams?.name ?? null,
+        opponentClubName: m.teams?.clubs?.name ?? null,
+        opponentLogoUrl:  m.teams?.logo_url ?? m.teams?.clubs?.logo_url ?? null,
+        opponentPrimaryColor: m.teams?.primary_color ?? null,
       });
     }
   }
