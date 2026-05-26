@@ -277,7 +277,7 @@ export async function fetchClubMatchList(teamId: string): Promise<ClubMatchLite[
   // Iter 38: zápasy kde tým je home NEBO opp_team_id (shared match v lize)
   const { data } = await admin
     .from('matches')
-    .select('id, date, opponent, our_score, opp_score, team_id, opp_team_id, teams(name, club_id, clubs(name))')
+    .select('id, date, opponent, our_score, opp_score, team_id, opp_team_id, teams!matches_team_id_fkey(name, club_id, clubs(name))')
     .or(`team_id.eq.${teamId},opp_team_id.eq.${teamId}`)
     .order('date', { ascending: false });
 
@@ -370,7 +370,7 @@ export async function fetchClubMatchHeadToHead(
       opp_xp1_att, opp_xp1_ok, opp_xp2_att, opp_xp2_ok,
       def_drives, def_stops,
       pen_count, pen_yds, opp_pen_count, opp_pen_yds,
-      teams(name, club_id, clubs(name))
+      teams!matches_team_id_fkey(name, club_id, clubs(name))
     `)
     .eq('id', matchId)
     .maybeSingle();
