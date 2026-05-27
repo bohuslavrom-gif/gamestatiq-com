@@ -1,0 +1,121 @@
+---
+// Iter 67: Liga back-end — seznam zápasů v lize s detail editorem.
+// Liga admin/staff vidí přehled napříč všemi týmy v lize.
+import AppLayout from '../../../layouts/AppLayout.astro';
+import { fetchLeagueMatches, type LeagueMatchListRow } from '../../../lib/league-stats';
+
+export const prerender = false;
+
+const league = Astro.locals.league ?? null;
+if (!league) return Astro.redirect('/app');
+
+const allMatches = await fetchLeagueMatches(league.id);
+
+const url = new URL(Astro.request.url);
+const teamFilter = url.searchParams.get('team') ?? '';
+const filtered: LeagueMatchListRow[] = teamFilter
+  ? allMatches.filter((m) => m.teamId === teamFilter)
+  : allMatches;
+
+// Dedup teamIds for filter dropdown
+const teamFilterMap = new Map<string, { id: string; label: string }>();
+for (const m of allMatches) {
+  if (!teamFilterMap.has(m.teamId)) {
+    teamFilterMap.set(m.teamId, { id: m.teamId, label: m.teamName });
+  }
+}
+const teamFilterOptions = Array.from(teamFilterMap.values()).sort((a, b) => a.label.localeCompare(b.label, 'cs'));
+---
+
+<AppLayout
+  title={`Zápasy · ${league.name} · GameStatiq`}
+  active="matches"
+  pageTitle="Zápasy v lize"
+  pageSub={`${league.name} · ${filtered.length} z ${allMatches.length} zápasů`}
+>
+  <div class="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
+    <a href="/app/league" class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">← Liga dashboard</a>
+  </div>
+
+  <!-- Team filter -->
+  <div class="mb-4 flex flex-wrap items-center gap-3">
+    <label class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Filtr týmu</label>
+    <form method="GET" class="flex items-center gap-2">
+      <select
+        name="team"
+        onchange="this.form.submit()"
+        class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[13px] text-ink"
+      >
+        <option value="" selected={!teamFilter} style="color:#1A1A1A;background:white">Všechny týmy ({allMatches.length})</option>
+        {teamFilterOptions.map((opt) => (
+          <option value={opt.id} selected={opt.id === teamFilter} style="color:#1A1A1A;background:white">{opt.label}</option>
+        ))}
+      </select>
+      {teamFilter && (
+        <a href="/app/league/matches" class="text-[12px] font-medium text-signal hover:underline">Resetovat</a>
+      )}
+    </form>
+  </div>
+
+  {filtered.length === 0 ? (
+    <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
+      <p class="text-[15px] font-semibold text-ink">Žádné zápasy</p>
+      <p class="mt-1 text-[13px] text-slate">Po prvním uložení ze Scorer PWA se zápasy objeví zde.</p>
+    </div>
+  ) : (
+    <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[720px] text-left text-[13px]">
+          <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+            <tr>
+              <th class="px-5 py-3 w-28">Datum</th>
+              <th class="py-3">Home</th>
+              <th class="py-3">Away</th>
+              <th class="px-3 py-3 text-center tabular-nums w-24">Skóre</th>
+              <th class="px-3 py-3 text-right w-24">&nbsp;</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone">
+            {filtered.map((m: any) => (
+              <tr class="hover:bg-mist/40 transition-colors">
+                <td class="px-5 py-3 tabular-nums text-graphite">{new Date(m.date).toLocaleDateString('cs-CZ')}</td>
+                <td class="py-3">
+                  <div class="flex items-center gap-2.5">
+                    {m.clubLogoUrl ? (
+                      <img src={m.clubLogoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-md object-contain" />
+                    ) : (
+                      <span class="inline-flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white" style={`background-color:${m.primaryColor}`}>
+                        {(m.teamName ?? '').replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    <span class="text-[13px] font-semibold text-ink">{m.teamName}</span>
+                  </div>
+                </td>
+                <td class="py-3">
+                  {m.opponentTeamName || m.opponentClubName ? (
+                    <div class="flex items-center gap-2.5">
+                      {m.opponentLogoUrl ? (
+                        <img src={m.opponentLogoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-md object-contain" />
+                      ) : (
+                        <span class="inline-flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white" style={`background-color:${m.opponentPrimaryColor ?? '#1A1A1A'}`}>
+                          {(m.opponentTeamName ?? '').replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 2).toUpperCase() || '?'}
+                        </span>
+                      )}
+                      <span class="text-[13px] font-semibold text-ink">{m.opponentTeamName ?? m.opponentClubName}</span>
+                    </div>
+                  ) : (
+                    <span class="text-[13px] text-graphite">{m.opponent}</span>
+                  )}
+                </td>
+                <td class="px-3 py-3 text-center font-bold tabular-nums text-ink">{m.ourScore}–{m.oppScore}</td>
+                <td class="px-5 py-3 text-right">
+                  <a href={`/app/matches/${m.id}`} class="inline-block whitespace-nowrap rounded-md border border-stone bg-pearl px-3 py-1.5 text-[11px] font-semibold text-graphite hover:bg-mist hover:text-ink">Detail →</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
+</AppLayout>

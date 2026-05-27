@@ -55,6 +55,47 @@ if (!role && oppTeam?.club_id) {
     accessClubId = oppTeam.club_id;
   }
 }
+
+// Iter 67: liga admin / staff může editovat zápasy v jeho lize (přes league_members nebo league.owner)
+let isLeagueAdminAccess = false;
+if (!role) {
+  // Najdi liga(s) kde je match (team nebo opp_team)
+  const teamIdsToCheck = [(match as any).team_id, (match as any).opp_team_id].filter(Boolean);
+  if (teamIdsToCheck.length > 0) {
+    const { data: leagueTeams } = await admin
+      .from('league_teams')
+      .select('league_id')
+      .in('team_id', teamIdsToCheck)
+      .not('approved_at', 'is', null);
+    const leagueIds = (leagueTeams ?? []).map((r: any) => r.league_id);
+    if (leagueIds.length > 0) {
+      // Liga owner check
+      const { data: ownedLeagues } = await admin
+        .from('leagues')
+        .select('id')
+        .in('id', leagueIds)
+        .eq('owner_user_id', user.id);
+      if (ownedLeagues && ownedLeagues.length > 0) {
+        role = 'admin';
+        isLeagueAdminAccess = true;
+      }
+      // League_members admin/staff check
+      if (!role) {
+        const { data: lm } = await admin
+          .from('league_members')
+          .select('role')
+          .in('league_id', leagueIds)
+          .eq('user_id', user.id)
+          .in('role', ['admin', 'staff']);
+        if (lm && lm.length > 0) {
+          role = (lm[0] as any).role === 'admin' ? 'admin' : 'stats';
+          isLeagueAdminAccess = true;
+        }
+      }
+    }
+  }
+}
+
 if (!role) return Astro.redirect('/app/matches');
 
 // V opp view je vždy read-only (zápas patří jinému klubu)
@@ -282,12 +323,6 @@ const displayOpp = isOppView ? match.our_score : match.opp_score;
             <div class="divide-y divide-stone">
               {psOther.map((row: any) => <PlayerStatRow row={row} canEdit={canEdit} readOnly={readOnly} />)}
             </div>
-          </div>
-        )}
-      </div>
-    )}
-  </div>
-</AppLayout>
           </div>
         )}
       </div>

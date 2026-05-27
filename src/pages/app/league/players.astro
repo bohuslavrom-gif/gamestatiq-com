@@ -1,0 +1,162 @@
+---
+// Iter 67: Liga back-end — přehled všech hráčů napříč týmy ligy.
+import AppLayout from '../../../layouts/AppLayout.astro';
+import { getSupabaseAdmin } from '../../../lib/supabase';
+
+export const prerender = false;
+
+const league = Astro.locals.league ?? null;
+if (!league) return Astro.redirect('/app');
+
+const admin = getSupabaseAdmin();
+
+// Schválené týmy v lize
+const { data: ltRaw } = await admin
+  .from('league_teams')
+  .select('team_id, teams(id, name, logo_url, primary_color, club_id, clubs(name, logo_url))')
+  .eq('league_id', league.id)
+  .not('approved_at', 'is', null);
+const lt = (ltRaw ?? []) as any[];
+const teamIds = lt.map((r) => r.team_id);
+
+// Map team_id → meta
+const teamMeta = new Map<string, { name: string; clubName: string; logoUrl: string | null; primaryColor: string }>();
+for (const r of lt) {
+  teamMeta.set(r.team_id, {
+    name: r.teams?.name ?? '—',
+    clubName: r.teams?.clubs?.name ?? '—',
+    logoUrl: r.teams?.logo_url ?? r.teams?.clubs?.logo_url ?? null,
+    primaryColor: r.teams?.primary_color ?? '#0F1B2D',
+  });
+}
+
+// Filter z URL
+const url = new URL(Astro.request.url);
+const teamFilter = url.searchParams.get('team') ?? '';
+const posFilter = url.searchParams.get('pos') ?? '';
+
+// Hráče
+let playersQuery = admin
+  .from('players')
+  .select('id, first_name, last_name, jersey_number, position, photo_url, team_id')
+  .in('team_id', teamIds.length > 0 ? teamIds : ['00000000-0000-0000-0000-000000000000'])
+  .order('team_id', { ascending: true })
+  .order('jersey_number', { ascending: true, nullsLast: true });
+
+if (teamFilter) playersQuery = playersQuery.eq('team_id', teamFilter);
+if (posFilter) playersQuery = playersQuery.eq('position', posFilter);
+
+const { data: playersRaw } = await playersQuery;
+const players = (playersRaw ?? []) as any[];
+
+// Dedup pozice + týmy pro filtry
+const positionsSet = new Set<string>();
+for (const p of players) if (p.position) positionsSet.add(p.position);
+const positions = Array.from(positionsSet).sort();
+
+const teamOptions = lt
+  .map((r) => ({ id: r.team_id, label: r.teams?.name ?? '—' }))
+  .sort((a, b) => a.label.localeCompare(b.label, 'cs'));
+---
+
+<AppLayout
+  title={`Hráči · ${league.name} · GameStatiq`}
+  active="players"
+  pageTitle="Hráči v lize"
+  pageSub={`${league.name} · ${players.length} hráčů${teamFilter || posFilter ? ' (filtrováno)' : ''}`}
+>
+  <div class="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
+    <a href="/app/league" class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">← Liga dashboard</a>
+  </div>
+
+  <!-- Filtry -->
+  <div class="mb-4 flex flex-wrap items-center gap-3">
+    <form method="GET" class="flex flex-wrap items-center gap-3">
+      <label class="flex items-center gap-2">
+        <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Tým</span>
+        <select name="team" onchange="this.form.submit()" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[13px] text-ink">
+          <option value="" selected={!teamFilter} style="color:#1A1A1A;background:white">Všechny týmy</option>
+          {teamOptions.map((opt) => (
+            <option value={opt.id} selected={opt.id === teamFilter} style="color:#1A1A1A;background:white">{opt.label}</option>
+          ))}
+        </select>
+      </label>
+      <label class="flex items-center gap-2">
+        <span class="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Pozice</span>
+        <select name="pos" onchange="this.form.submit()" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[13px] text-ink">
+          <option value="" selected={!posFilter} style="color:#1A1A1A;background:white">Všechny pozice</option>
+          {positions.map((pos) => (
+            <option value={pos} selected={pos === posFilter} style="color:#1A1A1A;background:white">{pos.toUpperCase()}</option>
+          ))}
+        </select>
+      </label>
+      {(teamFilter || posFilter) && (
+        <a href="/app/league/players" class="text-[12px] font-medium text-signal hover:underline">Resetovat filtry</a>
+      )}
+    </form>
+  </div>
+
+  {players.length === 0 ? (
+    <div class="rounded-xl border border-stone bg-pearl p-12 text-center">
+      <p class="text-[15px] font-semibold text-ink">Žádní hráči nesplňující filtry</p>
+      <p class="mt-1 text-[13px] text-slate">Klubový admin spravuje rostery v Klub portálu.</p>
+    </div>
+  ) : (
+    <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[720px] text-left text-[13px]">
+          <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
+            <tr>
+              <th class="px-5 py-3">Hráč</th>
+              <th class="py-3">Tým</th>
+              <th class="px-3 py-3 text-center w-20">Pozice</th>
+              <th class="px-3 py-3 text-center tabular-nums w-16">#</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone">
+            {players.map((p: any) => {
+              const meta = teamMeta.get(p.team_id);
+              const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ') || '—';
+              const initials = fullName.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2).toUpperCase();
+              return (
+                <tr class="hover:bg-mist/40 transition-colors">
+                  <td class="px-5 py-3">
+                    <div class="flex items-center gap-3">
+                      <div class="relative h-9 w-9 shrink-0">
+                        {p.photo_url ? (
+                          <img src={p.photo_url} alt="" loading="lazy" class="h-9 w-9 rounded-full object-cover" />
+                        ) : (
+                          <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink/5 text-[11px] font-semibold text-ink">{initials}</span>
+                        )}
+                        {meta?.logoUrl && (
+                          <img src={meta.logoUrl} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-4 w-4 rounded-full border border-pearl bg-pearl object-contain" />
+                        )}
+                      </div>
+                      <p class="text-[13px] font-semibold text-ink">{fullName}</p>
+                    </div>
+                  </td>
+                  <td class="py-3">
+                    {meta && (
+                      <div class="flex items-center gap-2">
+                        {meta.logoUrl ? (
+                          <img src={meta.logoUrl} alt="" loading="lazy" class="h-5 w-5 rounded object-contain" />
+                        ) : (
+                          <span class="inline-block h-5 w-5 rounded" style={`background-color:${meta.primaryColor}`}></span>
+                        )}
+                        <span class="text-[12px] font-semibold" style={`color:${meta.primaryColor}`}>{meta.name}</span>
+                      </div>
+                    )}
+                  </td>
+                  <td class="px-3 py-3 text-center text-[12px] font-medium uppercase text-graphite">{p.position ?? '—'}</td>
+                  <td class="px-3 py-3 text-center tabular-nums text-ink">#{p.jersey_number ?? '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
+
+  <p class="mt-4 text-[11px] text-stone-2">Roster spravuje klubový admin v Klub portálu — liga vidí přehled napříč týmy jako read-only.</p>
+</AppLayout>
