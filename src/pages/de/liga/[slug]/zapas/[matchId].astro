@@ -125,41 +125,41 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
   <main class="mx-auto max-w-6xl px-5 py-6 lg:px-8 lg:py-8">
 
     <!-- ═════════════ SCORE BANNER (same look as /klub/{slug}) ═════════════ -->
-    <div class="mb-4 overflow-hidden rounded-xl border border-white/5 bg-gradient-to-br from-[#475569] to-[#334155] text-white shadow-sm">
+    <div class="mb-4 overflow-hidden rounded-xl border border-stone bg-gradient-to-br from-pearl via-mist to-stone/40 text-ink shadow-lg shadow-ink/10">
       <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 py-7 sm:px-8">
         <div class="flex items-center gap-3 sm:gap-4">
           {headToHead.ourLogoUrl ? (
-            <img src={headToHead.ourLogoUrl} alt="" class="h-12 w-12 object-contain sm:h-16 sm:w-16" />
+            <img src={headToHead.ourLogoUrl} alt="" class="h-12 w-12 rounded-lg bg-white object-contain p-1 shadow-sm sm:h-16 sm:w-16" />
           ) : (
-            <span class="flex h-12 w-12 items-center justify-center rounded-lg bg-white/10 font-bold sm:h-16 sm:w-16">{initials(headToHead.ourClubName)}</span>
+            <span class="flex h-12 w-12 items-center justify-center rounded-lg bg-ink/10 font-bold text-ink shadow-sm sm:h-16 sm:w-16">{initials(headToHead.ourClubName)}</span>
           )}
           <div class="min-w-0">
             <div class="truncate font-['Bebas_Neue'] text-[24px] leading-none tracking-[0.04em] sm:text-[32px]">{(headToHead.ourTeamName ?? '').toUpperCase()}</div>
           </div>
         </div>
         <div class="flex items-baseline gap-2">
-          <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight sm:text-[88px]" style={headToHead.result === 'W' ? `color:${accent}` : ''}>{headToHead.ourScore}</span>
-          <span class="text-[24px] text-white/40 sm:text-[36px]">:</span>
-          <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight text-white/70 sm:text-[88px]" style={headToHead.result === 'L' ? `color:${headToHead.oppColor}` : ''}>{headToHead.oppScore}</span>
+          <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight text-ink sm:text-[88px]" style={headToHead.result === 'W' ? `color:${accent}` : ''}>{headToHead.ourScore}</span>
+          <span class="text-[24px] text-slate sm:text-[36px]">:</span>
+          <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight text-slate sm:text-[88px]" style={headToHead.result === 'L' ? `color:${headToHead.oppColor}` : ''}>{headToHead.oppScore}</span>
         </div>
         <div class="flex items-center justify-end gap-3 sm:gap-4">
           <div class="min-w-0 text-right">
             <div class="truncate font-['Bebas_Neue'] text-[24px] leading-none tracking-[0.04em] sm:text-[32px]">{(headToHead.opponent ?? '').toUpperCase()}</div>
           </div>
           {headToHead.oppLogoUrl ? (
-            <img src={headToHead.oppLogoUrl} alt="" class="h-12 w-12 flex-shrink-0 rounded-lg bg-white/95 object-contain p-1 sm:h-16 sm:w-16" />
+            <img src={headToHead.oppLogoUrl} alt="" class="h-12 w-12 flex-shrink-0 rounded-lg bg-white object-contain p-1 shadow-sm sm:h-16 sm:w-16" />
           ) : (
-            <span class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg font-bold sm:h-16 sm:w-16" style={`background:${headToHead.oppColor === '#1A1A1A' ? 'rgba(255,255,255,0.1)' : headToHead.oppColor}`}>{initials(headToHead.opponent)}</span>
+            <span class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg font-bold text-white shadow-sm sm:h-16 sm:w-16" style={`background:${headToHead.oppColor === '#1A1A1A' ? '#475569' : headToHead.oppColor}`}>{initials(headToHead.opponent)}</span>
           )}
         </div>
       </div>
-      <div class="border-t border-white/10 px-6 py-3 text-center sm:px-8">
+      <div class="border-t border-stone/60 bg-mist/40 px-6 py-3 text-center sm:px-8">
         <span class={`inline-block rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] ${headToHead.result === 'W' ? 'bg-verde text-white' : headToHead.result === 'L' ? 'bg-signal text-white' : 'bg-white/20 text-white'}`}>
           {resultLabelMap[headToHead.result] ?? headToHead.result}
         </span>
-        <span class="ml-2 text-[11px] text-white/65">{dateStr}</span>
-        <span class="ml-2 text-[11px] text-white/40">·</span>
-        <span class="ml-2 text-[11px] text-white/65">{sportText}</span>
+        <span class="ml-2 text-[11px] text-slate">{dateStr}</span>
+        <span class="ml-2 text-[11px] text-stone-2">·</span>
+        <span class="ml-2 text-[11px] text-slate">{sportText}</span>
       </div>
     </div>
 
@@ -241,7 +241,14 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
                       <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${accent}` : ''}>{i + 1}</span></td>
                       <td class="py-2.5" data-sort-value={p.name}>
                         <div class="flex items-center gap-2.5">
-                          {p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                          <div class="relative h-7 w-7 shrink-0">
+                            {p.photoUrl
+                              ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" />
+                              : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                            {perspectiveLogoUrl && (
+                              <img src={perspectiveLogoUrl} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
+                            )}
+                          </div>
                           <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
                         </div>
                       </td>
@@ -282,7 +289,14 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
                       <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${accent}` : ''}>{i + 1}</span></td>
                       <td class="py-2.5" data-sort-value={p.name}>
                         <div class="flex items-center gap-2.5">
-                          {p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                          <div class="relative h-7 w-7 shrink-0">
+                            {p.photoUrl
+                              ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" />
+                              : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                            {perspectiveLogoUrl && (
+                              <img src={perspectiveLogoUrl} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
+                            )}
+                          </div>
                           <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
                         </div>
                       </td>
@@ -322,7 +336,14 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
                       <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${accent}` : ''}>{i + 1}</span></td>
                       <td class="py-2.5" data-sort-value={p.name}>
                         <div class="flex items-center gap-2.5">
-                          {p.photoUrl ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" /> : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                          <div class="relative h-7 w-7 shrink-0">
+                            {p.photoUrl
+                              ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" />
+                              : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
+                            {perspectiveLogoUrl && (
+                              <img src={perspectiveLogoUrl} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
+                            )}
+                          </div>
                           <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
                         </div>
                       </td>
