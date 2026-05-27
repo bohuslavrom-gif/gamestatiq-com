@@ -72,6 +72,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   if (user && needsLeagueCtx) {
     try {
       const admin = getSupabaseAdmin();
+      // 1) Try membership-based lookup first (admin/staff/viewer of a league)
       const { data: lm } = await admin
         .from('league_members')
         .select('league_id, role, leagues(*)')
@@ -79,9 +80,23 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
-      if (lm) {
-        ctx.locals.league = (lm as any).leagues ?? null;
+      if (lm && (lm as any).leagues) {
+        ctx.locals.league = (lm as any).leagues;
         ctx.locals.leagueRole = (lm as { role: string }).role;
+      } else {
+        // 2) Fallback: user might be league OWNER without league_members row
+        //    (happens for liga-signup flow if member row wasn't created yet).
+        const { data: ownedLeague } = await admin
+          .from('leagues')
+          .select('*')
+          .eq('owner_user_id', user.id)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (ownedLeague) {
+          ctx.locals.league = ownedLeague as any;
+          ctx.locals.leagueRole = 'admin'; // owners are implicit admins
+        }
       }
     } catch (e) {
       // Defensive — don't block request if league lookup fails

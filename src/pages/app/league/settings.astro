@@ -5,11 +5,32 @@ import { getSupabaseAdmin } from '../../../lib/supabase';
 export const prerender = false;
 
 const user = Astro.locals.user!;
-const league = Astro.locals.league ?? null;
-const role = Astro.locals.leagueRole ?? null;
-if (!league) return Astro.redirect('/app');
+let league: any = Astro.locals.league ?? null;
+let role: string | null = Astro.locals.leagueRole ?? null;
 
 const admin = getSupabaseAdmin();
+
+// Iter 71: defensive lookup — if middleware didn't attach league (e.g. user is
+// league OWNER but not yet in league_members), try direct DB lookup before
+// redirecting away silently.
+if (!league && user) {
+  const { data: ownedLeague } = await admin
+    .from('leagues')
+    .select('*')
+    .eq('owner_user_id', user.id)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (ownedLeague) {
+    league = ownedLeague as any;
+    role = 'admin';
+  }
+}
+
+if (!league) {
+  // Iter 71: verbose error instead of silent redirect to /app
+  return Astro.redirect(`/app?error=${encodeURIComponent('Liga nastavení: nepodařilo se najít vaši ligu. Kontaktujte support.')}`);
+}
 
 // Fetch all league members with profile info
 const { data: membersRaw } = await admin
@@ -58,7 +79,22 @@ const publicUrl = `gamestatiq.com/liga/${league.slug}`;
       ✓ Logo odebráno.
     </div>
   )}
-  {saved && saved !== 'logo' && saved !== 'logo_removed' && (
+  {saved === 'invite' && (
+    <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">
+      ✓ Člen <strong>{url.searchParams.get('invited')}</strong> přidán do ligy.
+    </div>
+  )}
+  {saved === 'role' && (
+    <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">
+      ✓ Role byla změněna.
+    </div>
+  )}
+  {saved === 'removed' && (
+    <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">
+      ✓ Člen byl odebrán z ligy.
+    </div>
+  )}
+  {saved && saved !== 'logo' && saved !== 'logo_removed' && saved !== 'invite' && saved !== 'role' && saved !== 'removed' && (
     <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">
       ✓ Změny uloženy.
     </div>
@@ -165,12 +201,32 @@ const publicUrl = `gamestatiq.com/liga/${league.slug}`;
         <div class="flex items-center justify-between border-b border-stone px-5 py-4">
           <div>
             <p class="text-[15px] font-semibold tracking-tight-2 text-ink">Členové ligy</p>
-            <p class="text-[12px] text-slate">{members.length} {members.length === 1 ? 'člen' : members.length < 5 ? 'členové' : 'členů'}</p>
+            <p class="text-[12px] text-slate">{members.length} {members.length === 1 ? 'člen' : members.length < 5 ? 'členové' : 'členů'} · admin / staff / viewer</p>
           </div>
-          {isAdmin && (
-            <button type="button" disabled class="cursor-not-allowed rounded-md border border-stone bg-mist px-3 py-1.5 text-[12px] font-medium text-stone-2" title="Pozvání dalších členů přijde v další iteraci">+ Pozvat člena (brzy)</button>
-          )}
         </div>
+
+        {isAdmin && (
+          <form method="POST" action="/api/league/members/invite" class="border-b border-stone bg-mist/40 px-5 py-4">
+            <p class="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate">Přidat člena podle e-mailu</p>
+            <div class="flex flex-wrap items-end gap-3">
+              <label class="flex-1 min-w-[220px]">
+                <span class="block text-[11px] font-medium text-slate">E-mail</span>
+                <input type="email" name="email" required placeholder="kolega@klub.cz" class="mt-1 block w-full rounded-lg border border-stone bg-pearl px-3 py-2 text-[13px] text-ink focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/20" />
+              </label>
+              <label>
+                <span class="block text-[11px] font-medium text-slate">Role</span>
+                <select name="role" class="mt-1 rounded-lg border border-stone bg-pearl px-3 py-2 text-[13px] text-ink">
+                  <option value="staff" style="color:#1A1A1A;background:white">Staff</option>
+                  <option value="admin" style="color:#1A1A1A;background:white">Admin</option>
+                  <option value="viewer" style="color:#1A1A1A;background:white">Viewer</option>
+                </select>
+              </label>
+              <button type="submit" class="rounded-lg bg-signal px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#C8313D]">+ Přidat</button>
+            </div>
+            <p class="mt-2 text-[11px] text-stone-2">Uživatel musí mít účet na GameStatiq. Pokud nemá, požádejte ho, ať se nejdřív zaregistruje na gamestatiq.com.</p>
+          </form>
+        )}
+
         <ul class="divide-y divide-stone">
           {members.map((m) => {
             const p = profileById.get(m.user_id);
@@ -178,21 +234,56 @@ const publicUrl = `gamestatiq.com/liga/${league.slug}`;
             const ln = p?.last_name ?? '';
             const fullName = [fn, ln].filter(Boolean).join(' ') || (p?.email ?? '—');
             const isSelf = m.user_id === user.id;
+            const isOwner = m.user_id === (league as any).owner_user_id;
             return (
-              <li class="flex items-center gap-4 px-5 py-4">
-                <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink/5 text-[12px] font-semibold text-ink">{initials(fn, ln, p?.email ?? '?')}</span>
+              <li class="flex flex-wrap items-center gap-4 px-5 py-4">
+                <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink/5 text-[12px] font-semibold text-ink">{initials(fn, ln, p?.email ?? '?')}</span>
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-[14px] font-semibold text-ink">
                     {fullName}
                     {isSelf && <span class="ml-2 text-[10px] font-semibold uppercase tracking-wider text-slate">vy</span>}
+                    {isOwner && <span class="ml-2 rounded bg-spark/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#7A4318]">Vlastník</span>}
                   </p>
                   <p class="truncate text-[12px] text-slate">{p?.email ?? '—'}</p>
                 </div>
-                <span class={`rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${
-                  m.role === 'admin' ? 'bg-signal/15 text-signal' :
-                  m.role === 'staff' ? 'bg-sky/15 text-[#1B5E83]' :
-                                       'bg-mist text-slate'
-                }`}>{roleLabel[m.role] ?? m.role}</span>
+
+                {isAdmin ? (
+                  <div class="flex items-center gap-2">
+                    <form method="POST" action="/api/league/members/role" class="inline-flex">
+                      <input type="hidden" name="member_id" value={m.id} />
+                      <select
+                        name="role"
+                        onchange="this.form.submit()"
+                        class={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${
+                          m.role === 'admin' ? 'border-signal/40 bg-signal/15 text-signal' :
+                          m.role === 'staff' ? 'border-sky/40 bg-sky/15 text-[#1B5E83]' :
+                                               'border-stone bg-mist text-slate'
+                        }`}
+                      >
+                        <option value="admin"  selected={m.role === 'admin'}  style="color:#1A1A1A;background:white">Admin</option>
+                        <option value="staff"  selected={m.role === 'staff'}  style="color:#1A1A1A;background:white">Staff</option>
+                        <option value="viewer" selected={m.role === 'viewer'} style="color:#1A1A1A;background:white">Viewer</option>
+                      </select>
+                    </form>
+                    {!isOwner && (
+                      <form method="POST" action="/api/league/members/remove" class="inline-flex">
+                        <input type="hidden" name="member_id" value={m.id} />
+                        <button
+                          type="submit"
+                          onclick={`return confirm('Odebrat ${fullName} z ligy?')`}
+                          title="Odebrat z ligy"
+                          class="rounded-md border border-stone bg-pearl px-2 py-1 text-[11px] font-medium text-graphite hover:border-signal/40 hover:text-signal"
+                        >×</button>
+                      </form>
+                    )}
+                  </div>
+                ) : (
+                  <span class={`rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${
+                    m.role === 'admin' ? 'bg-signal/15 text-signal' :
+                    m.role === 'staff' ? 'bg-sky/15 text-[#1B5E83]' :
+                                         'bg-mist text-slate'
+                  }`}>{roleLabel[m.role] ?? m.role}</span>
+                )}
               </li>
             );
           })}
