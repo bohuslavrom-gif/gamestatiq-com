@@ -574,10 +574,9 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                 <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                   <tr>
                     <th class="px-5 py-3 w-28">{t('pliga.matches.col.date')}</th>
-                    <th class="py-3">{t('pliga.matches.col.team')}</th>
-                    <th class="py-3">{t('pliga.matches.col.opponent')}</th>
+                    <th class="py-3">HOME</th>
+                    <th class="py-3">AWAY</th>
                     <th class="px-3 py-3 text-center tabular-nums w-24">{t('pliga.matches.col.score')}</th>
-                    <th class="px-3 py-3 text-center w-16">{t('pliga.matches.col.result')}</th>
                     <th class="px-3 py-3 text-right w-24">&nbsp;</th>
                   </tr>
                 </thead>
@@ -618,9 +617,6 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                         )}
                       </td>
                       <td class="px-3 py-3 text-center font-bold tabular-nums text-ink">{m.ourScore}–{m.oppScore}</td>
-                      <td class="px-3 py-3 text-center">
-                        <span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${lastResultColor[m.result]}`}>{m.result}</span>
-                      </td>
                       <td class="px-5 py-3 text-right">
                         <a href={localizedPath(`/liga/${league.slug}/zapas/${m.id}`, lang)} class="inline-block whitespace-nowrap rounded-md border border-stone bg-pearl px-3 py-1.5 text-[11px] font-semibold text-graphite hover:bg-mist hover:text-ink">{t('pliga.matches.detail')}</a>
                       </td>
