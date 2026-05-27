@@ -2,6 +2,7 @@
 import AppLayout from '../../../layouts/AppLayout.astro';
 import PlayerStatRow from '../../../components/PlayerStatRow.astro';
 import { getSupabaseAdmin } from '../../../lib/supabase';
+import { isSuperAdmin } from '../../../lib/admin';
 
 export const prerender = false;
 
@@ -56,8 +57,14 @@ if (!role && oppTeam?.club_id) {
   }
 }
 
-// Iter 67: liga admin / staff může editovat zápasy v jeho lize (přes league_members nebo league.owner)
+// Iter 68c: super-admin escape hatch — vždy plný přístup
 let isLeagueAdminAccess = false;
+if (!role && isSuperAdmin(user)) {
+  role = 'admin';
+  isLeagueAdminAccess = true;
+}
+
+// Iter 67: liga admin / staff může editovat zápasy v jeho lize (přes league_members nebo league.owner)
 if (!role) {
   // Najdi liga(s) kde je match (team nebo opp_team)
   const teamIdsToCheck = [(match as any).team_id, (match as any).opp_team_id].filter(Boolean);
@@ -90,6 +97,49 @@ if (!role) {
         if (lm && lm.length > 0) {
           role = (lm[0] as any).role === 'admin' ? 'admin' : 'stats';
           isLeagueAdminAccess = true;
+        }
+      }
+    }
+  }
+}
+
+// Iter 68d: pokud user je club_member (jakékoli role) některého z týmů v lize zápasu, dostane stats access
+if (!role) {
+  const teamIdsToCheck = [(match as any).team_id, (match as any).opp_team_id].filter(Boolean);
+  if (teamIdsToCheck.length > 0) {
+    // Najdi liga(s) kde match je
+    const { data: leagueTeams } = await admin
+      .from('league_teams')
+      .select('league_id')
+      .in('team_id', teamIdsToCheck)
+      .not('approved_at', 'is', null);
+    const leagueIds = (leagueTeams ?? []).map((r: any) => r.league_id);
+    if (leagueIds.length > 0) {
+      // Najdi všechny týmy v těchto ligách
+      const { data: allLeagueTeams } = await admin
+        .from('league_teams')
+        .select('team_id, teams(club_id)')
+        .in('league_id', leagueIds)
+        .not('approved_at', 'is', null);
+      const clubIdsInLeague = new Set(
+        ((allLeagueTeams ?? []) as any[]).map((r) => r.teams?.club_id).filter(Boolean)
+      );
+      if (clubIdsInLeague.size > 0) {
+        // Je user club_admin v některém z těchto klubů?
+        const { data: cmInLeague } = await admin
+          .from('club_members')
+          .select('role, club_id')
+          .eq('user_id', user.id)
+          .in('club_id', Array.from(clubIdsInLeague))
+          .order('role', { ascending: true });
+        if (cmInLeague && cmInLeague.length > 0) {
+          // Vybereme nejvyšší roli
+          const adm = cmInLeague.find((r: any) => r.role === 'admin');
+          const coach = cmInLeague.find((r: any) => r.role === 'coach');
+          const stats = cmInLeague.find((r: any) => r.role === 'stats');
+          role = adm ? 'admin' : coach ? 'coach' : stats ? 'stats' : 'viewer';
+          accessClubId = (adm ?? coach ?? stats ?? cmInLeague[0])?.club_id;
+          isLeagueAdminAccess = true;  // přístup je nepřímý přes ligu
         }
       }
     }
