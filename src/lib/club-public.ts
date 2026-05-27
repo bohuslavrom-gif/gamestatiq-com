@@ -370,7 +370,8 @@ export async function fetchClubMatchHeadToHead(
       opp_xp1_att, opp_xp1_ok, opp_xp2_att, opp_xp2_ok,
       def_drives, def_stops,
       pen_count, pen_yds, opp_pen_count, opp_pen_yds,
-      teams!matches_team_id_fkey(name, club_id, clubs(name))
+      teams!matches_team_id_fkey(name, primary_color, logo_url, club_id, clubs(name, logo_url)),
+      opp_team:teams!matches_opp_team_id_fkey(name, primary_color, logo_url, club_id, clubs(name, logo_url))
     `)
     .eq('id', matchId)
     .maybeSingle();
@@ -392,15 +393,28 @@ export async function fetchClubMatchHeadToHead(
   const oppTd = Math.max(0, Math.floor((oppScore - oppXp1Ok - 2 * oppXp2Ok) / 6));
 
   // Iter 27: lookup opponent's brand color + logo
-  // Priority: 1) opponents table (per-club registry), 2) clubs table (if opponent is GameStatiq user), 3) defaults
+  // Priority: 1) shared match opp team (teams.logo_url), 2) opponents registry, 3) clubs table, 4) defaults
   let oppColor = '#1A1A1A';
   let oppLogoUrl: string | null = null;
-  // Iter 38: v opp perspective je "soupeř" původní home tým — použijeme jeho jméno
-  // Iter 54: jen teamName (bez clubName) pro public lize konzistenci
+
+  // Iter 61: pro shared match vytáhneme branding přímo z teams (kde má league admin nastavené barvy/logo)
+  if (isOppPerspective) {
+    // V opp perspective je "soupeř" home tým (match.teams)
+    if (match.teams?.logo_url) oppLogoUrl = match.teams.logo_url;
+    else if (match.teams?.clubs?.logo_url) oppLogoUrl = match.teams.clubs.logo_url;
+    if (match.teams?.primary_color) oppColor = match.teams.primary_color;
+  } else if (match.opp_team_id && match.opp_team) {
+    // Home perspective + shared match — soupeř je opp_team
+    if (match.opp_team?.logo_url) oppLogoUrl = match.opp_team.logo_url;
+    else if (match.opp_team?.clubs?.logo_url) oppLogoUrl = match.opp_team.clubs.logo_url;
+    if (match.opp_team?.primary_color) oppColor = match.opp_team.primary_color;
+  }
+
+  // Iter 38+54: opp name — v opp perspective z home teams (jen teamName)
   const opponentName = isOppPerspective
     ? (match.teams?.name || match.opponent || '')
     : match.opponent;
-  if (opponentName) {
+  if (opponentName && !oppLogoUrl) {
     const oppName = String(opponentName).trim();
 
     // First check this club's opponent registry
