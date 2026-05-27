@@ -154,12 +154,7 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
         </div>
       </div>
       <div class="border-t border-stone/60 bg-mist/40 px-6 py-3 text-center sm:px-8">
-        <span class={`inline-block rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] ${headToHead.result === 'W' ? 'bg-verde text-white' : headToHead.result === 'L' ? 'bg-signal text-white' : 'bg-white/20 text-white'}`}>
-          {resultLabelMap[headToHead.result] ?? headToHead.result}
-        </span>
-        <span class="ml-2 text-[11px] text-slate">{dateStr}</span>
-        <span class="ml-2 text-[11px] text-stone-2">·</span>
-        <span class="ml-2 text-[11px] text-slate">{sportText}</span>
+        <span class="text-[11px] text-slate">{dateStr}</span>
       </div>
     </div>
 
