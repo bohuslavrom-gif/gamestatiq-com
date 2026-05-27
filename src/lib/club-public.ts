@@ -340,6 +340,10 @@ export type MatchHeadToHead = {
   qbStats: QbRow[];
   wrStats: WrRow[];
   defenseLeaders: DbRow[];
+  // Iter 64: opp hráči ve shared matchi
+  oppQbStats: QbRow[];
+  oppWrStats: WrRow[];
+  oppDefenseLeaders: DbRow[];
 };
 
 /**
@@ -518,7 +522,7 @@ export async function fetchClubMatchHeadToHead(
     },
   ];
 
-  // Player stats for this match — Iter 38: + players.team_id pro filtrování per current team
+  // Player stats — Iter 64: vrať obě sady (our + opp)
   const { data: psRaw } = await admin
     .from('match_player_stats')
     .select(`
@@ -529,8 +533,10 @@ export async function fetchClubMatchHeadToHead(
       players ( first_name, last_name, jersey_number, photo_url, team_id )
     `)
     .eq('match_id', matchId);
-  // Iter 38: zobrazujeme jen hráče current teamu (z perspektivy které nahlížíme)
-  const psRows = ((psRaw ?? []) as any[]).filter((r) => r.players?.team_id === teamId);
+  const allPsRows = (psRaw ?? []) as any[];
+
+  // Iter 64: rozdělit per team_id — our perspective team + opp team
+  const opponentTeamId = isOppPerspective ? match.team_id : match.opp_team_id;
 
   type Bucket = {
     playerId: string;
@@ -541,50 +547,69 @@ export async function fetchClubMatchHeadToHead(
     wr: { targets: number; rec: number; yds: number; td: number; pts: number };
     db: { flagPull: number; sack: number; brkup: number; int: number };
   };
-  const buckets = new Map<string, Bucket>();
-  for (const r of psRows) {
-    const p = r.players ?? {};
-    const id = r.player_id;
-    let b = buckets.get(id);
-    if (!b) {
-      const fullName = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || '—';
-      b = {
-        playerId: id, name: fullName,
-        jersey: p.jersey_number ?? null,
-        photoUrl: p.photo_url ?? null,
-        qb: { att: 0, comp: 0, yds: 0, td: 0, int: 0 },
-        wr: { targets: 0, rec: 0, yds: 0, td: 0, pts: 0 },
-        db: { flagPull: 0, sack: 0, brkup: 0, int: 0 },
-      };
-      buckets.set(id, b);
+
+  function aggregate(rows: any[]): Bucket[] {
+    const buckets = new Map<string, Bucket>();
+    for (const r of rows) {
+      const p = r.players ?? {};
+      const id = r.player_id;
+      let b = buckets.get(id);
+      if (!b) {
+        const fullName = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || '—';
+        b = {
+          playerId: id, name: fullName,
+          jersey: p.jersey_number ?? null,
+          photoUrl: p.photo_url ?? null,
+          qb: { att: 0, comp: 0, yds: 0, td: 0, int: 0 },
+          wr: { targets: 0, rec: 0, yds: 0, td: 0, pts: 0 },
+          db: { flagPull: 0, sack: 0, brkup: 0, int: 0 },
+        };
+        buckets.set(id, b);
+      }
+      b.qb.att  += r.qb_att  ?? 0; b.qb.comp += r.qb_comp ?? 0;
+      b.qb.yds  += r.qb_yds  ?? 0; b.qb.td   += r.qb_td   ?? 0;
+      b.qb.int  += r.qb_int  ?? 0;
+      b.wr.targets += r.wr_targets ?? 0; b.wr.rec += r.wr_rec ?? 0;
+      b.wr.yds += r.wr_yds ?? 0; b.wr.td += r.wr_td ?? 0;
+      b.wr.pts += r.wr_pts ?? 0;
+      b.db.flagPull += r.db_flag_pull ?? 0; b.db.sack += r.db_sack ?? 0;
+      b.db.brkup += r.db_brkup ?? 0; b.db.int += r.db_int ?? 0;
     }
-    b.qb.att  += r.qb_att  ?? 0; b.qb.comp += r.qb_comp ?? 0;
-    b.qb.yds  += r.qb_yds  ?? 0; b.qb.td   += r.qb_td   ?? 0;
-    b.qb.int  += r.qb_int  ?? 0;
-    b.wr.targets += r.wr_targets ?? 0; b.wr.rec += r.wr_rec ?? 0;
-    b.wr.yds += r.wr_yds ?? 0; b.wr.td += r.wr_td ?? 0;
-    b.wr.pts += r.wr_pts ?? 0;
-    b.db.flagPull += r.db_flag_pull ?? 0; b.db.sack += r.db_sack ?? 0;
-    b.db.brkup += r.db_brkup ?? 0; b.db.int += r.db_int ?? 0;
+    return Array.from(buckets.values());
   }
-  const all = Array.from(buckets.values());
 
-  const qbStats: QbRow[] = all.filter((b) => b.qb.att > 0).map((b) => ({
-    playerId: b.playerId, name: b.name, jersey: b.jersey, photoUrl: b.photoUrl,
-    att: b.qb.att, comp: b.qb.comp, td: b.qb.td, int: b.qb.int, yds: b.qb.yds,
-  })).sort((a, b) => b.td - a.td || b.yds - a.yds);
-
-  const wrStats: WrRow[] = all.filter((b) => b.wr.targets > 0 || b.wr.td > 0).map((b) => ({
-    playerId: b.playerId, name: b.name, jersey: b.jersey, photoUrl: b.photoUrl,
-    td: b.wr.td, targets: b.wr.targets, rec: b.wr.rec, yds: b.wr.yds, pts: b.wr.pts,
-  })).sort((a, b) => b.td - a.td || b.pts - a.pts);
-
-  const defenseLeaders: DbRow[] = all.filter((b) => b.db.flagPull > 0 || b.db.sack > 0 || b.db.int > 0 || b.db.brkup > 0)
-    .map((b) => ({
+  function toQbRows(buckets: Bucket[]): QbRow[] {
+    return buckets.filter((b) => b.qb.att > 0).map((b) => ({
       playerId: b.playerId, name: b.name, jersey: b.jersey, photoUrl: b.photoUrl,
-      flagPull: b.db.flagPull, sack: b.db.sack, brkup: b.db.brkup, int: b.db.int,
-    }))
-    .sort((a, b) => (b.int * 3 + b.sack * 2 + b.flagPull) - (a.int * 3 + a.sack * 2 + a.flagPull));
+      att: b.qb.att, comp: b.qb.comp, td: b.qb.td, int: b.qb.int, yds: b.qb.yds,
+    })).sort((a, b) => b.td - a.td || b.yds - a.yds);
+  }
+  function toWrRows(buckets: Bucket[]): WrRow[] {
+    return buckets.filter((b) => b.wr.targets > 0 || b.wr.td > 0).map((b) => ({
+      playerId: b.playerId, name: b.name, jersey: b.jersey, photoUrl: b.photoUrl,
+      td: b.wr.td, targets: b.wr.targets, rec: b.wr.rec, yds: b.wr.yds, pts: b.wr.pts,
+    })).sort((a, b) => b.td - a.td || b.pts - a.pts);
+  }
+  function toDbRows(buckets: Bucket[]): DbRow[] {
+    return buckets.filter((b) => b.db.flagPull > 0 || b.db.sack > 0 || b.db.int > 0 || b.db.brkup > 0)
+      .map((b) => ({
+        playerId: b.playerId, name: b.name, jersey: b.jersey, photoUrl: b.photoUrl,
+        flagPull: b.db.flagPull, sack: b.db.sack, brkup: b.db.brkup, int: b.db.int,
+      }))
+      .sort((a, b) => (b.int * 3 + b.sack * 2 + b.flagPull) - (a.int * 3 + a.sack * 2 + a.flagPull));
+  }
+
+  const ourBuckets = aggregate(allPsRows.filter((r) => r.players?.team_id === teamId));
+  const oppBuckets = opponentTeamId
+    ? aggregate(allPsRows.filter((r) => r.players?.team_id === opponentTeamId))
+    : [];
+
+  const qbStats: QbRow[] = toQbRows(ourBuckets);
+  const wrStats: WrRow[] = toWrRows(ourBuckets);
+  const defenseLeaders: DbRow[] = toDbRows(ourBuckets);
+  const oppQbStats: QbRow[] = toQbRows(oppBuckets);
+  const oppWrStats: WrRow[] = toWrRows(oppBuckets);
+  const oppDefenseLeaders: DbRow[] = toDbRows(oppBuckets);
 
   return {
     id: match.id,
@@ -597,5 +622,6 @@ export async function fetchClubMatchHeadToHead(
     oppColor, oppLogoUrl,
     metrics,
     qbStats, wrStats, defenseLeaders,
+    oppQbStats, oppWrStats, oppDefenseLeaders,
   };
 }
