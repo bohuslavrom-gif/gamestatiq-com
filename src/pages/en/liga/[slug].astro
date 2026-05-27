@@ -366,6 +366,7 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                       <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">YDS</th>
                       <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="8">TD</th>
                       <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="9">INT</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="10" title="Sacked">SCK</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-stone">
@@ -395,6 +396,7 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                           <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbYds}>{p.qbYds}</td>
                           <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.qbTd}>{p.qbTd}</td>
                           <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbInt}>{p.qbInt}</td>
+                          <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbSack}>{p.qbSack}</td>
                         </tr>
                       );
                     })}

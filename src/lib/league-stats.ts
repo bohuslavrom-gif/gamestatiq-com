@@ -194,7 +194,7 @@ export type LeaderRow = {
   // Iter 48: počet zápasů (distinct match_id v match_player_stats per hráč)
   gamesPlayed: number;
   // QB
-  qbAtt: number; qbComp: number; qbYds: number; qbTd: number; qbInt: number;
+  qbAtt: number; qbComp: number; qbYds: number; qbTd: number; qbInt: number; qbSack: number;
   // WR
   wrTargets: number; wrRec: number; wrYds: number; wrTd: number; wrPts: number;
   // DB
@@ -243,7 +243,7 @@ export async function fetchLeagueLeaders(leagueId: string): Promise<{
     .from('match_player_stats')
     .select(`
       match_id, player_id,
-      qb_att, qb_comp, qb_yds, qb_td, qb_int,
+      qb_att, qb_comp, qb_yds, qb_td, qb_int, qb_sack,
       wr_targets, wr_rec, wr_yds, wr_td, wr_pts,
       db_flag_pull, db_sack, db_brkup, db_int,
       players ( first_name, last_name, jersey_number, photo_url, team_id )
@@ -274,7 +274,7 @@ export async function fetchLeagueLeaders(leagueId: string): Promise<{
         teamLogoUrl: meta?.teamLogoUrl ?? null,
         primaryColor: meta?.primaryColor ?? '#0F1B2D',
         gamesPlayed: 0,
-        qbAtt: 0, qbComp: 0, qbYds: 0, qbTd: 0, qbInt: 0,
+        qbAtt: 0, qbComp: 0, qbYds: 0, qbTd: 0, qbInt: 0, qbSack: 0,
         wrTargets: 0, wrRec: 0, wrYds: 0, wrTd: 0, wrPts: 0,
         dbFlagPull: 0, dbSack: 0, dbInt: 0, dbBrkup: 0,
       };
@@ -287,6 +287,7 @@ export async function fetchLeagueLeaders(leagueId: string): Promise<{
     b.qbYds += r.qb_yds ?? 0;
     b.qbTd += r.qb_td ?? 0;
     b.qbInt += r.qb_int ?? 0;
+    b.qbSack += r.qb_sack ?? 0;
     b.wrTargets += r.wr_targets ?? 0;
     b.wrRec += r.wr_rec ?? 0;
     b.wrYds += r.wr_yds ?? 0;
@@ -352,7 +353,7 @@ export async function fetchLeagueAllPlayers(leagueId: string): Promise<{
     .from('match_player_stats')
     .select(`
       match_id, player_id,
-      qb_att, qb_comp, qb_yds, qb_td, qb_int,
+      qb_att, qb_comp, qb_yds, qb_td, qb_int, qb_sack,
       wr_targets, wr_rec, wr_yds, wr_td, wr_pts,
       db_flag_pull, db_sack, db_brkup, db_int,
       players ( first_name, last_name, jersey_number, photo_url, team_id )
@@ -380,7 +381,7 @@ export async function fetchLeagueAllPlayers(leagueId: string): Promise<{
         teamLogoUrl: meta?.teamLogoUrl ?? null,
         primaryColor: meta?.primaryColor ?? '#0F1B2D',
         gamesPlayed: 0,
-        qbAtt: 0, qbComp: 0, qbYds: 0, qbTd: 0, qbInt: 0,
+        qbAtt: 0, qbComp: 0, qbYds: 0, qbTd: 0, qbInt: 0, qbSack: 0,
         wrTargets: 0, wrRec: 0, wrYds: 0, wrTd: 0, wrPts: 0,
         dbFlagPull: 0, dbSack: 0, dbInt: 0, dbBrkup: 0,
       };
@@ -389,7 +390,7 @@ export async function fetchLeagueAllPlayers(leagueId: string): Promise<{
     // Iter 48: distinct match per hráč
     b.gamesPlayed += 1;
     b.qbAtt += r.qb_att ?? 0; b.qbComp += r.qb_comp ?? 0; b.qbYds += r.qb_yds ?? 0;
-    b.qbTd  += r.qb_td  ?? 0; b.qbInt  += r.qb_int  ?? 0;
+    b.qbTd  += r.qb_td  ?? 0; b.qbInt  += r.qb_int  ?? 0; b.qbSack += r.qb_sack ?? 0;
     b.wrTargets += r.wr_targets ?? 0; b.wrRec += r.wr_rec ?? 0;
     b.wrYds += r.wr_yds ?? 0; b.wrTd += r.wr_td ?? 0; b.wrPts += r.wr_pts ?? 0;
     b.dbFlagPull += r.db_flag_pull ?? 0; b.dbSack += r.db_sack ?? 0;
@@ -668,7 +669,7 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
     .from('match_player_stats')
     .select(`
       match_id, player_id,
-      qb_att, qb_comp, qb_yds, qb_td, qb_int,
+      qb_att, qb_comp, qb_yds, qb_td, qb_int, qb_sack,
       wr_targets, wr_rec, wr_yds, wr_td, wr_pts,
       db_flag_pull, db_sack, db_brkup, db_int,
       players ( first_name, last_name, jersey_number, photo_url, team_id )
@@ -690,7 +691,7 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
   type PlayerAgg = {
     playerId: string; playerName: string; jersey: number | null; photoUrl: string | null;
     teamName: string; clubName: string;
-    qbAtt: number; qbComp: number; qbYds: number; qbTd: number; qbInt: number;
+    qbAtt: number; qbComp: number; qbYds: number; qbTd: number; qbInt: number; qbSack: number;
     wrTargets: number; wrRec: number; wrYds: number; wrTd: number; wrPts: number;
     dbFlagPull: number; dbSack: number; dbInt: number; dbBrkup: number;
   };
@@ -711,14 +712,14 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
         jersey: p.jersey_number ?? null,
         photoUrl: p.photo_url ?? null,
         teamName: meta.teamName, clubName: meta.clubName,
-        qbAtt: 0, qbComp: 0, qbYds: 0, qbTd: 0, qbInt: 0,
+        qbAtt: 0, qbComp: 0, qbYds: 0, qbTd: 0, qbInt: 0, qbSack: 0,
         wrTargets: 0, wrRec: 0, wrYds: 0, wrTd: 0, wrPts: 0,
         dbFlagPull: 0, dbSack: 0, dbInt: 0, dbBrkup: 0,
       };
       playerAgg.set(id, b);
     }
     b.qbAtt += r.qb_att ?? 0; b.qbComp += r.qb_comp ?? 0; b.qbYds += r.qb_yds ?? 0;
-    b.qbTd  += r.qb_td  ?? 0; b.qbInt  += r.qb_int  ?? 0;
+    b.qbTd  += r.qb_td  ?? 0; b.qbInt  += r.qb_int  ?? 0; b.qbSack += r.qb_sack ?? 0;
     b.wrTargets += r.wr_targets ?? 0; b.wrRec += r.wr_rec ?? 0;
     b.wrYds += r.wr_yds ?? 0; b.wrTd += r.wr_td ?? 0; b.wrPts += r.wr_pts ?? 0;
     b.dbFlagPull += r.db_flag_pull ?? 0; b.dbSack += r.db_sack ?? 0;
