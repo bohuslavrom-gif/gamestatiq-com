@@ -97,11 +97,16 @@ if (!role) {
 }
 
 if (!role) {
-  // Iter 67: lepší redirect — když je user liga admin, vraťme ho do liga matches
+  // Iter 68b: error redirect na obě cesty s readable info pro debug
   const leagueCtx = Astro.locals.league;
+  const homeClubId = (match as any).club_id ?? '—';
+  const homeTeamId = (match as any).team_id ?? '—';
+  const oppTeamId = (match as any).opp_team_id ?? '—';
+  const debugInfo = `match.club=${homeClubId}, match.team=${homeTeamId}, opp_team=${oppTeamId}, user=${user.id}`;
+  const msg = `Bez oprávnění k zápasu. Musíš být admin/coach/stats v klubu jednoho z týmů zápasu, nebo liga admin/staff. Debug: ${debugInfo}`;
   const dest = leagueCtx
-    ? `/app/league/matches?error=${encodeURIComponent('Bez oprávnění k tomuto zápasu. Musíš být admin/staff klubu nebo liga.')}`
-    : '/app/matches';
+    ? `/app/league/matches?error=${encodeURIComponent(msg)}`
+    : `/app/matches?error=${encodeURIComponent(msg)}`;
   return Astro.redirect(dest);
 }
 
