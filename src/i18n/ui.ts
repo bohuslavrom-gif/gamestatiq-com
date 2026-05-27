@@ -17,7 +17,7 @@ export const ui = {
   cs: {
     // Meta
     'meta.home.title': 'GameStatiq — Sport stats platforma pro týmy, ligy a svazy',
-    'meta.home.description': 'Měřte každou hru. Live stats, public widget pro fanoušky, trenérská analytika. Pro vážné amatérské týmy a národní svazy.',
+    'meta.home.description': 'Sport stats platforma pro flag football. Live stats, public widget pro fanoušky, trenérská analytika. Pro vážné amatérské týmy, kluby a národní svazy.',
     'meta.liga.title': 'Liga 2026 — Demo ligový hub | GameStatiq',
     'meta.liga.description': 'Ukázka, jak vypadá veřejná stránka ligy nebo svazu na GameStatiq. Tabulka, sezónní statistiky a cross-club leaderboardy napříč kluby.',
 
@@ -34,11 +34,11 @@ export const ui = {
     'nav.lang.switch': 'Jazyk',
 
     // Hero
-    'hero.eyebrow': 'Sport stats SaaS',
+    'hero.eyebrow': 'Sport stats SaaS · flag football',
     'hero.title.1': 'Zaznamenejte každou hru.',
     'hero.title.2': 'Od klubu',
     'hero.title.3': 'po národní svaz.',
-    'hero.lead': 'GameStatiq je platforma pro sport stats — od jednoho týmu, přes klub s více týmy, až po ligy a svazy. Statistici zapisují přímo z mobilu, fanoušci sledují live, trenéři dostanou analytiku v reálném čase.',
+    'hero.lead': 'GameStatiq je sport stats platforma pro flag football — od jednoho týmu, přes klub s více týmy, až po ligy a národní svazy. Statistici zapisují plays, drives a QB/WR/DB statistiky přímo z mobilu, fanoušci sledují live, trenéři dostanou analytiku v reálném čase.',
     'hero.cta.primary': 'Vyžádat demo',
     'hero.cta.secondary': 'Otevřít ukázku ligy',
     'hero.stat.1.value': '3',
@@ -51,7 +51,7 @@ export const ui = {
     // Features
     'features.eyebrow': 'Funkce',
     'features.title': 'Stats infrastruktura, ne další tabulka.',
-    'features.lead': 'Každá funkce je navržená pro reálný zápas — od statistika u hřiště po trenéra v autobuse cestou domů.',
+    'features.lead': 'Každá funkce je navržená pro reálný flag football zápas — od statistika u hřiště po trenéra v autobuse cestou domů. Pozice QB/WR/DB, drives, plays, sacky, INT — všechno je hned na svém místě.',
     'features.f1.title': 'Scorer PWA pro mobil',
     'features.f1.body': 'Statistik zapisuje plays, drives a fauly tap-tap z telefonu. Funguje offline, syncuje při Wi-Fi. Žádná instalace přes app store — otevři v Chrome a "Přidat na plochu".',
     'features.f2.title': 'Hráčské profily a rosters',
@@ -356,7 +356,7 @@ export const ui = {
   en: {
     // Meta
     'meta.home.title': 'GameStatiq — Sport stats platform for teams, leagues and federations',
-    'meta.home.description': 'Measure every play. Live stats, public fan widget, coach analytics. For serious amateur teams and national federations.',
+    'meta.home.description': 'Sport stats platform for flag football. Live stats, public fan widget, coach analytics. For serious amateur teams, clubs and national federations.',
     'meta.liga.title': 'League 2026 — Demo league hub | GameStatiq',
     'meta.liga.description': 'See how a league or federation page looks on GameStatiq. Standings, season stats and cross-club leaderboards across every team.',
 
@@ -373,11 +373,11 @@ export const ui = {
     'nav.lang.switch': 'Language',
 
     // Hero
-    'hero.eyebrow': 'Sport stats SaaS',
+    'hero.eyebrow': 'Sport stats SaaS · flag football',
     'hero.title.1': 'Capture every play.',
     'hero.title.2': 'From a single team',
     'hero.title.3': 'to a national federation.',
-    'hero.lead': 'GameStatiq is the stats platform that scales — from a single team, through a multi-team club, all the way to leagues and federations. Statisticians log plays from their phone, fans watch live, coaches get real-time analytics.',
+    'hero.lead': 'GameStatiq is the sport stats platform built for flag football — from a single team, through a multi-team club, all the way to leagues and national federations. Statisticians log plays, drives and QB/WR/DB stats from their phone, fans watch live, coaches get real-time analytics.',
     'hero.cta.primary': 'Book a demo',
     'hero.cta.secondary': 'Open league demo',
     'hero.stat.1.value': '3',
@@ -390,7 +390,7 @@ export const ui = {
     // Features
     'features.eyebrow': 'Features',
     'features.title': 'Stats infrastructure, not another spreadsheet.',
-    'features.lead': 'Every feature is designed for a real game day — from the statistician on the sideline to the coach on the bus home.',
+    'features.lead': 'Every feature is designed for a real flag football game day — from the statistician on the sideline to the coach on the bus home. QB/WR/DB positions, drives, plays, sacks, INTs — everything where you expect it.',
     'features.f1.title': 'Mobile Scorer PWA',
     'features.f1.body': 'Statisticians log plays, drives and penalties tap-tap from a phone. Works offline, syncs over Wi-Fi. No app store install — open in Chrome and "Add to Home Screen".',
     'features.f2.title': 'Player profiles & rosters',
@@ -695,7 +695,7 @@ export const ui = {
   de: {
     // Meta
     'meta.home.title': 'GameStatiq — Sport-Stats-Plattform für Teams, Ligen und Verbände',
-    'meta.home.description': 'Jeden Spielzug erfassen. Live-Stats, öffentliches Fan-Widget, Trainer-Analytics. Für ambitionierte Amateurteams und nationale Verbände.',
+    'meta.home.description': 'Sport-Stats-Plattform für Flag Football. Live-Stats, öffentliches Fan-Widget, Trainer-Analytics. Für ambitionierte Amateurteams, Vereine und nationale Verbände.',
     'meta.liga.title': 'Liga 2026 — Demo-Liga-Hub | GameStatiq',
     'meta.liga.description': 'So sieht eine Liga- oder Verbandsseite auf GameStatiq aus. Tabelle, Saisonstatistiken und vereinsübergreifende Bestenlisten an einem Ort.',
 
@@ -712,11 +712,11 @@ export const ui = {
     'nav.lang.switch': 'Sprache',
 
     // Hero
-    'hero.eyebrow': 'Sport-Stats-SaaS',
+    'hero.eyebrow': 'Sport-Stats-SaaS · Flag Football',
     'hero.title.1': 'Jeden Spielzug erfassen.',
     'hero.title.2': 'Vom einzelnen Team',
     'hero.title.3': 'bis zum nationalen Verband.',
-    'hero.lead': 'GameStatiq ist die Sport-Stats-Plattform, die mitwächst — vom einzelnen Team über den Mehrteam-Verein bis hin zu Ligen und Verbänden. Statistiker erfassen Spielzüge direkt vom Handy, Fans sehen live mit, Trainer bekommen Analytics in Echtzeit.',
+    'hero.lead': 'GameStatiq ist die Sport-Stats-Plattform für Flag Football — vom einzelnen Team über den Mehrteam-Verein bis hin zu Ligen und nationalen Verbänden. Statistiker erfassen Plays, Drives und QB/WR/DB-Statistiken direkt vom Handy, Fans sehen live mit, Trainer bekommen Analytics in Echtzeit.',
     'hero.cta.primary': 'Demo anfragen',
     'hero.cta.secondary': 'Liga-Demo öffnen',
     'hero.stat.1.value': '3',
@@ -729,7 +729,7 @@ export const ui = {
     // Features
     'features.eyebrow': 'Funktionen',
     'features.title': 'Stats-Infrastruktur, kein weiteres Excel.',
-    'features.lead': 'Jede Funktion ist für den echten Spieltag gemacht — vom Statistiker an der Seitenlinie bis zum Trainer im Bus auf dem Heimweg.',
+    'features.lead': 'Jede Funktion ist für einen echten Flag-Football-Spieltag gemacht — vom Statistiker an der Seitenlinie bis zum Trainer im Bus auf dem Heimweg. QB-/WR-/DB-Positionen, Drives, Plays, Sacks, INTs — alles am erwarteten Platz.',
     'features.f1.title': 'Mobile Scorer-PWA',
     'features.f1.body': 'Der Statistiker erfasst Plays, Drives und Strafen per Tap-Tap vom Handy. Funktioniert offline, synchronisiert sich über WLAN. Keine App-Store-Installation — in Chrome öffnen und „Zum Home-Bildschirm hinzufügen".',
     'features.f2.title': 'Spielerprofile & Roster',
