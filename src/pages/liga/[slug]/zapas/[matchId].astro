@@ -110,7 +110,7 @@ function resolveOppColor(rawOpp: string, ourColor: string, oppName: string): str
   return rawOpp;
 }
 
-const finalOppColor = resolveOppColor(finalOppColor, accent, headToHead.opponent);
+const finalOppColor = resolveOppColor(headToHead.oppColor, accent, headToHead.opponent);
 
 
 const dateLocale = lang === 'cs' ? 'cs-CZ' : lang === 'de' ? 'de-DE' : 'en-US';
