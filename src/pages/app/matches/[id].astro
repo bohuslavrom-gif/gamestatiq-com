@@ -14,7 +14,7 @@ const admin = getSupabaseAdmin();
 
 const { data: match } = await admin
   .from('matches')
-  .select('*, teams(id, name, club_id, clubs(name)), opp_team:teams!matches_opp_team_id_fkey(id, name, club_id, clubs(name))')
+  .select('*, teams!matches_team_id_fkey(id, name, club_id, clubs(name)), opp_team:teams!matches_opp_team_id_fkey(id, name, club_id, clubs(name))')
   .eq('id', id)
   .maybeSingle();
 if (!match) return Astro.redirect('/app/matches');
