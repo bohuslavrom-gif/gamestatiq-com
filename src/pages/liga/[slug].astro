@@ -353,18 +353,19 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
               <div class="p-12 text-center text-[13px] text-slate">{t('pliga.players.empty.qb')}</div>
             ) : (
               <div class="overflow-x-auto">
-                <table class="sortable-table w-full min-w-[800px] text-left text-[13px]" data-accent={secondary} data-default-sort="7" data-default-dir="desc">
+                <table class="sortable-table w-full min-w-[800px] text-left text-[13px]" data-accent={secondary} data-default-sort="8" data-default-dir="desc">
                   <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                     <tr>
                       <th class="px-5 py-3 w-10">#</th>
                       <th class="py-3" data-sort="text" data-sort-col="1">{t('pliga.players.col.player')}</th>
                       <th class="py-3" data-sort="text" data-sort-col="2">{t('pliga.players.col.team')}</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">ATT</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">COMP</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">%</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">YDS</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">TD</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="8">INT</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3" title="Odehráno zápasů">Z</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">ATT</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">COMP</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">%</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">YDS</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="8">TD</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="9">INT</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-stone">
@@ -387,6 +388,7 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                             </div>
                           </td>
                           <td class="py-2.5 text-[12px] text-graphite" data-sort-value={`${p.clubName} ${p.teamName}`}>{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
+                          <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.gamesPlayed}>{p.gamesPlayed}</td>
                           <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbAtt}>{p.qbAtt}</td>
                           <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.qbComp}>{p.qbComp}</td>
                           <td class="px-3 py-2.5 text-center tabular-nums" style={`color:${secondary}`} data-sort-value={pct}>{pct}%</td>
@@ -413,18 +415,19 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
               <div class="p-12 text-center text-[13px] text-slate">{t('pliga.players.empty.wr')}</div>
             ) : (
               <div class="overflow-x-auto">
-                <table class="sortable-table w-full min-w-[820px] text-left text-[13px]" data-accent={secondary} data-default-sort="7" data-default-dir="desc">
+                <table class="sortable-table w-full min-w-[820px] text-left text-[13px]" data-accent={secondary} data-default-sort="8" data-default-dir="desc">
                   <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                     <tr>
                       <th class="px-5 py-3 w-10">#</th>
                       <th class="py-3" data-sort="text" data-sort-col="1">{t('pliga.players.col.player')}</th>
                       <th class="py-3" data-sort="text" data-sort-col="2">{t('pliga.players.col.team')}</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">TARG</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">REC</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">%</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">YDS</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">TD</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="8">PTS</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3" title="Odehráno zápasů">Z</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">TARG</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">REC</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">%</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">YDS</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="8">TD</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="9">PTS</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-stone">
@@ -447,6 +450,7 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                             </div>
                           </td>
                           <td class="py-2.5 text-[12px] text-graphite" data-sort-value={`${p.clubName} ${p.teamName}`}>{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
+                          <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.gamesPlayed}>{p.gamesPlayed}</td>
                           <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.wrTargets}>{p.wrTargets}</td>
                           <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.wrRec}>{p.wrRec}</td>
                           <td class="px-3 py-2.5 text-center tabular-nums" style={`color:${secondary}`} data-sort-value={pct}>{pct}%</td>
@@ -473,16 +477,17 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
               <div class="p-12 text-center text-[13px] text-slate">{t('pliga.players.empty.db')}</div>
             ) : (
               <div class="overflow-x-auto">
-                <table class="sortable-table w-full min-w-[780px] text-left text-[13px]" data-accent={secondary} data-default-sort="5" data-default-dir="desc">
+                <table class="sortable-table w-full min-w-[780px] text-left text-[13px]" data-accent={secondary} data-default-sort="6" data-default-dir="desc">
                   <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                     <tr>
                       <th class="px-5 py-3 w-10">#</th>
                       <th class="py-3" data-sort="text" data-sort-col="1">{t('pliga.players.col.player')}</th>
                       <th class="py-3" data-sort="text" data-sort-col="2">{t('pliga.players.col.team')}</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">FLAG</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">SACK</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">INT</th>
-                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">BRKUP</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3" title="Odehráno zápasů">Z</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">FLAG</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">SACK</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">INT</th>
+                      <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">BRKUP</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-stone">
@@ -503,6 +508,7 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                           </div>
                         </td>
                         <td class="py-2.5 text-[12px] text-graphite" data-sort-value={`${p.clubName} ${p.teamName}`}>{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
+                        <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.gamesPlayed}>{p.gamesPlayed}</td>
                         <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.dbFlagPull}>{p.dbFlagPull}</td>
                         <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${secondary}`} data-sort-value={p.dbSack}>{p.dbSack}</td>
                         <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.dbInt}>{p.dbInt}</td>

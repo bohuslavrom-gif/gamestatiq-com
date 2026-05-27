@@ -191,6 +191,8 @@ export type LeaderRow = {
   // Iter 44: team brand pro mini logo + barvy
   teamLogoUrl: string | null;
   primaryColor: string;
+  // Iter 48: počet zápasů (distinct match_id v match_player_stats per hráč)
+  gamesPlayed: number;
   // QB
   qbAtt: number; qbComp: number; qbYds: number; qbTd: number; qbInt: number;
   // WR
@@ -271,12 +273,15 @@ export async function fetchLeagueLeaders(leagueId: string): Promise<{
         clubName: meta?.clubName ?? '—',
         teamLogoUrl: meta?.teamLogoUrl ?? null,
         primaryColor: meta?.primaryColor ?? '#0F1B2D',
+        gamesPlayed: 0,
         qbAtt: 0, qbComp: 0, qbYds: 0, qbTd: 0, qbInt: 0,
         wrTargets: 0, wrRec: 0, wrYds: 0, wrTd: 0, wrPts: 0,
         dbFlagPull: 0, dbSack: 0, dbInt: 0, dbBrkup: 0,
       };
       buckets.set(id, b);
     }
+    // Iter 48: počet distinct match_id per hráč
+    b.gamesPlayed += 1;  // každý ps row = jeden match × jeden hráč; unique constraint match_player_stats(match_id, player_id)
     b.qbAtt += r.qb_att ?? 0;
     b.qbComp += r.qb_comp ?? 0;
     b.qbYds += r.qb_yds ?? 0;
@@ -374,12 +379,15 @@ export async function fetchLeagueAllPlayers(leagueId: string): Promise<{
         clubName: meta?.clubName ?? '—',
         teamLogoUrl: meta?.teamLogoUrl ?? null,
         primaryColor: meta?.primaryColor ?? '#0F1B2D',
+        gamesPlayed: 0,
         qbAtt: 0, qbComp: 0, qbYds: 0, qbTd: 0, qbInt: 0,
         wrTargets: 0, wrRec: 0, wrYds: 0, wrTd: 0, wrPts: 0,
         dbFlagPull: 0, dbSack: 0, dbInt: 0, dbBrkup: 0,
       };
       buckets.set(id, b);
     }
+    // Iter 48: distinct match per hráč
+    b.gamesPlayed += 1;
     b.qbAtt += r.qb_att ?? 0; b.qbComp += r.qb_comp ?? 0; b.qbYds += r.qb_yds ?? 0;
     b.qbTd  += r.qb_td  ?? 0; b.qbInt  += r.qb_int  ?? 0;
     b.wrTargets += r.wr_targets ?? 0; b.wrRec += r.wr_rec ?? 0;
