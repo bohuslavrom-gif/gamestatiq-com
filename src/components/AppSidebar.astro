@@ -28,20 +28,38 @@ if (user) {
 
   const { data: membership } = await admin
     .from('club_members')
-    .select('role, clubs(name, sport, logo_url)')
+    .select('role, clubs(name, sport, logo_url, subscription_tier)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
   if (membership) {
     userRole = ({ admin: 'Admin', coach: 'Trenér', stats: 'Statistik', viewer: 'Pozorovatel' } as Record<string, string>)[membership.role] ?? 'Admin';
-    const c = (membership as any).clubs as Pick<Club, 'name' | 'sport' | 'logo_url'> | null;
+    const c = (membership as any).clubs as Pick<Club, 'name' | 'sport' | 'logo_url' | 'subscription_tier'> | null;
     if (c) {
       const abbr = c.name.replace(/[^A-Za-zÀ-ž]/g, '').slice(0, 3).toUpperCase() || 'KLB';
-      club = { name: c.name, sport: c.sport, abbr, logoUrl: c.logo_url };
+      club = { name: c.name, sport: c.sport, abbr, logoUrl: c.logo_url, tier: c.subscription_tier ?? null } as any;
     }
   }
 }
+
+// ── Iter 69: tier badge u GameStatiq loga ──
+// Liga context → LEAGUE; jinak z club.subscription_tier
+const isLeagueContextEarly = Astro.url.pathname.startsWith('/app/league');
+const tierForBadge: 'team' | 'club' | 'league' | 'trial' =
+  isLeagueContextEarly
+    ? 'league'
+    : ((club as any)?.tier === 'klub' ? 'club'
+      : (club as any)?.tier === 'liga' ? 'league'
+      : (club as any)?.tier === 'tym' ? 'team'
+      : 'trial');
+const tierBadgeLabel = { team: 'TEAM', club: 'CLUB', league: 'LEAGUE', trial: 'TRIAL' }[tierForBadge];
+const tierBadgeStyle = {
+  team:   'bg-sky/20 text-[#1B5E83]',
+  club:   'bg-signal/15 text-signal',
+  league: 'bg-plum/20 text-[#4F3878]',
+  trial:  'bg-spark/20 text-[#A0531B]',
+}[tierForBadge];
 
 // ── Iter 5b: detect context (klub vs liga) by current URL path ──
 const _pathname = Astro.url.pathname;
@@ -99,6 +117,8 @@ const leagueRoleLabel = leagueRole === 'admin' ? 'Admin' : leagueRole === 'staff
       <span class="text-[17px] font-semibold tracking-tight-2">
         Game<span class="font-bold text-signal">Statiq</span>
       </span>
+      {/* Iter 69: tier badge */}
+      <span class={`ml-auto rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] ${tierBadgeStyle}`}>{tierBadgeLabel}</span>
     </div>
 
     <div class="border-b border-stone px-3 py-4">
