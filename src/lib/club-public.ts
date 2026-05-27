@@ -396,8 +396,9 @@ export async function fetchClubMatchHeadToHead(
   let oppColor = '#1A1A1A';
   let oppLogoUrl: string | null = null;
   // Iter 38: v opp perspective je "soupeř" původní home tým — použijeme jeho jméno
+  // Iter 54: jen teamName (bez clubName) pro public lize konzistenci
   const opponentName = isOppPerspective
-    ? (match.teams?.clubs?.name ? `${match.teams.clubs.name}${match.teams?.name ? ' ' + match.teams.name : ''}` : (match.teams?.name || match.opponent || ''))
+    ? (match.teams?.name || match.opponent || '')
     : match.opponent;
   if (opponentName) {
     const oppName = String(opponentName).trim();

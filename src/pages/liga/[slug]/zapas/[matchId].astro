@@ -125,7 +125,7 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
   <main class="mx-auto max-w-6xl px-5 py-6 lg:px-8 lg:py-8">
 
     <!-- ═════════════ SCORE BANNER (same look as /klub/{slug}) ═════════════ -->
-    <div class="mb-4 overflow-hidden rounded-xl border border-black/10 bg-[#1A1A1A] text-white">
+    <div class="mb-4 overflow-hidden rounded-xl border border-white/5 bg-gradient-to-br from-[#1E293B] to-[#0F172A] text-white shadow-sm">
       <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 py-7 sm:px-8">
         <div class="flex items-center gap-3 sm:gap-4">
           {headToHead.ourLogoUrl ? (
@@ -134,8 +134,7 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
             <span class="flex h-12 w-12 items-center justify-center rounded-lg bg-white/10 font-bold sm:h-16 sm:w-16">{initials(headToHead.ourClubName)}</span>
           )}
           <div class="min-w-0">
-            <div class="truncate font-['Bebas_Neue'] text-[20px] leading-none tracking-[0.04em] sm:text-[26px]">{(headToHead.ourClubName ?? '').toUpperCase()}</div>
-            <div class="mt-1 truncate text-[11px] uppercase tracking-[0.1em] text-white/65">{headToHead.ourTeamName}</div>
+            <div class="truncate font-['Bebas_Neue'] text-[24px] leading-none tracking-[0.04em] sm:text-[32px]">{(headToHead.ourTeamName ?? '').toUpperCase()}</div>
           </div>
         </div>
         <div class="flex items-baseline gap-2">
@@ -145,8 +144,7 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
         </div>
         <div class="flex items-center justify-end gap-3 sm:gap-4">
           <div class="min-w-0 text-right">
-            <div class="truncate font-['Bebas_Neue'] text-[20px] leading-none tracking-[0.04em] sm:text-[26px]">{(headToHead.opponent ?? '').toUpperCase()}</div>
-            <div class="mt-1 truncate text-[11px] uppercase tracking-[0.1em] text-white/65">{t('pmatch.opponent')}</div>
+            <div class="truncate font-['Bebas_Neue'] text-[24px] leading-none tracking-[0.04em] sm:text-[32px]">{(headToHead.opponent ?? '').toUpperCase()}</div>
           </div>
           {headToHead.oppLogoUrl ? (
             <img src={headToHead.oppLogoUrl} alt="" class="h-12 w-12 flex-shrink-0 rounded-lg bg-white/95 object-contain p-1 sm:h-16 sm:w-16" />
