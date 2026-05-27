@@ -592,6 +592,9 @@ export type RecordEntry = {
   photoUrl?: string | null;
   teamName: string;
   clubName: string;
+  // Iter 52: brand pro mini overlay + accent
+  teamLogoUrl?: string | null;
+  primaryColor?: string | null;
   matchContext?: string;  // "vs Lions · 12.5.2026" pro single-game
   season: string;
 };
@@ -630,15 +633,20 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
   // Approved teams + metadata
   const { data: ltRaw } = await admin
     .from('league_teams')
-    .select('team_id, teams(id, name, club_id, clubs(name, logo_url))')
+    .select('team_id, teams(id, name, primary_color, logo_url, club_id, clubs(name, logo_url))')
     .eq('league_id', leagueId)
     .not('approved_at', 'is', null);
   const lt = (ltRaw ?? []) as any[];
   if (lt.length === 0) return empty;
   const teamIds = lt.map((r) => r.team_id);
-  const teamMeta = new Map<string, { teamName: string; clubName: string }>();
+  const teamMeta = new Map<string, { teamName: string; clubName: string; teamLogoUrl: string | null; primaryColor: string }>();
   for (const r of lt) {
-    teamMeta.set(r.team_id, { teamName: r.teams?.name ?? '—', clubName: r.teams?.clubs?.name ?? '—' });
+    teamMeta.set(r.team_id, {
+      teamName: r.teams?.name ?? '—',
+      clubName: r.teams?.clubs?.name ?? '—',
+      teamLogoUrl: r.teams?.logo_url ?? r.teams?.clubs?.logo_url ?? null,
+      primaryColor: r.teams?.primary_color ?? '#0F1B2D',
+    });
   }
 
   // Iter 37+39: shared matches incl. + opp_* aggregates
@@ -690,7 +698,7 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
   // ── Player season totals — Iter 37: per player.team_id ──
   type PlayerAgg = {
     playerId: string; playerName: string; jersey: number | null; photoUrl: string | null;
-    teamName: string; clubName: string;
+    teamName: string; clubName: string; playerTeamId: string;
     qbAtt: number; qbComp: number; qbYds: number; qbTd: number; qbInt: number; qbSack: number;
     wrTargets: number; wrRec: number; wrYds: number; wrTd: number; wrPts: number;
     dbFlagPull: number; dbSack: number; dbInt: number; dbBrkup: number;
@@ -711,7 +719,7 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
         playerName: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || '—',
         jersey: p.jersey_number ?? null,
         photoUrl: p.photo_url ?? null,
-        teamName: meta.teamName, clubName: meta.clubName,
+        teamName: meta.teamName, clubName: meta.clubName, playerTeamId,
         qbAtt: 0, qbComp: 0, qbYds: 0, qbTd: 0, qbInt: 0, qbSack: 0,
         wrTargets: 0, wrRec: 0, wrYds: 0, wrTd: 0, wrPts: 0,
         dbFlagPull: 0, dbSack: 0, dbInt: 0, dbBrkup: 0,
@@ -736,11 +744,15 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
     const sorted = players.filter((p) => (p[field] as number) > 0).sort((a, b) => (b[field] as number) - (a[field] as number));
     if (sorted.length === 0) return null;
     const top = sorted[0];
+    const tm = top.playerTeamId ? teamMeta.get(top.playerTeamId) : null;
     return {
       category, value: top[field] as number,
       formattedValue: formatter ? formatter(top[field] as number) : undefined,
       playerName: top.playerName, jersey: top.jersey, photoUrl: top.photoUrl,
-      teamName: top.teamName, clubName: top.clubName, season,
+      teamName: top.teamName, clubName: top.clubName,
+      teamLogoUrl: tm?.teamLogoUrl ?? null,
+      primaryColor: tm?.primaryColor ?? null,
+      season,
     };
   };
 
@@ -791,6 +803,8 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
       jersey: top.player.jersey_number ?? null,
       photoUrl: top.player.photo_url ?? null,
       teamName: meta.teamName, clubName: meta.clubName,
+      teamLogoUrl: meta.teamLogoUrl ?? null,
+      primaryColor: meta.primaryColor ?? null,
       matchContext: matchCtxFor(top.match, ptid), season,
     };
   };
@@ -883,10 +897,14 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
     const sorted = teams.filter((t) => (t[field] as number) > 0).sort((a, b) => (b[field] as number) - (a[field] as number));
     if (sorted.length === 0) return null;
     const top = sorted[0];
+    const tm = teamMeta.get(top.teamId);
     return {
       category, value: top[field] as number,
       formattedValue: formatter ? formatter(top[field] as number) : undefined,
-      teamName: top.teamName, clubName: top.clubName, season,
+      teamName: top.teamName, clubName: top.clubName,
+      teamLogoUrl: tm?.teamLogoUrl ?? null,
+      primaryColor: tm?.primaryColor ?? null,
+      season,
     };
   };
 
@@ -897,11 +915,15 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
     })).sort((a, b) => b.winPct - a.winPct);
     if (sorted.length === 0) return null;
     const top = sorted[0];
+    const tm = teamMeta.get(top.teamId);
     return {
       category: 'Nejlepší Win % za sezónu',
       value: Math.round(top.winPct * 100),
       formattedValue: `${Math.round(top.winPct * 100)}%`,
-      teamName: top.teamName, clubName: top.clubName, season,
+      teamName: top.teamName, clubName: top.clubName,
+      teamLogoUrl: tm?.teamLogoUrl ?? null,
+      primaryColor: tm?.primaryColor ?? null,
+      season,
       matchContext: `${top.wins}-${top.losses}${top.ties ? `-${top.ties}` : ''} (${top.games} zápasů)`,
     };
   };
@@ -944,10 +966,12 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
     if (candidates.length === 0) return null;
     candidates.sort((a, b) => b.value - a.value);
     const top = candidates[0];
-    const meta = teamMeta.get(top.teamId) ?? { teamName: '—', clubName: '—' };
+    const meta = teamMeta.get(top.teamId) ?? { teamName: '—', clubName: '—', teamLogoUrl: null, primaryColor: '#0F1B2D' };
     return {
       category, value: top.value,
       teamName: meta.teamName, clubName: meta.clubName,
+      teamLogoUrl: meta.teamLogoUrl ?? null,
+      primaryColor: meta.primaryColor ?? null,
       matchContext: matchCtxFor(top.m, top.teamId), season,
     };
   };
@@ -957,11 +981,13 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
     if (candidates.length === 0) return null;
     candidates.sort((a, b) => b.value - a.value);
     const top = candidates[0];
-    const meta = teamMeta.get(top.teamId) ?? { teamName: '—', clubName: '—' };
+    const meta = teamMeta.get(top.teamId) ?? { teamName: '—', clubName: '—', teamLogoUrl: null, primaryColor: '#0F1B2D' };
     return {
       category: 'Nejvíc bodů skórovaných v zápase',
       value: top.value,
       teamName: meta.teamName, clubName: meta.clubName,
+      teamLogoUrl: meta.teamLogoUrl ?? null,
+      primaryColor: meta.primaryColor ?? null,
       matchContext: matchCtxFor(top.m, top.teamId), season,
     };
   };
@@ -973,7 +999,7 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
     if (candidates.length === 0) return null;
     candidates.sort((a, b) => b.value - a.value);
     const top = candidates[0];
-    const meta = teamMeta.get(top.teamId) ?? { teamName: '—', clubName: '—' };
+    const meta = teamMeta.get(top.teamId) ?? { teamName: '—', clubName: '—', teamLogoUrl: null, primaryColor: '#0F1B2D' };
     const isHome = top.m.team_id === top.teamId;
     const oppLabel = isHome
       ? top.m.opponent
@@ -983,6 +1009,8 @@ export async function fetchLeagueRecords(leagueId: string, season = '2026'): Pro
       value: top.value,
       formattedValue: `+${top.value}`,
       teamName: meta.teamName, clubName: meta.clubName,
+      teamLogoUrl: meta.teamLogoUrl ?? null,
+      primaryColor: meta.primaryColor ?? null,
       matchContext: `${top.ourScore}–${top.oppScore} vs ${oppLabel} · ${formatDate(top.m.date)}`,
       season,
     };
