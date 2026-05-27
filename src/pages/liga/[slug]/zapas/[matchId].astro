@@ -234,46 +234,54 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
       </p>
     </div>
 
-    <!-- ═════════════ PLAYER TABLES (sortable) ═════════════ -->
+    <!-- ═════════════ PLAYER TABLES (single combined table per position) ═════════════ -->
     {(headToHead.qbStats.length > 0 || headToHead.wrStats.length > 0 || headToHead.defenseLeaders.length > 0 || headToHead.oppQbStats.length > 0 || headToHead.oppWrStats.length > 0 || headToHead.oppDefenseLeaders.length > 0) && (
       <div class="mt-6 space-y-6">
+
+        {/* QB combined */}
         {(headToHead.qbStats.length > 0 || headToHead.oppQbStats.length > 0) && (
-          <div class="space-y-4">
-            <h3 class="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">{t('pliga.pos.qb')}</h3>
-        {headToHead.qbStats.length > 0 && (
           <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
-            <div class="flex items-center gap-2.5 border-b border-stone px-5 py-3">
-              {perspectiveLogoUrl ? <img src={perspectiveLogoUrl} alt="" loading="lazy" class="h-5 w-5 rounded object-contain" /> : <span class="inline-block h-5 w-5 rounded" style={`background-color:${accent}`}></span>}
-              <p class="text-[14px] font-semibold text-ink">{headToHead.ourTeamName} ({headToHead.qbStats.length})</p>
+            <div class="border-b border-stone px-5 py-3">
+              <p class="text-[14px] font-semibold text-ink">{t('pliga.pos.qb')} ({headToHead.qbStats.length + headToHead.oppQbStats.length})</p>
             </div>
             <div class="overflow-x-auto">
-              <table class="sortable-table w-full min-w-[640px] text-left text-[13px]" data-accent={accent} data-default-sort="5" data-default-dir="desc">
+              <table class="sortable-table w-full min-w-[680px] text-left text-[13px]" data-accent={accent} data-default-sort="6" data-default-dir="desc">
                 <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                   <tr>
                     <th class="px-5 py-3 w-10">#</th>
                     <th class="py-3" data-sort="text" data-sort-col="1">{t('pliga.players.col.player')}</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="2">ATT</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">COMP</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">YDS</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">TD</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">INT</th>
+                    <th class="py-3" data-sort="text" data-sort-col="2">{t('pliga.players.col.team')}</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">ATT</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">COMP</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">YDS</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">TD</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">INT</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-stone">
-                  {headToHead.qbStats.map((p, i) => (
+                  {[
+                    ...headToHead.qbStats.map((p: any) => ({ ...p, _logo: perspectiveLogoUrl, _color: accent, _team: headToHead.ourTeamName })),
+                    ...headToHead.oppQbStats.map((p: any) => ({ ...p, _logo: headToHead.oppLogoUrl, _color: finalOppColor, _team: headToHead.opponent })),
+                  ].sort((a, b) => b.td - a.td || b.yds - a.yds).map((p, i) => (
                     <tr>
-                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${accent}` : ''}>{i + 1}</span></td>
+                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${p._color}` : ''}>{i + 1}</span></td>
                       <td class="py-2.5" data-sort-value={p.name}>
                         <div class="flex items-center gap-2.5">
                           <div class="relative h-7 w-7 shrink-0">
                             {p.photoUrl
                               ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" />
                               : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
-                            {perspectiveLogoUrl && (
-                              <img src={perspectiveLogoUrl} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
+                            {p._logo && (
+                              <img src={p._logo} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
                             )}
                           </div>
                           <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
+                        </div>
+                      </td>
+                      <td class="py-2.5" data-sort-value={p._team}>
+                        <div class="flex items-center gap-2">
+                          {p._logo ? <img src={p._logo} alt="" loading="lazy" class="h-5 w-5 rounded object-contain" /> : <span class="inline-block h-5 w-5 rounded" style={`background-color:${p._color}`}></span>}
+                          <span class="text-[12px] font-semibold" style={`color:${p._color}`}>{p._team}</span>
                         </div>
                       </td>
                       <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.att}>{p.att}</td>
@@ -286,201 +294,115 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
-        {headToHead.oppQbStats.length > 0 && (
-          <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
-            <div class="flex items-center gap-2.5 border-b border-stone px-5 py-3">
-              {headToHead.oppLogoUrl ? <img src={headToHead.oppLogoUrl} alt="" loading="lazy" class="h-5 w-5 rounded object-contain" /> : <span class="inline-block h-5 w-5 rounded" style={`background-color:${finalOppColor}`}></span>}
-              <p class="text-[14px] font-semibold text-ink">{headToHead.opponent} ({headToHead.oppQbStats.length})</p>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="sortable-table w-full min-w-[640px] text-left text-[13px]" data-accent={finalOppColor} data-default-sort="5" data-default-dir="desc">
-                <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
-                  <tr>
-                    <th class="px-5 py-3 w-10">#</th>
-                    <th class="py-3" data-sort="text" data-sort-col="1">{t('pliga.players.col.player')}</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="2">ATT</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">COMP</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">YDS</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">TD</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">INT</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-stone">
-                  {headToHead.oppQbStats.map((p, i) => (
-                    <tr>
-                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${finalOppColor}` : ''}>{i + 1}</span></td>
-                      <td class="py-2.5" data-sort-value={p.name}>
-                        <div class="flex items-center gap-2.5">
-                          <div class="relative h-7 w-7 shrink-0">
-                            {p.photoUrl
-                              ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" />
-                              : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
-                            {headToHead.oppLogoUrl && (
-                              <img src={headToHead.oppLogoUrl} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
-                            )}
-                          </div>
-                          <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
-                        </div>
-                      </td>
-                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.att}>{p.att}</td>
-                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.comp}>{p.comp}</td>
-                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.yds}>{p.yds}</td>
-                      <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.td}>{p.td}</td>
-                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.int}>{p.int}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
           </div>
         )}
 
+        {/* WR combined */}
         {(headToHead.wrStats.length > 0 || headToHead.oppWrStats.length > 0) && (
-          <div class="space-y-4">
-            <h3 class="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">{t('pliga.pos.wr')}</h3>
-        {headToHead.wrStats.length > 0 && (
           <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
-            <div class="flex items-center gap-2.5 border-b border-stone px-5 py-3">
-              {perspectiveLogoUrl ? <img src={perspectiveLogoUrl} alt="" loading="lazy" class="h-5 w-5 rounded object-contain" /> : <span class="inline-block h-5 w-5 rounded" style={`background-color:${accent}`}></span>}
-              <p class="text-[14px] font-semibold text-ink">{headToHead.ourTeamName} ({headToHead.wrStats.length})</p>
+            <div class="border-b border-stone px-5 py-3">
+              <p class="text-[14px] font-semibold text-ink">{t('pliga.pos.wr')} ({headToHead.wrStats.length + headToHead.oppWrStats.length})</p>
             </div>
             <div class="overflow-x-auto">
-              <table class="sortable-table w-full min-w-[640px] text-left text-[13px]" data-accent={accent} data-default-sort="5" data-default-dir="desc">
+              <table class="sortable-table w-full min-w-[680px] text-left text-[13px]" data-accent={accent} data-default-sort="6" data-default-dir="desc">
                 <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                   <tr>
                     <th class="px-5 py-3 w-10">#</th>
                     <th class="py-3" data-sort="text" data-sort-col="1">{t('pliga.players.col.player')}</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="2">TARG</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">REC</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">YDS</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">TD</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">PTS</th>
+                    <th class="py-3" data-sort="text" data-sort-col="2">{t('pliga.players.col.team')}</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">TARG</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">REC</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">YDS</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">TD</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="7">PTS</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-stone">
-                  {headToHead.wrStats.map((p, i) => (
+                  {[
+                    ...headToHead.wrStats.map((p: any) => ({ ...p, _logo: perspectiveLogoUrl, _color: accent, _team: headToHead.ourTeamName })),
+                    ...headToHead.oppWrStats.map((p: any) => ({ ...p, _logo: headToHead.oppLogoUrl, _color: finalOppColor, _team: headToHead.opponent })),
+                  ].sort((a, b) => b.td - a.td || b.pts - a.pts).map((p, i) => (
                     <tr>
-                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${accent}` : ''}>{i + 1}</span></td>
+                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${p._color}` : ''}>{i + 1}</span></td>
                       <td class="py-2.5" data-sort-value={p.name}>
                         <div class="flex items-center gap-2.5">
                           <div class="relative h-7 w-7 shrink-0">
                             {p.photoUrl
                               ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" />
                               : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
-                            {perspectiveLogoUrl && (
-                              <img src={perspectiveLogoUrl} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
+                            {p._logo && (
+                              <img src={p._logo} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
                             )}
                           </div>
                           <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
+                        </div>
+                      </td>
+                      <td class="py-2.5" data-sort-value={p._team}>
+                        <div class="flex items-center gap-2">
+                          {p._logo ? <img src={p._logo} alt="" loading="lazy" class="h-5 w-5 rounded object-contain" /> : <span class="inline-block h-5 w-5 rounded" style={`background-color:${p._color}`}></span>}
+                          <span class="text-[12px] font-semibold" style={`color:${p._color}`}>{p._team}</span>
                         </div>
                       </td>
                       <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.targets}>{p.targets}</td>
                       <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.rec}>{p.rec}</td>
                       <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.yds}>{p.yds}</td>
                       <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.td}>{p.td}</td>
-                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${accent}`} data-sort-value={p.pts}>{p.pts}</td>
+                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${p._color}`} data-sort-value={p.pts}>{p.pts}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
-        {headToHead.oppWrStats.length > 0 && (
-          <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
-            <div class="flex items-center gap-2.5 border-b border-stone px-5 py-3">
-              {headToHead.oppLogoUrl ? <img src={headToHead.oppLogoUrl} alt="" loading="lazy" class="h-5 w-5 rounded object-contain" /> : <span class="inline-block h-5 w-5 rounded" style={`background-color:${finalOppColor}`}></span>}
-              <p class="text-[14px] font-semibold text-ink">{headToHead.opponent} ({headToHead.oppWrStats.length})</p>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="sortable-table w-full min-w-[640px] text-left text-[13px]" data-accent={finalOppColor} data-default-sort="5" data-default-dir="desc">
-                <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
-                  <tr>
-                    <th class="px-5 py-3 w-10">#</th>
-                    <th class="py-3" data-sort="text" data-sort-col="1">{t('pliga.players.col.player')}</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="2">TARG</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">REC</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">YDS</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">TD</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">PTS</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-stone">
-                  {headToHead.oppWrStats.map((p, i) => (
-                    <tr>
-                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${finalOppColor}` : ''}>{i + 1}</span></td>
-                      <td class="py-2.5" data-sort-value={p.name}>
-                        <div class="flex items-center gap-2.5">
-                          <div class="relative h-7 w-7 shrink-0">
-                            {p.photoUrl
-                              ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" />
-                              : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
-                            {headToHead.oppLogoUrl && (
-                              <img src={headToHead.oppLogoUrl} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
-                            )}
-                          </div>
-                          <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
-                        </div>
-                      </td>
-                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.targets}>{p.targets}</td>
-                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.rec}>{p.rec}</td>
-                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.yds}>{p.yds}</td>
-                      <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.td}>{p.td}</td>
-                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${finalOppColor}`} data-sort-value={p.pts}>{p.pts}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
           </div>
         )}
 
+        {/* DB combined */}
         {(headToHead.defenseLeaders.length > 0 || headToHead.oppDefenseLeaders.length > 0) && (
-          <div class="space-y-4">
-            <h3 class="text-[12px] font-semibold uppercase tracking-[0.1em] text-slate">{t('pliga.pos.db')}</h3>
-        {headToHead.defenseLeaders.length > 0 && (
           <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
-            <div class="flex items-center gap-2.5 border-b border-stone px-5 py-3">
-              {perspectiveLogoUrl ? <img src={perspectiveLogoUrl} alt="" loading="lazy" class="h-5 w-5 rounded object-contain" /> : <span class="inline-block h-5 w-5 rounded" style={`background-color:${accent}`}></span>}
-              <p class="text-[14px] font-semibold text-ink">{headToHead.ourTeamName} ({headToHead.defenseLeaders.length})</p>
+            <div class="border-b border-stone px-5 py-3">
+              <p class="text-[14px] font-semibold text-ink">{t('pliga.pos.db')} ({headToHead.defenseLeaders.length + headToHead.oppDefenseLeaders.length})</p>
             </div>
             <div class="overflow-x-auto">
-              <table class="sortable-table w-full min-w-[560px] text-left text-[13px]" data-accent={accent} data-default-sort="4" data-default-dir="desc">
+              <table class="sortable-table w-full min-w-[600px] text-left text-[13px]" data-accent={accent} data-default-sort="5" data-default-dir="desc">
                 <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
                   <tr>
                     <th class="px-5 py-3 w-10">#</th>
                     <th class="py-3" data-sort="text" data-sort-col="1">{t('pliga.players.col.player')}</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="2">FLAG</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">SACK</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">INT</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">BRKUP</th>
+                    <th class="py-3" data-sort="text" data-sort-col="2">{t('pliga.players.col.team')}</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">FLAG</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">SACK</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">INT</th>
+                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="6">BRKUP</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-stone">
-                  {headToHead.defenseLeaders.map((p, i) => (
+                  {[
+                    ...headToHead.defenseLeaders.map((p: any) => ({ ...p, _logo: perspectiveLogoUrl, _color: accent, _team: headToHead.ourTeamName })),
+                    ...headToHead.oppDefenseLeaders.map((p: any) => ({ ...p, _logo: headToHead.oppLogoUrl, _color: finalOppColor, _team: headToHead.opponent })),
+                  ].sort((a, b) => (b.int * 3 + b.sack * 2 + b.flagPull) - (a.int * 3 + a.sack * 2 + a.flagPull)).map((p, i) => (
                     <tr>
-                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${accent}` : ''}>{i + 1}</span></td>
+                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${p._color}` : ''}>{i + 1}</span></td>
                       <td class="py-2.5" data-sort-value={p.name}>
                         <div class="flex items-center gap-2.5">
                           <div class="relative h-7 w-7 shrink-0">
                             {p.photoUrl
                               ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" />
                               : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
-                            {perspectiveLogoUrl && (
-                              <img src={perspectiveLogoUrl} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
+                            {p._logo && (
+                              <img src={p._logo} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
                             )}
                           </div>
                           <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
                         </div>
                       </td>
+                      <td class="py-2.5" data-sort-value={p._team}>
+                        <div class="flex items-center gap-2">
+                          {p._logo ? <img src={p._logo} alt="" loading="lazy" class="h-5 w-5 rounded object-contain" /> : <span class="inline-block h-5 w-5 rounded" style={`background-color:${p._color}`}></span>}
+                          <span class="text-[12px] font-semibold" style={`color:${p._color}`}>{p._team}</span>
+                        </div>
+                      </td>
                       <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.flagPull}>{p.flagPull}</td>
-                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${accent}`} data-sort-value={p.sack}>{p.sack}</td>
+                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${p._color}`} data-sort-value={p.sack}>{p.sack}</td>
                       <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.int}>{p.int}</td>
                       <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.brkup}>{p.brkup}</td>
                     </tr>
@@ -490,58 +412,11 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
             </div>
           </div>
         )}
-        {headToHead.oppDefenseLeaders.length > 0 && (
-          <div class="overflow-hidden rounded-xl border border-stone bg-pearl">
-            <div class="flex items-center gap-2.5 border-b border-stone px-5 py-3">
-              {headToHead.oppLogoUrl ? <img src={headToHead.oppLogoUrl} alt="" loading="lazy" class="h-5 w-5 rounded object-contain" /> : <span class="inline-block h-5 w-5 rounded" style={`background-color:${finalOppColor}`}></span>}
-              <p class="text-[14px] font-semibold text-ink">{headToHead.opponent} ({headToHead.oppDefenseLeaders.length})</p>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="sortable-table w-full min-w-[560px] text-left text-[13px]" data-accent={finalOppColor} data-default-sort="4" data-default-dir="desc">
-                <thead class="border-b border-stone bg-mist text-[10px] font-semibold uppercase tracking-[0.08em] text-slate">
-                  <tr>
-                    <th class="px-5 py-3 w-10">#</th>
-                    <th class="py-3" data-sort="text" data-sort-col="1">{t('pliga.players.col.player')}</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="2">FLAG</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="3">SACK</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="4">INT</th>
-                    <th class="px-3 py-3 text-center tabular-nums" data-sort="numeric" data-sort-col="5">BRKUP</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-stone">
-                  {headToHead.oppDefenseLeaders.map((p, i) => (
-                    <tr>
-                      <td class="px-5 py-2.5 rank-cell"><span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${i === 0 ? 'text-white' : 'bg-mist text-graphite'}`} style={i === 0 ? `background-color:${finalOppColor}` : ''}>{i + 1}</span></td>
-                      <td class="py-2.5" data-sort-value={p.name}>
-                        <div class="flex items-center gap-2.5">
-                          <div class="relative h-7 w-7 shrink-0">
-                            {p.photoUrl
-                              ? <img src={p.photoUrl} alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover" />
-                              : <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 text-[10px] font-semibold text-ink">{p.name.split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2)}</span>}
-                            {headToHead.oppLogoUrl && (
-                              <img src={headToHead.oppLogoUrl} alt="" loading="lazy" class="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full border border-pearl bg-pearl object-contain" />
-                            )}
-                          </div>
-                          <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
-                        </div>
-                      </td>
-                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.flagPull}>{p.flagPull}</td>
-                      <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${finalOppColor}`} data-sort-value={p.sack}>{p.sack}</td>
-                      <td class="px-3 py-2.5 text-center font-bold tabular-nums text-ink" data-sort-value={p.int}>{p.int}</td>
-                      <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.brkup}>{p.brkup}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-          </div>
-        )}
+
       </div>
     )}
 
-    <!-- Back link -->
+        <!-- Back link -->
     <div class="mt-8 border-t border-stone pt-4 text-[12px] text-slate">
       <a href={localizedPath(`/liga/${league.slug}?tab=matches`, lang)} class="font-semibold text-ink hover:text-signal">{t('pmatch.players.back')}</a>
     </div>
