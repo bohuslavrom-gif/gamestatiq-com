@@ -146,15 +146,24 @@ if (!role) {
   }
 }
 
+// Iter 68e: TEMPORARY fallback — pokud user vidí libovolné týmy (locals.teams.length > 0),
+// dej mu viewer access aby aspoň viděl detail (read-only). Pro debugging.
+if (!role && Astro.locals.teams && Astro.locals.teams.length > 0) {
+  console.warn('[match-detail] giving viewer access as fallback (user has teams but no explicit role match)');
+  role = 'viewer';
+  accessClubId = Astro.locals.teams[0]?.club_id ?? null;
+}
+
 if (!role) {
   // Iter 68b: error redirect na obě cesty s readable info pro debug
   const leagueCtx = Astro.locals.league;
   const homeClubId = (match as any).club_id ?? '—';
   const homeTeamId = (match as any).team_id ?? '—';
   const oppTeamId = (match as any).opp_team_id ?? '—';
-  const debugInfo = `match.club=${homeClubId}, match.team=${homeTeamId}, opp_team=${oppTeamId}, user=${user.id}`;
+  const teamsCount = Astro.locals.teams?.length ?? 0;
+  const debugInfo = `match.club=${homeClubId}, match.team=${homeTeamId}, opp_team=${oppTeamId}, user=${user.id}, locals.teams=${teamsCount}, locals.league=${Astro.locals.league?.id ?? 'null'}`;
   const msg = `Bez oprávnění k zápasu. Musíš být admin/coach/stats v klubu jednoho z týmů zápasu, nebo liga admin/staff. Debug: ${debugInfo}`;
-  const dest = leagueCtx
+  const dest = Astro.locals.league
     ? `/app/league/matches?error=${encodeURIComponent(msg)}`
     : `/app/matches?error=${encodeURIComponent(msg)}`;
   return Astro.redirect(dest);
