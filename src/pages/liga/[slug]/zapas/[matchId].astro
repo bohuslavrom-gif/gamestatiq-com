@@ -88,6 +88,31 @@ const primary = league.primary_color || '#0F1B2D';
 const secondary = league.secondary_color || '#E63946';
 const accent = perspectivePrimaryColor || secondary;
 
+// Iter 62: pokud opp barva koliduje s naší barvou nebo je default, vyber kontrastní z palety
+const BRAND_FALLBACKS = ['#E63946', '#2A9D8F', '#7B5BA6', '#F4A261', '#7AB5D9'];
+function hashColor(str: string): string {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return BRAND_FALLBACKS[Math.abs(h) % BRAND_FALLBACKS.length];
+}
+function isDefaultDark(c: string | null | undefined): boolean {
+  if (!c) return true;
+  const v = c.toLowerCase();
+  return v === '#0f1b2d' || v === '#1a1a1a' || v === '#000' || v === '#000000';
+}
+function resolveOppColor(rawOpp: string, ourColor: string, oppName: string): string {
+  if (isDefaultDark(rawOpp) || rawOpp.toLowerCase() === ourColor.toLowerCase()) {
+    // Pick from brand palette by team name hash, vyhněte se akcentu
+    let c = hashColor(oppName);
+    if (c.toLowerCase() === ourColor.toLowerCase()) c = BRAND_FALLBACKS[(BRAND_FALLBACKS.indexOf(c) + 1) % BRAND_FALLBACKS.length];
+    return c;
+  }
+  return rawOpp;
+}
+
+const finalOppColor = resolveOppColor(finalOppColor, accent, headToHead.opponent);
+
+
 const dateLocale = lang === 'cs' ? 'cs-CZ' : lang === 'de' ? 'de-DE' : 'en-US';
 const dateStr = new Date(headToHead.date).toLocaleDateString(dateLocale, { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -140,7 +165,7 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
         <div class="flex items-baseline gap-2">
           <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight text-ink sm:text-[88px]" style={headToHead.result === 'W' ? `color:${accent}` : ''}>{headToHead.ourScore}</span>
           <span class="text-[24px] text-slate sm:text-[36px]">:</span>
-          <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight text-slate sm:text-[88px]" style={headToHead.result === 'L' ? `color:${headToHead.oppColor}` : ''}>{headToHead.oppScore}</span>
+          <span class="font-['Bebas_Neue'] text-[60px] leading-none tabular-nums tracking-tight text-slate sm:text-[88px]" style={headToHead.result === 'L' ? `color:${finalOppColor}` : ''}>{headToHead.oppScore}</span>
         </div>
         <div class="flex items-center justify-end gap-3 sm:gap-4">
           <div class="min-w-0 text-right">
@@ -149,7 +174,7 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
           {headToHead.oppLogoUrl ? (
             <img src={headToHead.oppLogoUrl} alt="" class="h-12 w-12 flex-shrink-0 rounded-lg bg-white object-contain p-1 shadow-sm sm:h-16 sm:w-16" />
           ) : (
-            <span class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg font-bold text-white shadow-sm sm:h-16 sm:w-16" style={`background:${headToHead.oppColor === '#1A1A1A' ? '#475569' : headToHead.oppColor}`}>{initials(headToHead.opponent)}</span>
+            <span class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg font-bold text-white shadow-sm sm:h-16 sm:w-16" style={`background:${finalOppColor === '#1A1A1A' ? '#475569' : finalOppColor}`}>{initials(headToHead.opponent)}</span>
           )}
         </div>
       </div>
@@ -187,10 +212,10 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
                     <div class="h-full transition-all" style={`width:${ourBar}%;background:${accent};opacity:${ourBetter ? 1 : 0.45}`}></div>
                   </div>
                   <div class="flex h-full w-1/2 justify-start">
-                    <div class="h-full transition-all" style={`width:${oppBar}%;background:${headToHead.oppColor};opacity:${oppBetter ? 1 : 0.45}`}></div>
+                    <div class="h-full transition-all" style={`width:${oppBar}%;background:${finalOppColor};opacity:${oppBetter ? 1 : 0.45}`}></div>
                   </div>
                 </div>
-                <div class={`text-left tabular-nums ${oppBetter ? 'font-bold' : ''}`} style={`color:${headToHead.oppColor};opacity:${oppBetter ? 1 : 0.5}`}>
+                <div class={`text-left tabular-nums ${oppBetter ? 'font-bold' : ''}`} style={`color:${finalOppColor};opacity:${oppBetter ? 1 : 0.5}`}>
                   <span class="text-[16px] sm:text-[18px]">{oppShown}</span>
                   {oppYardSuffix && <span class="ml-1 text-[10px] opacity-70">yd</span>}
                 </div>
@@ -204,7 +229,7 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
         <span class="inline-block h-2 w-2 rounded-full align-middle" style={`background:${accent}`}></span>
         <span class="mx-1.5 align-middle">{headToHead.ourTeamName}</span>
         <span class="text-[#bbb8ad]">·</span>
-        <span class="inline-block h-2 w-2 rounded-full align-middle ml-1.5" style={`background:${headToHead.oppColor}`}></span>
+        <span class="inline-block h-2 w-2 rounded-full align-middle ml-1.5" style={`background:${finalOppColor}`}></span>
         <span class="ml-1.5 align-middle">{headToHead.opponent}</span>
       </p>
     </div>
@@ -463,3 +488,4 @@ const pageDesc = `${headToHead.ourClubName} ${headToHead.ourTeamName} vs ${headT
   </script>
 
 </BaseLayout>
+                         
