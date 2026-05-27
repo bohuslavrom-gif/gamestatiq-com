@@ -13,6 +13,7 @@ const allMatches = await fetchLeagueMatches(league.id);
 
 const url = new URL(Astro.request.url);
 const teamFilter = url.searchParams.get('team') ?? '';
+const errorMsg = url.searchParams.get('error');
 const filtered: LeagueMatchListRow[] = teamFilter
   ? allMatches.filter((m) => m.teamId === teamFilter)
   : allMatches;
@@ -36,6 +37,10 @@ const teamFilterOptions = Array.from(teamFilterMap.values()).sort((a, b) => a.la
   <div class="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
     <a href="/app/league" class="rounded-md border border-stone bg-pearl px-3 py-1.5 font-medium text-graphite hover:bg-mist">← Liga dashboard</a>
   </div>
+
+  {errorMsg && (
+    <div class="mb-6 rounded-lg border border-signal/30 bg-signal/5 px-4 py-3 text-[14px] text-signal">{errorMsg}</div>
+  )}
 
   <!-- Team filter -->
   <div class="mb-4 flex flex-wrap items-center gap-3">

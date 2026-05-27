@@ -96,7 +96,14 @@ if (!role) {
   }
 }
 
-if (!role) return Astro.redirect('/app/matches');
+if (!role) {
+  // Iter 67: lepší redirect — když je user liga admin, vraťme ho do liga matches
+  const leagueCtx = Astro.locals.league;
+  const dest = leagueCtx
+    ? `/app/league/matches?error=${encodeURIComponent('Bez oprávnění k tomuto zápasu. Musíš být admin/staff klubu nebo liga.')}`
+    : '/app/matches';
+  return Astro.redirect(dest);
+}
 
 // V opp view je vždy read-only (zápas patří jinému klubu)
 const canEdit   = !isOppView && (role === 'admin' || role === 'coach' || role === 'stats');
