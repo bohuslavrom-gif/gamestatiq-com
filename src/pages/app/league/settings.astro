@@ -10,34 +10,66 @@ let role: string | null = Astro.locals.leagueRole ?? null;
 
 const admin = getSupabaseAdmin();
 
-// Iter 71: defensive lookup — if middleware didn't attach league (e.g. user is
-// league OWNER but not yet in league_members), try direct DB lookup before
-// redirecting away silently.
+// Iter 71b: collect diagnostic info so we can SEE what's happening instead
+// of silently bouncing.
+const debug: Record<string, any> = {
+  userId: user?.id ?? '(null)',
+  userEmail: user?.email ?? '(null)',
+  initialLeagueFromMiddleware: league?.id ?? null,
+  initialRole: role,
+  membershipRows: null,
+  membershipErr: null,
+  ownedLeagueId: null,
+  ownedErr: null,
+};
+
+// Path 1: membership lookup (re-do in case middleware missed it)
 if (!league && user) {
-  const { data: ownedLeague } = await admin
+  const { data: lmRows, error: lmErr } = await admin
+    .from('league_members')
+    .select('league_id, role, leagues(*)')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: true });
+  debug.membershipRows = lmRows?.length ?? 0;
+  debug.membershipErr = lmErr?.message ?? null;
+  const lm = (lmRows ?? [])[0];
+  if (lm && (lm as any).leagues) {
+    league = (lm as any).leagues;
+    role = (lm as any).role;
+  }
+}
+
+// Path 2: owner fallback
+if (!league && user) {
+  const { data: ownedLeague, error: ownErr } = await admin
     .from('leagues')
     .select('*')
     .eq('owner_user_id', user.id)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
+  debug.ownedLeagueId = (ownedLeague as any)?.id ?? null;
+  debug.ownedErr = ownErr?.message ?? null;
   if (ownedLeague) {
     league = ownedLeague as any;
     role = 'admin';
   }
 }
 
-if (!league) {
-  // Iter 71: verbose error instead of silent redirect to /app
-  return Astro.redirect(`/app?error=${encodeURIComponent('Liga nastavení: nepodařilo se najít vaši ligu. Kontaktujte support.')}`);
-}
+debug.finalLeagueId = league?.id ?? null;
+debug.finalRole = role;
 
-// Fetch all league members with profile info
-const { data: membersRaw } = await admin
-  .from('league_members')
-  .select('id, role, user_id, created_at')
-  .eq('league_id', league.id)
-  .order('created_at', { ascending: true });
+// Iter 71b: if league STILL missing, render diagnostic page (no redirect).
+const noLeague = !league;
+
+// Fetch all league members with profile info (skip if noLeague)
+const { data: membersRaw } = noLeague
+  ? { data: [] as any[] }
+  : await admin
+      .from('league_members')
+      .select('id, role, user_id, created_at')
+      .eq('league_id', league.id)
+      .order('created_at', { ascending: true });
 const members = (membersRaw ?? []) as { id: string; role: string; user_id: string; created_at: string }[];
 
 const userIds = members.map((m) => m.user_id);
@@ -60,15 +92,32 @@ const initials = (firstName: string, lastName: string, email: string) => {
   return (email[0] ?? '?').toUpperCase();
 };
 
-const publicUrl = `gamestatiq.com/liga/${league.slug}`;
+const publicUrl = noLeague ? '—' : `gamestatiq.com/liga/${league.slug}`;
 ---
 
 <AppLayout
-  title={`Nastavení · ${league.name}`}
+  title={noLeague ? 'Nastavení (diagnostika) · GameStatiq' : `Nastavení · ${league.name}`}
   active="settings"
-  pageTitle="Nastavení ligy"
-  pageSub={`${league.name} · ${members.length} členů`}
+  pageTitle={noLeague ? 'Nastavení ligy — diagnostika' : 'Nastavení ligy'}
+  pageSub={noLeague ? 'Liga kontext chybí. Detaily níže.' : `${league.name} · ${members.length} členů`}
 >
+  {noLeague && (
+    <div class="mb-8 rounded-xl border-2 border-signal/40 bg-signal/5 p-6">
+      <p class="text-[15px] font-bold text-signal">⚠️ Liga kontext nebyl nastaven</p>
+      <p class="mt-2 text-[13px] text-graphite">
+        Server nedokázal najít žádnou ligu, ke které jsi přihlášený(á). Pošli tento výpis na <a href="mailto:hello@gamestatiq.com" class="font-semibold text-signal underline">hello@gamestatiq.com</a>.
+      </p>
+      <pre class="mt-4 overflow-x-auto rounded-lg border border-stone bg-ink/95 p-4 text-[11px] font-mono text-pearl">{JSON.stringify(debug, null, 2)}</pre>
+      <p class="mt-3 text-[11px] text-slate">
+        Možné příčiny: žádný řádek v <code class="rounded bg-mist px-1 text-[10px]">league_members</code> pro tvůj user_id, žádná liga s <code class="rounded bg-mist px-1 text-[10px]">owner_user_id</code> = tvůj user_id, nebo Supabase service-role klíč nemá přístup ke <code class="rounded bg-mist px-1 text-[10px]">leagues</code>/<code class="rounded bg-mist px-1 text-[10px]">league_members</code> tabulkám.
+      </p>
+      <div class="mt-5 flex flex-wrap gap-2">
+        <a href="/app" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[13px] font-medium text-graphite hover:bg-mist">← Hlavní dashboard</a>
+        <a href="/app/league" class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[13px] font-medium text-graphite hover:bg-mist">Liga dashboard</a>
+      </div>
+    </div>
+  )}
+  {!noLeague && (<>
   {saved === 'logo' && (
     <div class="mb-6 rounded-lg border border-verde/30 bg-verde/5 px-4 py-3 text-[14px] text-[#1B6E62]">
       ✓ Logo nahráno.
@@ -323,4 +372,5 @@ const publicUrl = `gamestatiq.com/liga/${league.slug}`;
       </div>
     </aside>
   </div>
+  </>)}
 </AppLayout>
