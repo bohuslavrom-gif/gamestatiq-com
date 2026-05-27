@@ -50,7 +50,7 @@ const [standings, teamStats, players, recent, allMatches, records, manualRecords
 const teamFilterMap = new Map<string, { id: string; label: string }>();
 for (const m of allMatches) {
   if (!teamFilterMap.has(m.teamId)) {
-    teamFilterMap.set(m.teamId, { id: m.teamId, label: `${m.clubName} ${m.teamName}` });
+    teamFilterMap.set(m.teamId, { id: m.teamId, label: m.teamName });
   }
 }
 const teamFilterOptions = Array.from(teamFilterMap.values()).sort((a, b) => a.label.localeCompare(b.label, 'cs'));
@@ -622,7 +622,7 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                         <span class={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${lastResultColor[m.result]}`}>{m.result}</span>
                       </td>
                       <td class="px-5 py-3 text-right">
-                        <a href={localizedPath(`/liga/${league.slug}/zapas/${m.id}`, lang)} class="rounded-md border border-stone bg-pearl px-3 py-1.5 text-[11px] font-semibold text-graphite hover:bg-mist hover:text-ink">{t('pliga.matches.detail')}</a>
+                        <a href={localizedPath(`/liga/${league.slug}/zapas/${m.id}`, lang)} class="inline-block whitespace-nowrap rounded-md border border-stone bg-pearl px-3 py-1.5 text-[11px] font-semibold text-graphite hover:bg-mist hover:text-ink">{t('pliga.matches.detail')}</a>
                       </td>
                     </tr>
                   ))}
@@ -995,26 +995,4 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
         var defDir = table.getAttribute('data-default-dir') || 'desc';
         if (!isNaN(defCol)) {
           state = { col: defCol, dir: defDir };
-          ths.forEach(function (th) {
-            var thCol = parseInt(th.getAttribute('data-sort-col'), 10);
-            if (thCol === defCol) {
-              th.classList.add('is-active');
-              var icon = th.querySelector('.sort-icon');
-              if (icon) icon.textContent = defDir === 'desc' ? '▼' : '▲';
-            }
-          });
-        }
-      }
-
-      function init() {
-        document.querySelectorAll('table.sortable-table').forEach(initTable);
-      }
-
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-      } else {
-        init();
-      }
-    })();
-  </script>
-</BaseLayout>
+          ths.forEach(function 
