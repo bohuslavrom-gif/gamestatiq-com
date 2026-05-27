@@ -219,7 +219,6 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                           )}
                           <div class="min-w-0">
                             <p class="text-[13px] font-semibold text-ink">{row.teamName}</p>
-                            <p class="text-[10px] text-slate">{row.clubName}</p>
                           </div>
                         </div>
                       </td>
@@ -388,7 +387,7 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                               <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
                             </div>
                           </td>
-                          <td class="py-2.5 text-[12px] text-graphite" data-sort-value={`${p.clubName} ${p.teamName}`}>{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
+                          <td class="py-2.5 text-[12px] text-graphite" data-sort-value={p.teamName}>{p.teamName}</td>
                           <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.gamesPlayed}>{p.gamesPlayed}</td>
                           <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.qbAtt}>{p.qbAtt}</td>
                           <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.qbComp}>{p.qbComp}</td>
@@ -451,7 +450,7 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                               <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
                             </div>
                           </td>
-                          <td class="py-2.5 text-[12px] text-graphite" data-sort-value={`${p.clubName} ${p.teamName}`}>{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
+                          <td class="py-2.5 text-[12px] text-graphite" data-sort-value={p.teamName}>{p.teamName}</td>
                           <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.gamesPlayed}>{p.gamesPlayed}</td>
                           <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.wrTargets}>{p.wrTargets}</td>
                           <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.wrRec}>{p.wrRec}</td>
@@ -509,7 +508,7 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                             <div><p class="text-[13px] font-semibold text-ink">{p.name}</p><p class="text-[10px] text-slate">#{p.jersey ?? '—'}</p></div>
                           </div>
                         </td>
-                        <td class="py-2.5 text-[12px] text-graphite" data-sort-value={`${p.clubName} ${p.teamName}`}>{p.clubName}<br/><span class="text-[10px] text-stone-2">{p.teamName}</span></td>
+                        <td class="py-2.5 text-[12px] text-graphite" data-sort-value={p.teamName}>{p.teamName}</td>
                         <td class="px-3 py-2.5 text-center tabular-nums text-graphite" data-sort-value={p.gamesPlayed}>{p.gamesPlayed}</td>
                         <td class="px-3 py-2.5 text-center font-semibold tabular-nums text-ink" data-sort-value={p.dbFlagPull}>{p.dbFlagPull}</td>
                         <td class="px-3 py-2.5 text-center font-semibold tabular-nums" style={`color:${secondary}`} data-sort-value={p.dbSack}>{p.dbSack}</td>
@@ -581,8 +580,7 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                             </span>
                           )}
                           <div class="min-w-0">
-                            <p class="text-[13px] font-semibold text-ink">{m.clubName}</p>
-                            <p class="text-[10px] text-slate">{m.teamName}</p>
+                            <p class="text-[13px] font-semibold text-ink">{m.teamName}</p>
                           </div>
                         </div>
                       </td>
@@ -597,10 +595,7 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
                               </span>
                             )}
                             <div class="min-w-0">
-                              <p class="text-[13px] font-semibold text-ink">{(m as any).opponentClubName ?? (m as any).opponentTeamName}</p>
-                              {(m as any).opponentTeamName && (m as any).opponentClubName && (
-                                <p class="text-[10px] text-slate">{(m as any).opponentTeamName}</p>
-                              )}
+                              <p class="text-[13px] font-semibold text-ink">{(m as any).opponentTeamName ?? (m as any).opponentClubName}</p>
                             </div>
                           </div>
                         ) : (
