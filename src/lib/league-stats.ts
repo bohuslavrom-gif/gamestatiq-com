@@ -421,7 +421,7 @@ export type TeamStatsRow = {
   xp2Att: number;
   pointsFor: number;
   pointsForAvg: number;
-  // Scoring defense — what we have today
+  // Scoring defense
   pointsAgainst: number;
   pointsAgainstAvg: number;
   // Pass offense
@@ -430,12 +430,30 @@ export type TeamStatsRow = {
   qbInt: number;
   qbYds: number;
   qbTd: number;
-  passEfficiency: number;  // NCAA-style
-  // Pass defense (limited — we only have opp_pass_yds + our def's INT/Sack)
+  passEfficiency: number;
+  // Iter 53: Total offense — agregát pass/rush/total + plays + per-play průměr
+  passYds: number;
+  rushYds: number;
+  totalYds: number;
+  plays: number;
+  ydsPerPlay: number;
+  // Pass defense
   oppPassYds: number;
   oppPassYdsAvg: number;
+  // Iter 53: Total defense
+  oppOffTd: number;
+  oppXp1Ok: number;
+  oppXp1Att: number;
+  oppXp2Ok: number;
+  oppXp2Att: number;
+  oppRushYds: number;
+  oppTotalYds: number;
+  oppPlays: number;
+  oppYdsPerPlay: number;
+  // Defense statistiky
   defInts: number;
   defSacks: number;
+  defFlagPulls: number;
   // Penalties
   penCount: number;
   penYds: number;
@@ -470,11 +488,12 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
     .select(`
       id, team_id, opp_team_id,
       our_score, opp_score,
-      off_td, opp_off_td,
+      off_td, opp_off_td, off_drives, opp_off_drives,
       qb_att, qb_comp, qb_td, qb_int, qb_yds,
       xp1_att, xp1_ok, xp2_att, xp2_ok,
       opp_xp1_att, opp_xp1_ok, opp_xp2_att, opp_xp2_ok,
-      opp_pass_yds,
+      pass_yds, rush_yds, total_yds,
+      opp_pass_yds, opp_rush_yds, opp_total_yds,
       pen_count, pen_yds, opp_pen_count, opp_pen_yds
     `)
     .or(orFilter);
@@ -485,12 +504,12 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
   const { data: psRaw } = matchIds.length > 0
     ? await admin
         .from('match_player_stats')
-        .select('match_id, qb_att, qb_comp, qb_yds, qb_td, qb_int, db_int, db_sack, players(team_id)')
+        .select('match_id, qb_att, qb_comp, qb_yds, qb_td, qb_int, db_int, db_sack, db_flag_pull, players(team_id)')
         .in('match_id', matchIds)
     : { data: [] as any[] };
   const psRows = (psRaw ?? []) as any[];
   const qbAggByTeam = new Map<string, { att: number; comp: number; yds: number; td: number; int: number }>();
-  const defAggByTeam = new Map<string, { ints: number; sacks: number }>();
+  const defAggByTeam = new Map<string, { ints: number; sacks: number; flagPulls: number }>();
   for (const r of psRows) {
     const pt = r.players?.team_id;
     if (!pt || !teamIdSet.has(pt)) continue;
@@ -502,9 +521,10 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
     qb.td   += r.qb_td   ?? 0;
     qb.int  += r.qb_int  ?? 0;
     let d = defAggByTeam.get(pt);
-    if (!d) { d = { ints: 0, sacks: 0 }; defAggByTeam.set(pt, d); }
-    d.ints  += r.db_int  ?? 0;
-    d.sacks += r.db_sack ?? 0;
+    if (!d) { d = { ints: 0, sacks: 0, flagPulls: 0 }; defAggByTeam.set(pt, d); }
+    d.ints      += r.db_int       ?? 0;
+    d.sacks     += r.db_sack      ?? 0;
+    d.flagPulls += r.db_flag_pull ?? 0;
   }
 
   // Aggregate per team
@@ -523,8 +543,12 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
       pointsFor: 0, pointsForAvg: 0,
       pointsAgainst: 0, pointsAgainstAvg: 0,
       qbAtt: 0, qbComp: 0, qbInt: 0, qbYds: 0, qbTd: 0, passEfficiency: 0,
+      // Iter 53
+      passYds: 0, rushYds: 0, totalYds: 0, plays: 0, ydsPerPlay: 0,
       oppPassYds: 0, oppPassYdsAvg: 0,
-      defInts: 0, defSacks: 0,
+      oppOffTd: 0, oppXp1Ok: 0, oppXp1Att: 0, oppXp2Ok: 0, oppXp2Att: 0,
+      oppRushYds: 0, oppTotalYds: 0, oppPlays: 0, oppYdsPerPlay: 0,
+      defInts: 0, defSacks: 0, defFlagPulls: 0,
       penCount: 0, penYds: 0,
     });
   }
@@ -540,12 +564,24 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
         row.xp2Ok += m.xp2_ok ?? 0; row.xp2Att += m.xp2_att ?? 0;
         row.pointsFor += m.our_score ?? 0;
         row.pointsAgainst += m.opp_score ?? 0;
-        row.oppPassYds += m.opp_pass_yds ?? 0;
+        // Iter 53: total offense
+        row.passYds  += m.pass_yds  ?? 0;
+        row.rushYds  += m.rush_yds  ?? 0;
+        row.totalYds += m.total_yds ?? 0;
+        row.plays    += m.off_drives ?? 0;  // proxy: drives jako "play count" (chybí přesný plays count)
+        // Iter 53: total defense
+        row.oppOffTd += m.opp_off_td ?? 0;
+        row.oppXp1Ok += m.opp_xp1_ok ?? 0; row.oppXp1Att += m.opp_xp1_att ?? 0;
+        row.oppXp2Ok += m.opp_xp2_ok ?? 0; row.oppXp2Att += m.opp_xp2_att ?? 0;
+        row.oppRushYds  += m.opp_rush_yds  ?? 0;
+        row.oppPassYds  += m.opp_pass_yds  ?? 0;
+        row.oppTotalYds += m.opp_total_yds ?? 0;
+        row.oppPlays    += m.opp_off_drives ?? 0;
         row.penCount += m.pen_count ?? 0;
         row.penYds += m.pen_yds ?? 0;
       }
     }
-    // Iter 36+39: opp perspektiva — shared match v lize (s opp_* agregáty)
+    // Iter 36+39+53: opp perspektiva — shared match v lize (s opp_* agregáty)
     if (m.opp_team_id && teamIdSet.has(m.opp_team_id)) {
       const row = byTeam.get(m.opp_team_id);
       if (row) {
@@ -555,6 +591,19 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
         row.xp2Ok += m.opp_xp2_ok ?? 0; row.xp2Att += m.opp_xp2_att ?? 0;
         row.pointsFor += m.opp_score ?? 0;
         row.pointsAgainst += m.our_score ?? 0;
+        // Iter 53: opp tým je sám útočník → jejich offense = opp_* fields
+        row.passYds  += m.opp_pass_yds  ?? 0;
+        row.rushYds  += m.opp_rush_yds  ?? 0;
+        row.totalYds += m.opp_total_yds ?? 0;
+        row.plays    += m.opp_off_drives ?? 0;
+        // Jejich defense = home offense (my host)
+        row.oppOffTd    += m.off_td ?? 0;
+        row.oppXp1Ok    += m.xp1_ok ?? 0; row.oppXp1Att += m.xp1_att ?? 0;
+        row.oppXp2Ok    += m.xp2_ok ?? 0; row.oppXp2Att += m.xp2_att ?? 0;
+        row.oppRushYds  += m.rush_yds  ?? 0;
+        row.oppPassYds  += m.pass_yds  ?? 0;
+        row.oppTotalYds += m.total_yds ?? 0;
+        row.oppPlays    += m.off_drives ?? 0;
         row.penCount += m.opp_pen_count ?? 0;
         row.penYds += m.opp_pen_yds ?? 0;
       }
@@ -573,9 +622,12 @@ export async function fetchLeagueTeamStats(leagueId: string): Promise<TeamStatsR
       row.pointsAgainstAvg = +(row.pointsAgainst / row.games).toFixed(1);
       row.oppPassYdsAvg    = +(row.oppPassYds    / row.games).toFixed(1);
     }
+    // Iter 53: ydsPerPlay = totalYds / plays
+    if (row.plays > 0)    row.ydsPerPlay    = +(row.totalYds    / row.plays).toFixed(1);
+    if (row.oppPlays > 0) row.oppYdsPerPlay = +(row.oppTotalYds / row.oppPlays).toFixed(1);
     row.passEfficiency = passEff(row.qbAtt, row.qbComp, row.qbYds, row.qbTd, row.qbInt);
     const def = defAggByTeam.get(row.teamId);
-    if (def) { row.defInts = def.ints; row.defSacks = def.sacks; }
+    if (def) { row.defInts = def.ints; row.defSacks = def.sacks; row.defFlagPulls = def.flagPulls; }
   }
 
   return Array.from(byTeam.values());

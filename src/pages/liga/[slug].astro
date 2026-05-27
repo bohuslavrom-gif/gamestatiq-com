@@ -236,29 +236,44 @@ const recordsSubTabs: { key: RecordType; label: string; count: number }[] = [
         </div>
 
         <TeamStatsSection
-          title={t('pliga.section.scoring_off')}
-          subtitle={t('pliga.section.scoring_off.sub')}
+          title="Total offense"
+          subtitle="Útok — body, TD, XP, yardy + průměr na hru"
           accentColor={secondary}
           rows={scoringOffense}
           columns={[
-            { key: 'games', label: t('pliga.col.games') },
-            { key: 'offTd', label: t('pliga.col.td'), bold: true },
-            { key: 'xp1Ok', label: t('pliga.col.xp1') },
-            { key: 'xp2Ok', label: t('pliga.col.xp2') },
-            { key: 'pointsFor', label: t('pliga.col.points'), bold: true },
-            { key: 'pointsForAvg', label: t('pliga.col.points_avg'), accent: true },
+            { key: 'games', label: 'G' },
+            { key: 'pointsFor', label: 'Body', bold: true },
+            { key: 'offTd', label: 'TD', bold: true },
+            { key: 'xp1Ok', label: '1XP' },
+            { key: 'xp2Ok', label: '2XP' },
+            { key: 'passYds', label: 'Pass yds' },
+            { key: 'rushYds', label: 'Run yds' },
+            { key: 'totalYds', label: 'Total yds', bold: true },
+            { key: 'plays', label: 'Plays' },
+            { key: 'ydsPerPlay', label: 'YDS/P', accent: true },
+            { key: 'penYds', label: 'Penalty yds' },
           ]}
         />
 
         <TeamStatsSection
-          title={t('pliga.section.scoring_def')}
-          subtitle={t('pliga.section.scoring_def.sub')}
+          title="Total defense"
+          subtitle="Obrana — obdržené body, TD, yardy + agresivita"
           accentColor={secondary}
           rows={scoringDefense}
           columns={[
-            { key: 'games', label: t('pliga.col.games') },
-            { key: 'pointsAgainst', label: t('pliga.col.pts_against'), bold: true },
-            { key: 'pointsAgainstAvg', label: t('pliga.col.pts_against_avg'), accent: true },
+            { key: 'games', label: 'G' },
+            { key: 'pointsAgainst', label: 'Obdržené body', bold: true },
+            { key: 'oppOffTd', label: 'TD' },
+            { key: 'oppXp1Ok', label: '1XP' },
+            { key: 'oppXp2Ok', label: '2XP' },
+            { key: 'oppPassYds', label: 'Pass yds' },
+            { key: 'oppRushYds', label: 'Run yds' },
+            { key: 'oppTotalYds', label: 'Total yds', bold: true },
+            { key: 'oppYdsPerPlay', label: 'YDS/P', accent: true },
+            { key: 'penCount', label: 'Penalty' },
+            { key: 'defFlagPulls', label: 'Flag pulls' },
+            { key: 'defSacks', label: 'Sacks' },
+            { key: 'defInts', label: 'INT' },
           ]}
         />
 
